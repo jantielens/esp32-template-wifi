@@ -1,0 +1,163 @@
+# Copilot Instructions for ESP32 Template Project
+
+## Project Overview
+
+ESP32 Arduino development template using `arduino-cli` for headless builds. Designed for WSL2/Linux environments with local toolchain installation (no system dependencies).
+
+## Architecture
+
+- **Build System**: Custom bash scripts wrapping `arduino-cli` (installed locally to `./bin/`)
+- **Sketch Location**: Single Arduino file at `src/app/app.ino`
+- **Output**: Compiled binaries in `./build/` directory
+- **Board Target**: `esp32:esp32:esp32` (ESP32 Dev Module)
+
+## Critical Developer Workflows
+
+### First-time Setup
+```bash
+./setup.sh  # Downloads arduino-cli, installs ESP32 core, configures environment
+```
+
+### Build-Upload-Monitor Cycle
+```bash
+./build.sh              # Compile sketch
+./upload.sh             # Auto-detects /dev/ttyUSB0 or /dev/ttyACM0
+./monitor.sh            # Serial monitor at 115200 baud
+```
+
+All scripts use absolute paths via `SCRIPT_DIR` resolution - they work from any directory.
+
+## Project-Specific Conventions
+
+### Script Design Pattern
+- All scripts source `config.sh` for common configuration and helper functions
+- `config.sh` provides:
+  - `SCRIPT_DIR` resolution for absolute path handling
+  - `find_arduino_cli()` - Checks local `$SCRIPT_DIR/bin/arduino-cli` first, then system-wide
+  - `find_serial_port()` - Auto-detects `/dev/ttyUSB0` first, fallback to `/dev/ttyACM0`
+  - Project constants: `SKETCH_PATH`, `BUILD_PATH`, `FQBN`
+- Scripts work from any directory due to absolute path resolution
+
+### Arduino Code Standards
+- Use `Serial.begin(115200)` for consistency with monitor.sh default
+- Include startup diagnostics (chip model, revision, CPU freq, flash size) using `ESP.*` functions
+- Implement heartbeat pattern with `millis()` for long-running loops (5s interval)
+
+## WSL-Specific Requirements
+
+Serial port access requires:
+1. `usbipd-win` to bind USB devices from Windows host
+2. User must be in `dialout` group: `sudo usermod -a -G dialout $USER`
+3. Full WSL restart after group change: `wsl --terminate Ubuntu` (PowerShell)
+
+See `docs/wsl-development.md` for complete USB/IP setup guide.
+
+## Key Files
+
+### Scripts
+- `config.sh` - Common configuration and helper functions (sourced by all scripts)
+- `setup.sh` - Downloads arduino-cli v0.latest, configures ESP32 platform, installs libraries
+- `build.sh` - Compiles to `./build/*.bin` files
+- `upload.sh` - Flashes firmware via serial
+- `upload-erase.sh` - Completely erases ESP32 flash memory
+- `monitor.sh` - Serial console (Ctrl+C to exit)
+- `clean.sh` - Removes build artifacts
+- `library.sh` - Manages Arduino library dependencies
+
+### Source
+- `src/app/app.ino` - Single sketch file (standard Arduino structure)
+- `src/version.h` - Firmware version tracking
+
+### Configuration
+- `config.sh` - Project paths, FQBN, and helper functions
+- `arduino-libraries.txt` - List of required Arduino libraries (auto-installed by setup.sh)
+- `.github/workflows/build.yml` - CI/CD pipeline for automated builds
+
+## Library Management
+
+- **Configuration File**: `arduino-libraries.txt` lists all required Arduino libraries
+- **Management Script**: `./library.sh` provides commands to search, add, remove, and list libraries
+- **Auto-Installation**: `setup.sh` reads `arduino-libraries.txt` and installs all listed libraries
+- **CI/CD Integration**: GitHub Actions automatically installs libraries via `setup.sh`
+- **Initial State**: Template starts with 0 libraries configured (examples are commented out)
+
+### Library Commands
+```bash
+./library.sh search <keyword>    # Find libraries
+./library.sh add <library>       # Add to config and install
+./library.sh list                # Show configured libraries
+```
+
+## Common Pitfalls
+
+- **Permission denied on /dev/ttyUSB0**: User not in dialout group or WSL not restarted
+- **arduino-cli not found**: Scripts support both local (`./bin/arduino-cli`) and system-wide installations
+- **Upload with sudo fails**: Root user lacks ESP32 core installation; use dialout group instead
+
+## Copilot Agent Guidelines
+
+### Before Making Significant Changes
+
+Before implementing significant changes or starting major work, the agent must:
+
+1. **Create a concise summary** of the proposed changes including:
+   - What will be changed and why
+   - Which files will be affected
+   - Expected impact on the project
+   - Any potential risks or breaking changes
+
+2. **Ask for user approval and/or feedback** and wait for confirmation
+
+3. **Only proceed with implementation** after receiving user approval
+
+### After Significant Changes
+
+After every significant change, the agent must:
+
+1. **Verify the changes by building** the code:
+   - Run `./build.sh` to ensure the code compiles successfully
+   - Check for any compilation errors or warnings
+   - Only proceed if the build completes without errors
+
+2. **Check if documentation needs updates** by reviewing:
+   - `README.md` - Main project documentation
+   - `docs/scripts.md` - Script usage guide
+   - `docs/library-management.md` - Library management guide
+   - `docs/wsl-development.md` - WSL setup guide
+   - `.github/copilot-instructions.md` - This file
+   - `.github/workflows/build.yml` - CI/CD pipeline
+
+3. **Update existing documentation** if changes affect documented behavior
+
+4. **Before creating new documentation files**, ask the user:
+   - "Should I create a new doc file for [topic]?"
+   - Wait for confirmation before creating new docs
+
+### Examples of Significant Changes
+
+- Adding new scripts or tools
+- Modifying build/upload/monitor workflows
+- Changing project structure
+- Adding new dependencies or requirements
+- Updating CI/CD pipeline
+- Changing library management approach
+
+### Examples of Documentation Updates Needed
+
+- New script added → Update `README.md` script table and `docs/scripts.md`
+- Library management changed → Update `docs/library-management.md`
+- Workflow modified → Update `README.md` CI/CD section
+- New requirement added → Update `README.md` prerequisites
+
+### Build Verification
+
+Always verify code changes by building:
+
+```bash
+./build.sh  # Must complete successfully after code changes
+```
+
+If the build fails:
+- Review and fix compilation errors
+- Check library dependencies in `arduino-libraries.txt`
+- Verify Arduino code syntax and ESP32 compatibility

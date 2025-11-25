@@ -1,0 +1,20 @@
+# Arduino Libraries for ESP32 Template Project
+#
+# Format: One library per line
+# - Library names must match arduino-cli library names exactly
+# - You can specify versions: LibraryName@1.2.3
+# - Lines starting with # are comments
+# - Empty lines are ignored
+#
+# Examples:
+#   WiFi
+#   ArduinoJson@6.21.3
+#   PubSubClient@2.8
+#
+# To find library names: arduino-cli lib search <keyword>
+
+# Core libraries
+# WiFi
+# ArduinoJson
+
+# Add additional libraries below:

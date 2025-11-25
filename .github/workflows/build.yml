@@ -1,0 +1,75 @@
+name: ESP32 Build
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+    
+    - name: Cache arduino-cli
+      uses: actions/cache@v4
+      with:
+        path: |
+          bin/arduino-cli
+          ~/.arduino15
+        key: ${{ runner.os }}-arduino-cli-${{ hashFiles('setup.sh', 'arduino-libraries.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-arduino-cli-
+    
+    - name: Install arduino-cli and ESP32 platform
+      run: |
+        chmod +x setup.sh
+        ./setup.sh
+    
+    - name: Compile firmware
+      run: |
+        chmod +x build.sh
+        ./build.sh
+    
+    - name: Check for build artifacts
+      run: |
+        if [ ! -f "build/app.ino.bin" ]; then
+          echo "Error: Firmware binary not found"
+          exit 1
+        fi
+        echo "Build successful!"
+        ls -lh build/
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: esp32-firmware
+        path: |
+          build/*.bin
+          build/*.elf
+        retention-days: 30
+    
+    - name: Generate build summary
+      run: |
+        echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Firmware Details" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| File | Size |" >> $GITHUB_STEP_SUMMARY
+        echo "|------|------|" >> $GITHUB_STEP_SUMMARY
+        for file in build/*.bin; do
+          if [ -f "$file" ]; then
+            size=$(ls -lh "$file" | awk '{print $5}')
+            name=$(basename "$file")
+            echo "| $name | $size |" >> $GITHUB_STEP_SUMMARY
+          fi
+        done

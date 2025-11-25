@@ -1,0 +1,22 @@
+# Build output
+build/
+bin/arduino-cli
+
+# Arduino CLI configuration
+.arduino15/
+.cli-config.yml
+arduino-cli.yaml
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
