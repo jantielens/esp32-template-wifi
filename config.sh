@@ -16,14 +16,24 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Project configuration
+PROJECT_NAME="esp32-template-wifi"
 SKETCH_PATH="$SCRIPT_DIR/src/app/app.ino"
 BUILD_PATH="$SCRIPT_DIR/build"
+
 # Board configuration (FQBN - Fully Qualified Board Name)
-# For ESP32 Dev Module (default):
-FQBN="esp32:esp32:esp32"
-# For ESP32-C3 Super Mini (with USB CDC enabled):
-#FQBN="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"
-# Note: ESP32-C3 uses built-in USB CDC and appears as /dev/ttyACM0 (not /dev/ttyUSB0)
+# Define target boards as an associative array: [FQBN]="board-name"
+# - Provide custom board name for clean directory naming
+# - Omit board name (or leave empty) to auto-extract from FQBN (3rd segment)
+# Examples:
+#   ["esp32:esp32:esp32"]="esp32"                                        # Custom name
+#   ["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"]             # Auto-extract → "nologo_esp32c3_super_mini"
+declare -A FQBN_TARGETS=(
+    ["esp32:esp32:esp32"]="esp32"
+    ["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"]="esp32c3"
+)
+
+# Default board (used when only one board is configured)
+DEFAULT_BOARD=""
 
 # Find arduino-cli executable
 # Checks for local installation first, then falls back to system-wide
@@ -51,5 +61,78 @@ find_serial_port() {
         return 0
     else
         return 1
+    fi
+}
+
+# Get board name for a given FQBN
+# If custom name is provided in FQBN_TARGETS, use it
+# Otherwise, extract board ID (3rd segment) from FQBN
+get_board_name() {
+    local fqbn="$1"
+    local board_name="${FQBN_TARGETS[$fqbn]}"
+    
+    if [[ -n "$board_name" ]]; then
+        echo "$board_name"
+    else
+        # Extract board ID (3rd segment) from FQBN
+        # Example: "esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc" → "nologo_esp32c3_super_mini"
+        echo "$fqbn" | cut -d':' -f3
+    fi
+}
+
+# List all configured boards
+list_boards() {
+    echo -e "${CYAN}Available boards:${NC}"
+    for fqbn in "${!FQBN_TARGETS[@]}"; do
+        local board_name=$(get_board_name "$fqbn")
+        echo -e "  ${GREEN}$board_name${NC} → $fqbn"
+    done
+}
+
+# Get FQBN for a given board name
+get_fqbn_for_board() {
+    local target_board="$1"
+    for fqbn in "${!FQBN_TARGETS[@]}"; do
+        local board_name=$(get_board_name "$fqbn")
+        if [[ "$board_name" == "$target_board" ]]; then
+            echo "$fqbn"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Parse board and port arguments for scripts that need them
+# Usage: parse_board_and_port_args "$@"
+# Sets global variables: BOARD, PORT, FQBN
+# Exits with error if board name is required but not provided
+parse_board_and_port_args() {
+    local board_count="${#FQBN_TARGETS[@]}"
+    
+    if [[ $board_count -gt 1 ]]; then
+        # Multiple boards: first arg is board name, second is optional port
+        if [[ -z "$1" ]]; then
+            echo -e "${RED}Error: Board name required when multiple boards are configured${NC}"
+            echo ""
+            list_boards
+            echo ""
+            echo "Usage: ${0##*/} <board-name> [port]"
+            exit 1
+        fi
+        BOARD="$1"
+        PORT="$2"
+    else
+        # Single board: first arg is optional port
+        BOARD=$(get_board_name "${!FQBN_TARGETS[@]}")
+        PORT="$1"
+    fi
+    
+    # Get FQBN for the board
+    FQBN=$(get_fqbn_for_board "$BOARD")
+    if [[ -z "$FQBN" ]]; then
+        echo -e "${RED}Error: Board '$BOARD' not found${NC}"
+        echo ""
+        list_boards
+        exit 1
     fi
 }

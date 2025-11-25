@@ -7,11 +7,24 @@ This project includes several bash scripts to streamline ESP32 development workf
 **Purpose:** Common configuration and helper functions used by all scripts.
 
 **What it contains:**
-- Project paths (`SKETCH_PATH`, `BUILD_PATH`, `FQBN`)
+- Project configuration (`PROJECT_NAME`, `SKETCH_PATH`, `BUILD_PATH`)
+- Board targets (`FQBN_TARGETS` associative array)
 - `find_arduino_cli()` - Locates arduino-cli (local or system-wide)
 - `find_serial_port()` - Auto-detects `/dev/ttyUSB0` or `/dev/ttyACM0`
+- `get_board_name()` - Extracts/returns board name from FQBN
+- `list_boards()` - Lists all configured boards
+- `get_fqbn_for_board()` - Gets FQBN for a board name
 
 **Usage:** Automatically sourced by other scripts. Do not run directly.
+
+**Multi-Board Configuration:**
+```bash
+declare -A FQBN_TARGETS=(
+    ["esp32:esp32:esp32"]="esp32"                                        # Custom name
+    ["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"]="esp32c3"  # Custom name
+    ["esp32:esp32:some_new_board"]                                       # Auto-extract name
+)
+```
 
 **Note:** This file centralizes common code to avoid duplication across scripts.
 
@@ -38,17 +51,33 @@ This project includes several bash scripts to streamline ESP32 development workf
 
 ## build.sh
 
-**Purpose:** Compile the Arduino sketch into ESP32 firmware.
+**Purpose:** Compile the Arduino sketch into ESP32 firmware for one or more board variants.
 
 **Usage:**
 ```bash
-./build.sh
+./build.sh              # Build all configured boards
+./build.sh esp32        # Build only ESP32 Dev Module
+./build.sh esp32c3      # Build only ESP32-C3 Super Mini
 ```
 
 **What it does:**
-- Compiles `src/app/app.ino` 
-- Outputs firmware binaries to `./build/` directory
-- Generates `.bin`, `.bootloader.bin`, `.merged.bin`, and `.partitions.bin` files
+- Generates minified web assets (once for all builds)
+- Compiles `src/app/app.ino` for specified board(s)
+- Creates board-specific directories: `./build/esp32/`, `./build/esp32c3/`, etc.
+- Generates `.bin`, `.bootloader.bin`, `.merged.bin`, and `.partitions.bin` files per board
+
+**Build Output Structure:**
+```
+build/
+├── esp32/
+│   ├── app.ino.bin
+│   ├── app.ino.bootloader.bin
+│   ├── app.ino.merged.bin
+│   └── app.ino.partitions.bin
+└── esp32c3/
+    ├── app.ino.bin
+    └── ...
+```
 
 **Requirements:** Must run `setup.sh` first.
 
@@ -59,18 +88,28 @@ This project includes several bash scripts to streamline ESP32 development workf
 **Purpose:** Upload compiled firmware to the ESP32 device.
 
 **Usage:**
+
+**Single Board Configuration:**
 ```bash
-./upload.sh              # Auto-detects /dev/ttyUSB0 or /dev/ttyACM0
-./upload.sh /dev/ttyUSB0 # Specify custom port
+./upload.sh              # Auto-detects port
+./upload.sh /dev/ttyUSB0 # Specify port
+```
+
+**Multiple Boards Configuration:**
+```bash
+./upload.sh esp32              # Upload ESP32 build, auto-detect port
+./upload.sh esp32c3            # Upload ESP32-C3 build, auto-detect port
+./upload.sh esp32 /dev/ttyUSB0 # Upload ESP32 build to specific port
 ```
 
 **What it does:**
+- Validates board name (required when multiple boards configured)
 - Detects connected ESP32 boards
-- Uploads firmware from `./build/` to the device
+- Uploads firmware from board-specific `./build/<board>/` directory to the device
 - Auto-detects serial port if not specified
 
 **Requirements:** 
-- Must run `build.sh` first
+- Must run `build.sh [board]` first
 - ESP32 device must be connected via USB
 - User must be in `dialout` group (see [WSL Development Guide](wsl-development.md))
 
@@ -108,7 +147,8 @@ This project includes several bash scripts to streamline ESP32 development workf
 ```
 
 **What it does:**
-- Removes the `./build/` directory and all compiled binaries
+- Removes the `./build/` directory and all board subdirectories
+- Lists board directories being removed
 - Cleans up temporary files (*.tmp, *.bak, *~)
 - Prepares for a fresh build
 
@@ -121,12 +161,23 @@ This project includes several bash scripts to streamline ESP32 development workf
 **Purpose:** Completely erase the ESP32 flash memory.
 
 **Usage:**
+
+**Single Board Configuration:**
 ```bash
 ./upload-erase.sh              # Auto-detects port
-./upload-erase.sh /dev/ttyUSB0 # Specify custom port
+./upload-erase.sh /dev/ttyUSB0 # Specify port
+```
+
+**Multiple Boards Configuration:**
+```bash
+./upload-erase.sh esp32              # Erase ESP32, auto-detect port
+./upload-erase.sh esp32c3            # Erase ESP32-C3, auto-detect port
+./upload-erase.sh esp32 /dev/ttyUSB0 # Erase ESP32 on specific port
 ```
 
 **What it does:**
+- Validates board name (required when multiple boards configured)
+- Extracts chip type from FQBN for correct esptool invocation
 - Uses esptool.py to completely erase ESP32 flash
 - Prompts for confirmation before erasing
 - Auto-detects serial port if not specified
@@ -167,6 +218,7 @@ This project includes several bash scripts to streamline ESP32 development workf
 
 ## Typical Workflow
 
+**Single Board Project:**
 ```bash
 # Initial setup (one time)
 ./setup.sh
@@ -180,8 +232,9 @@ This project includes several bash scripts to streamline ESP32 development workf
 ./upload.sh             # Upload to device
 ./monitor.sh            # View serial output
 
-# Or combine upload and monitor
-./upload.sh && ./monitor.sh
+# Or use convenience scripts
+./bum.sh                # Build + Upload + Monitor
+./um.sh                 # Upload + Monitor
 
 # Clean build when needed
 ./clean.sh
@@ -189,6 +242,30 @@ This project includes several bash scripts to streamline ESP32 development workf
 
 # Complete flash erase (when needed)
 ./upload-erase.sh
+```
+
+**Multi-Board Project:**
+```bash
+# Initial setup (one time)
+./setup.sh
+
+# Build all boards
+./build.sh
+
+# Or build specific board
+./build.sh esp32
+./build.sh esp32c3
+
+# Upload to specific board
+./upload.sh esp32       # Auto-detects port
+./upload.sh esp32c3     # Auto-detects port
+
+# Full cycle for specific board
+./bum.sh esp32          # Build + Upload + Monitor
+./um.sh esp32c3         # Upload + Monitor
+
+# Clean all board builds
+./clean.sh
 ```
 
 ## Troubleshooting
@@ -204,6 +281,11 @@ sudo usermod -a -G dialout $USER
 - Scripts use local `./bin/arduino-cli`, not system PATH
 
 **Build directory not found:**
-- Run `./build.sh` before `./upload.sh`
+- Run `./build.sh [board]` before `./upload.sh [board]`
+- Ensure board name matches configured boards in `config.sh`
+
+**Board name required error:**
+- When multiple boards are configured, specify board name: `./upload.sh esp32`
+- List available boards by checking `config.sh` or running with invalid board name
 
 For WSL-specific setup, see [WSL Development Guide](wsl-development.md).

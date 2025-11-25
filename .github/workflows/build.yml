@@ -8,8 +8,43 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  # Generate build matrix from config.sh
+  prepare-matrix:
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Generate board matrix from config.sh
+      id: set-matrix
+      run: |
+        # Source config.sh and extract FQBN_TARGETS
+        source config.sh
+        
+        # Build JSON array for matrix
+        boards_json="["
+        first=true
+        for fqbn in "${!FQBN_TARGETS[@]}"; do
+          board_name=$(get_board_name "$fqbn")
+          if [ "$first" = true ]; then
+            first=false
+          else
+            boards_json+=","
+          fi
+          boards_json+="{\"name\":\"$board_name\",\"fqbn\":\"$fqbn\"}"
+        done
+        boards_json+="]"
+        
+        echo "matrix={\"board\":$boards_json}" >> $GITHUB_OUTPUT
+        echo "Generated matrix: {\"board\":$boards_json}"
+
+  build:
+    needs: prepare-matrix
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.prepare-matrix.outputs.matrix) }}
     
     steps:
     - name: Checkout repository
@@ -35,38 +70,42 @@ jobs:
         chmod +x setup.sh
         ./setup.sh
     
-    - name: Compile firmware
+    - name: Compile firmware for ${{ matrix.board.name }}
       run: |
         chmod +x build.sh
-        ./build.sh
+        ./build.sh ${{ matrix.board.name }}
     
     - name: Check for build artifacts
       run: |
-        if [ ! -f "build/app.ino.bin" ]; then
-          echo "Error: Firmware binary not found"
+        BOARD_DIR="build/${{ matrix.board.name }}"
+        if [ ! -d "$BOARD_DIR" ] || [ -z "$(ls -A "$BOARD_DIR"/*.bin 2>/dev/null)" ]; then
+          echo "Error: Firmware binary not found for ${{ matrix.board.name }}"
           exit 1
         fi
-        echo "Build successful!"
-        ls -lh build/
+        echo "Build successful for ${{ matrix.board.name }}!"
+        ls -lh "$BOARD_DIR"/
     
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: esp32-firmware
+        name: esp32-firmware-${{ matrix.board.name }}
         path: |
-          build/*.bin
-          build/*.elf
+          build/${{ matrix.board.name }}/*.bin
+          build/${{ matrix.board.name }}/*.elf
         retention-days: 30
     
     - name: Generate build summary
       run: |
-        echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+        echo "## Build Summary - ${{ matrix.board.name }}" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### Firmware Details" >> $GITHUB_STEP_SUMMARY
+        echo "**Board:** ${{ matrix.board.name }}" >> $GITHUB_STEP_SUMMARY
+        echo "**FQBN:** ${{ matrix.board.fqbn }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Firmware Files" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "| File | Size |" >> $GITHUB_STEP_SUMMARY
         echo "|------|------|" >> $GITHUB_STEP_SUMMARY
-        for file in build/*.bin; do
+        for file in build/${{ matrix.board.name }}/*.bin; do
           if [ -f "$file" ]; then
             size=$(ls -lh "$file" | awk '{print $5}')
             name=$(basename "$file")

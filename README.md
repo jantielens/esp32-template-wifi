@@ -32,13 +32,14 @@ cd esp32-template
 ### 2. Build, Upload, Monitor
 
 ```bash
-./build.sh              # Compile firmware
-./upload.sh             # Upload to ESP32
+./build.sh              # Compile firmware for all boards
+./build.sh esp32        # Compile for specific board
+./upload.sh esp32       # Upload to ESP32 (board name required if multiple boards)
 ./monitor.sh            # View serial output
 
 # Or use convenience scripts:
-./bum.sh                # Build + Upload + Monitor
-./um.sh                 # Upload + Monitor
+./bum.sh esp32          # Build + Upload + Monitor
+./um.sh esp32           # Upload + Monitor
 ```
 
 ### 3. Start Developing
@@ -51,6 +52,8 @@ Edit `src/app/app.ino` with your code and repeat step 2.
 esp32-template-wifi/
 ├── bin/                    # Local arduino-cli installation
 ├── build/                  # Compiled firmware binaries
+│   ├── esp32/             # ESP32 Dev Module builds
+│   └── esp32c3/           # ESP32-C3 Super Mini builds
 ├── docs/                   # Documentation
 │   ├── scripts.md         # Script usage guide
 │   ├── web-portal.md      # Web portal guide
@@ -128,12 +131,12 @@ See [docs/web-portal.md](docs/web-portal.md) for detailed guide.
 |--------|---------|-------|
 | `config.sh` | Common configuration (sourced by scripts) | Sourced automatically |
 | `setup.sh` | Install arduino-cli and ESP32 core | Run once during initial setup |
-| `build.sh` | Compile the Arduino sketch | `./build.sh` |
-| `upload.sh` | Upload firmware to ESP32 | `./upload.sh [port]` |
+| `build.sh` | Compile the Arduino sketch | `./build.sh [board-name]` |
+| `upload.sh` | Upload firmware to ESP32 | `./upload.sh [board-name] [port]` |
 | `monitor.sh` | Display serial output | `./monitor.sh [port] [baud]` |
-| `bum.sh` | Build + Upload + Monitor (full cycle) | `./bum.sh` |
-| `um.sh` | Upload + Monitor | `./um.sh [port]` |
-| `upload-erase.sh` | Completely erase ESP32 flash | `./upload-erase.sh [port]` |
+| `bum.sh` | Build + Upload + Monitor (full cycle) | `./bum.sh [board-name] [port]` |
+| `um.sh` | Upload + Monitor | `./um.sh [board-name] [port]` |
+| `upload-erase.sh` | Completely erase ESP32 flash | `./upload-erase.sh [board-name] [port]` |
 | `clean.sh` | Remove build artifacts | `./clean.sh` |
 | `library.sh` | Manage Arduino libraries | `./library.sh [command]` |
 
@@ -141,15 +144,36 @@ See [docs/scripts.md](docs/scripts.md) for detailed documentation.
 
 ## 🔧 Configuration
 
-### Target Board
+### Target Boards
 
-Default: `esp32:esp32:esp32` (ESP32 Dev Module)
-
-To change the board, edit the `FQBN` variable in `build.sh` and `upload.sh`:
+The project supports multiple ESP32 board variants configured in `config.sh`:
 
 ```bash
-FQBN="esp32:esp32:esp32s3"  # For ESP32-S3
-FQBN="esp32:esp32:esp32c3"  # For ESP32-C3
+# Default configuration includes:
+declare -A FQBN_TARGETS=(
+    ["esp32:esp32:esp32"]="esp32"                                        # ESP32 Dev Module
+    ["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"]="esp32c3"  # ESP32-C3 Super Mini
+)
+```
+
+**Adding/Modifying Boards:**
+
+1. Edit `config.sh` and add/modify entries in `FQBN_TARGETS`
+2. Provide custom board name or leave empty to auto-extract from FQBN
+3. Build outputs go to `build/<board-name>/` directory
+
+**Examples:**
+```bash
+# Build all boards
+./build.sh
+
+# Build specific board
+./build.sh esp32
+./build.sh esp32c3
+
+# Upload to specific board
+./upload.sh esp32
+./upload.sh esp32c3 /dev/ttyACM0  # With explicit port
 ```
 
 ### Serial Port
@@ -157,7 +181,7 @@ FQBN="esp32:esp32:esp32c3"  # For ESP32-C3
 Scripts auto-detect `/dev/ttyUSB0` or `/dev/ttyACM0`. Manually specify if needed:
 
 ```bash
-./upload.sh /dev/ttyUSB1
+./upload.sh esp32 /dev/ttyUSB1
 ./monitor.sh /dev/ttyACM0 115200
 ```
 
@@ -233,9 +257,10 @@ Version is automatically displayed at startup. Update before releases.
 
 GitHub Actions automatically validates builds on push:
 
-- Compiles firmware for ESP32 Dev Module
+- Compiles firmware for all configured board variants (matrix build)
 - Caches arduino-cli and libraries for faster builds
-- Uploads build artifacts (.bin and .elf files)
+- Uploads separate build artifacts per board (.bin and .elf files)
+- Generates build summary with firmware sizes
 
 ## 🐛 Troubleshooting
 

@@ -12,8 +12,10 @@ ESP32 Arduino development template using `arduino-cli` for headless builds. Desi
   - `web_portal.cpp/h` - Server and REST API implementation
   - `web_assets.cpp/h` - Embedded HTML/CSS/JS (from `src/app/web/`)
   - `config_manager.cpp/h` - NVS configuration storage
-- **Output**: Compiled binaries in `./build/` directory
-- **Board Target**: `esp32:esp32:esp32` (ESP32 Dev Module)
+- **Output**: Compiled binaries in `./build/<board-name>/` directories
+- **Board Targets**: Multi-board support via `FQBN_TARGETS` array in `config.sh`
+  - `esp32:esp32:esp32` → `build/esp32/` (ESP32 Dev Module)
+  - `esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc` → `build/esp32c3/` (ESP32-C3 Super Mini)
 
 ## Critical Developer Workflows
 
@@ -24,9 +26,23 @@ ESP32 Arduino development template using `arduino-cli` for headless builds. Desi
 
 ### Build-Upload-Monitor Cycle
 ```bash
-./build.sh              # Compile sketch
-./upload.sh             # Auto-detects /dev/ttyUSB0 or /dev/ttyACM0
+# Build all configured boards
+./build.sh
+
+# Or build specific board
+./build.sh esp32        # Compile for ESP32 Dev Module
+./build.sh esp32c3      # Compile for ESP32-C3 Super Mini
+
+# Upload (board name required when multiple boards configured)
+./upload.sh esp32       # Auto-detects /dev/ttyUSB0 or /dev/ttyACM0
+./upload.sh esp32c3     # Auto-detects /dev/ttyUSB0 or /dev/ttyACM0
+
+# Monitor
 ./monitor.sh            # Serial monitor at 115200 baud
+
+# Convenience scripts
+./bum.sh esp32          # Build + Upload + Monitor
+./um.sh esp32c3         # Upload + Monitor
 ```
 
 All scripts use absolute paths via `SCRIPT_DIR` resolution - they work from any directory.
@@ -39,8 +55,10 @@ All scripts use absolute paths via `SCRIPT_DIR` resolution - they work from any 
   - `SCRIPT_DIR` resolution for absolute path handling
   - `find_arduino_cli()` - Checks local `$SCRIPT_DIR/bin/arduino-cli` first, then system-wide
   - `find_serial_port()` - Auto-detects `/dev/ttyUSB0` first, fallback to `/dev/ttyACM0`
-  - Project constants: `SKETCH_PATH`, `BUILD_PATH`, `FQBN`
+  - Project constants: `PROJECT_NAME`, `SKETCH_PATH`, `BUILD_PATH`
+  - Board management: `FQBN_TARGETS` array, `get_board_name()`, `list_boards()`, `get_fqbn_for_board()`
 - Scripts work from any directory due to absolute path resolution
+- Multi-board scripts require board name parameter when multiple targets are configured
 
 ### Arduino Code Standards
 - Use `Serial.begin(115200)` for consistency with monitor.sh default
@@ -91,12 +109,14 @@ See `docs/wsl-development.md` for complete USB/IP setup guide.
 ### Scripts
 - `config.sh` - Common configuration and helper functions (sourced by all scripts)
 - `setup.sh` - Downloads arduino-cli v0.latest, configures ESP32 platform, installs libraries
-- `build.sh` - Compiles to `./build/*.bin` files
-- `upload.sh` - Flashes firmware via serial
-- `upload-erase.sh` - Completely erases ESP32 flash memory
+- `build.sh` - Compiles to `./build/<board-name>/*.bin` files (all boards or specific board)
+- `upload.sh` - Flashes firmware via serial (requires board name with multiple boards)
+- `upload-erase.sh` - Completely erases ESP32 flash memory (requires board name with multiple boards)
 - `monitor.sh` - Serial console (Ctrl+C to exit)
-- `clean.sh` - Removes build artifacts
+- `clean.sh` - Removes all build artifacts (all board directories)
 - `library.sh` - Manages Arduino library dependencies
+- `bum.sh` - Build + Upload + Monitor convenience script
+- `um.sh` - Upload + Monitor convenience script
 
 ### Source
 - `src/app/app.ino` - Main sketch file (standard Arduino structure)
@@ -109,9 +129,9 @@ See `docs/wsl-development.md` for complete USB/IP setup guide.
 - `src/version.h` - Firmware version tracking
 
 ### Configuration
-- `config.sh` - Project paths, FQBN, and helper functions
+- `config.sh` - Project paths, FQBN_TARGETS array, and helper functions
 - `arduino-libraries.txt` - List of required Arduino libraries (auto-installed by setup.sh)
-- `.github/workflows/build.yml` - CI/CD pipeline for automated builds
+- `.github/workflows/build.yml` - CI/CD pipeline with matrix builds for all board variants
 
 ## Library Management
 

@@ -2,6 +2,9 @@
 
 # ESP32 Flash Erase Script
 # Completely erases the ESP32 flash memory
+# Usage: ./upload-erase.sh [board-name] [port]
+#   - board-name: Required when multiple boards configured
+#   - port: Optional, auto-detected if not provided
 
 set -e
 
@@ -12,24 +15,37 @@ source "$SCRIPT_DIR/config.sh"
 # Get arduino-cli path
 ARDUINO_CLI=$(find_arduino_cli)
 
+# Parse board and port arguments
+parse_board_and_port_args "$@"
+
+# Extract chip type from FQBN (2nd segment is platform, use that for chip type)
+CHIP_TYPE=$(echo "$FQBN" | cut -d':' -f3 | grep -oE 'esp32[a-z0-9]*' | head -n1)
+if [[ -z "$CHIP_TYPE" ]]; then
+    CHIP_TYPE="esp32"  # Default fallback
+fi
+
 # Auto-detect port if not specified
-if [ -z "$1" ]; then
+if [[ -z "$PORT" ]]; then
     if PORT=$(find_serial_port); then
         echo -e "${GREEN}Auto-detected port: $PORT${NC}"
     else
         echo -e "${RED}Error: No serial device found at /dev/ttyUSB0 or /dev/ttyACM0${NC}"
-        echo "Please specify port manually: $0 <port>"
+        if [[ "${#FQBN_TARGETS[@]}" -gt 1 ]]; then
+            echo "Please specify port manually: ${0##*/} <board-name> [port]"
+        else
+            echo "Please specify port manually: ${0##*/} [port]"
+        fi
         exit 1
     fi
-else
-    PORT="$1"
 fi
 
 echo -e "${CYAN}=== ESP32 Flash Erase Utility ===${NC}"
 echo ""
 echo -e "${RED}WARNING: This will completely erase all data from the ESP32 flash memory!${NC}"
-echo "Port: $PORT"
-echo "Board: $FQBN"
+echo "Board: $BOARD"
+echo "Chip:  $CHIP_TYPE"
+echo "FQBN:  $FQBN"
+echo "Port:  $PORT"
 echo ""
 read -p "Are you sure you want to continue? (y/N) " -n 1 -r
 echo ""
@@ -64,15 +80,17 @@ if [ -z "$ESPTOOL_PATH" ]; then
 fi
 
 # Erase flash
-python3 "$ESPTOOL_PATH" --chip esp32 --port "$PORT" erase_flash
+python3 "$ESPTOOL_PATH" --chip "$CHIP_TYPE" --port "$PORT" erase_flash
 
 echo ""
 echo -e "${GREEN}=== Flash Erase Complete ===${NC}"
 echo "The ESP32 flash memory has been completely erased"
 echo ""
 echo "Next steps:"
-echo "  1. Upload new firmware: ./upload.sh"
-echo "  2. Or build and upload: ./build.sh && ./upload.sh"
-echo ""
-echo "Usage: $0 [port]"
-echo "Example: $0 /dev/ttyUSB0"
+if [[ "${#FQBN_TARGETS[@]}" -gt 1 ]]; then
+    echo "  1. Upload new firmware: ./upload.sh $BOARD"
+    echo "  2. Or build and upload: ./build.sh $BOARD && ./upload.sh $BOARD"
+else
+    echo "  1. Upload new firmware: ./upload.sh"
+    echo "  2. Or build and upload: ./build.sh && ./upload.sh"
+fi
