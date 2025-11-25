@@ -22,7 +22,7 @@ BUILD_PATH="$SCRIPT_DIR/build"
 # For ESP32 Dev Module (default):
 FQBN="esp32:esp32:esp32"
 # For ESP32-C3 Super Mini (with USB CDC enabled):
-# FQBN="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"
+#FQBN="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"
 # Note: ESP32-C3 uses built-in USB CDC and appears as /dev/ttyACM0 (not /dev/ttyUSB0)
 
 # Find arduino-cli executable

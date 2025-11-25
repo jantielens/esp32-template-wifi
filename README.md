@@ -6,8 +6,9 @@ A streamlined ESP32 Arduino development template using `arduino-cli` for headles
 
 - **Zero System Dependencies**: Local `arduino-cli` installation (no sudo required)
 - **Simple Build Scripts**: One-command compilation, upload, and monitoring
-- **Auto Port Detection**: Automatically finds `/dev/ttyUSB0` or `/dev/ttyACM0`
-- **WSL2 Optimized**: Full USB/IP support with detailed setup guide
+- **Web Configuration Portal**: WiFi setup via captive portal with REST API
+- **Health Monitoring**: Real-time device stats with floating status widget
+- **OTA Updates**: Over-the-air firmware updates via web interface
 - **Version Tracking**: Built-in firmware version management
 - **Clean Project Structure**: Organized directories with best practices
 - **CI/CD Ready**: GitHub Actions workflow for automated validation
@@ -47,16 +48,24 @@ Edit `src/app/app.ino` with your code and repeat step 2.
 ## 📁 Project Structure
 
 ```
-esp32-template/
+esp32-template-wifi/
 ├── bin/                    # Local arduino-cli installation
 ├── build/                  # Compiled firmware binaries
 ├── docs/                   # Documentation
 │   ├── scripts.md         # Script usage guide
+│   ├── web-portal.md      # Web portal guide
 │   ├── wsl-development.md # WSL/USB setup
 │   └── library-management.md # Library management
 ├── src/
 │   ├── app/
-│   │   └── app.ino        # Main sketch file
+│   │   ├── app.ino        # Main sketch file
+│   │   ├── config_manager.cpp/h  # NVS config storage
+│   │   ├── web_portal.cpp/h      # Web server & API
+│   │   ├── web_assets.cpp/h      # Embedded HTML/CSS/JS
+│   │   └── web/
+│   │       ├── portal.html   # Portal interface
+│   │       ├── portal.css    # Styles
+│   │       └── portal.js     # Client logic
 │   └── version.h          # Firmware version tracking
 ├── .github/
 │   └── workflows/
@@ -68,9 +77,50 @@ esp32-template/
 ├── monitor.sh             # Serial monitor
 ├── clean.sh               # Clean build artifacts
 ├── library.sh             # Library management
+├── bum.sh / um.sh         # Convenience scripts
 ├── setup.sh               # Environment setup
 └── arduino-libraries.txt  # Library dependencies
 ```
+
+## 🌐 Web Configuration Portal
+
+The template includes a full-featured web portal for device configuration and monitoring.
+
+### Portal Modes
+
+**Core Mode (AP)**: Runs when WiFi is not configured
+- Device creates Access Point: `ESP32-XXXXXX`
+- Captive portal at: `http://192.168.4.1`
+- Configure WiFi credentials and device settings
+
+**Full Mode (WiFi)**: Runs when connected to WiFi
+- Access at device IP or mDNS hostname
+- All configuration options available
+- Real-time health monitoring
+- OTA firmware updates
+
+### Features
+
+- 🔧 **WiFi Configuration**: SSID, password, fixed IP settings
+- 📊 **Health Monitoring**: CPU usage, temperature, memory, uptime
+- 🔄 **OTA Updates**: Upload firmware via web interface
+- 💾 **Config Management**: Save, reset, export settings
+- 📱 **Responsive UI**: Works on desktop and mobile
+
+### REST API Endpoints
+
+| Method | Endpoint | Purpose |
+|--------|----------|----------|
+| GET | `/api/info` | Device info (firmware, chip, cores, flash, PSRAM) |
+| GET | `/api/health` | Real-time health stats (CPU, memory, WiFi, uptime) |
+| GET | `/api/config` | Current configuration |
+| POST | `/api/config` | Save configuration (triggers reboot) |
+| DELETE | `/api/config` | Reset to defaults (triggers reboot) |
+| GET | `/api/mode` | Portal mode (core vs full) |
+| POST | `/api/update` | OTA firmware upload |
+| POST | `/api/reboot` | Reboot device |
+
+See [docs/web-portal.md](docs/web-portal.md) for detailed guide.
 
 ## 🛠️ Available Scripts
 
@@ -220,9 +270,11 @@ usbipd list
 
 ## 📖 Documentation
 
+- [Web Portal Guide](docs/web-portal.md) - Configuration portal & REST API
 - [Script Reference](docs/scripts.md) - Detailed script usage
 - [WSL Development Guide](docs/wsl-development.md) - Windows/WSL setup
 - [Library Management](docs/library-management.md) - Managing dependencies
+- [Changelog](CHANGELOG.md) - Version history and release notes
 
 ## 📄 License
 

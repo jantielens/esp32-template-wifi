@@ -2,6 +2,9 @@
 build/
 bin/arduino-cli
 
+# Auto-generated web assets
+src/app/web_assets.h
+
 # Arduino CLI configuration
 .arduino15/
 .cli-config.yml

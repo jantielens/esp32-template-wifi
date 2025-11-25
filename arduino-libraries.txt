@@ -14,7 +14,8 @@
 # To find library names: arduino-cli lib search <keyword>
 
 # Core libraries
-# WiFi
-# ArduinoJson
+ArduinoJson@7.2.1
+ESP Async WebServer@3.9.0
+Async TCP@3.4.9
 
 # Add additional libraries below:

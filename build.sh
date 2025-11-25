@@ -14,6 +14,11 @@ ARDUINO_CLI=$(find_arduino_cli)
 
 echo -e "${CYAN}=== Building ESP32 Firmware ===${NC}"
 
+# Generate web assets
+echo "Generating web assets..."
+"$SCRIPT_DIR/tools/minify-web-assets.sh"
+echo ""
+
 # Create build directory if it doesn't exist
 mkdir -p "$BUILD_PATH"
 

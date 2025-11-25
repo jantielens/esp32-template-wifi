@@ -7,7 +7,11 @@ ESP32 Arduino development template using `arduino-cli` for headless builds. Desi
 ## Architecture
 
 - **Build System**: Custom bash scripts wrapping `arduino-cli` (installed locally to `./bin/`)
-- **Sketch Location**: Single Arduino file at `src/app/app.ino`
+- **Sketch Location**: Main Arduino file at `src/app/app.ino`
+- **Web Portal**: Async web server with captive portal support
+  - `web_portal.cpp/h` - Server and REST API implementation
+  - `web_assets.cpp/h` - Embedded HTML/CSS/JS (from `src/app/web/`)
+  - `config_manager.cpp/h` - NVS configuration storage
 - **Output**: Compiled binaries in `./build/` directory
 - **Board Target**: `esp32:esp32:esp32` (ESP32 Dev Module)
 
@@ -43,6 +47,36 @@ All scripts use absolute paths via `SCRIPT_DIR` resolution - they work from any 
 - Include startup diagnostics (chip model, revision, CPU freq, flash size) using `ESP.*` functions
 - Implement heartbeat pattern with `millis()` for long-running loops (5s interval)
 
+### Web Portal Conventions
+
+**Portal Modes**:
+- **Core Mode**: AP with captive portal (192.168.4.1) - WiFi not configured
+- **Full Mode**: Connected to WiFi - portal at device IP/hostname
+
+**REST API Design**:
+- All endpoints under `/api/*` namespace
+- Use semantic names: `/api/info` (device info), `/api/health` (real-time stats), `/api/config` (settings)
+- Return JSON responses with proper HTTP status codes
+- POST operations that modify state trigger device reboot for consistency
+
+**Health Monitoring**:
+- `/api/health` provides real-time metrics (CPU, memory, WiFi, temperature, uptime)
+- CPU usage calculated via IDLE task: `100 - (idle_runtime/total_runtime * 100)`
+- Temperature sensor with `SOC_TEMP_SENSOR_SUPPORTED` guards for cross-platform compatibility
+- Update interval: 10s (compact widget), 5s (expanded widget)
+
+**UI Design**:
+- Minimalist card-based layout with gradient header
+- 6 header badges showing device capabilities:
+  - Firmware version (purple badge)
+  - Chip info (orange badge)
+  - CPU cores (green badge)
+  - CPU frequency (yellow badge)
+  - Flash size (cyan badge)
+  - PSRAM status (teal badge)
+- Floating health widget with compact/expanded views
+- Breathing animation on status updates
+
 ## WSL-Specific Requirements
 
 Serial port access requires:
@@ -65,7 +99,13 @@ See `docs/wsl-development.md` for complete USB/IP setup guide.
 - `library.sh` - Manages Arduino library dependencies
 
 ### Source
-- `src/app/app.ino` - Single sketch file (standard Arduino structure)
+- `src/app/app.ino` - Main sketch file (standard Arduino structure)
+- `src/app/web_portal.cpp/h` - Async web server and REST API endpoints
+- `src/app/web_assets.cpp/h` - Embedded HTML/CSS/JS from `web/` directory
+- `src/app/config_manager.cpp/h` - NVS-based configuration storage
+- `src/app/web/portal.html` - Web interface markup
+- `src/app/web/portal.css` - Styles (gradients, animations, responsive)
+- `src/app/web/portal.js` - Client-side logic (API calls, health updates)
 - `src/version.h` - Firmware version tracking
 
 ### Configuration
@@ -79,7 +119,10 @@ See `docs/wsl-development.md` for complete USB/IP setup guide.
 - **Management Script**: `./library.sh` provides commands to search, add, remove, and list libraries
 - **Auto-Installation**: `setup.sh` reads `arduino-libraries.txt` and installs all listed libraries
 - **CI/CD Integration**: GitHub Actions automatically installs libraries via `setup.sh`
-- **Initial State**: Template starts with 0 libraries configured (examples are commented out)
+- **Required Libraries**:
+  - `ArduinoJson@7.2.1` - JSON serialization for REST API
+  - `ESP Async WebServer@3.9.0` - Non-blocking web server
+  - `Async TCP@3.4.9` - Async TCP dependency
 
 ### Library Commands
 ```bash
@@ -121,6 +164,7 @@ After every significant change, the agent must:
 
 2. **Check if documentation needs updates** by reviewing:
    - `README.md` - Main project documentation
+   - `docs/web-portal.md` - Web portal and REST API guide
    - `docs/scripts.md` - Script usage guide
    - `docs/library-management.md` - Library management guide
    - `docs/wsl-development.md` - WSL setup guide
@@ -148,6 +192,9 @@ After every significant change, the agent must:
 - Library management changed → Update `docs/library-management.md`
 - Workflow modified → Update `README.md` CI/CD section
 - New requirement added → Update `README.md` prerequisites
+- REST API endpoint added/changed → Update `docs/web-portal.md` and `README.md` API table
+- Web UI feature changed → Update `docs/web-portal.md` features section
+- New version released → Update `CHANGELOG.md` with changes, update `src/version.h` with new version number
 
 ### Build Verification
 
