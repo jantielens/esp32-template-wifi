@@ -57,11 +57,6 @@ fi
 if [ ${#HTML_FILES[@]} -gt 0 ] || [ ${#CSS_FILES[@]} -gt 0 ] || [ ${#JS_FILES[@]} -gt 0 ]; then
     echo "Checking Python dependencies..."
     
-    if [ ${#HTML_FILES[@]} -gt 0 ] && ! python3 -c "import htmlmin" 2>/dev/null; then
-        echo "Installing htmlmin..."
-        python3 -m pip install --user htmlmin
-    fi
-    
     if [ ${#CSS_FILES[@]} -gt 0 ] && ! python3 -c "import csscompressor" 2>/dev/null; then
         echo "Installing csscompressor..."
         python3 -m pip install --user csscompressor
@@ -96,19 +91,27 @@ declare -A JS_CONTENTS
 declare -A ORIGINAL_SIZES
 declare -A PROCESSED_SIZES
 
-# Process HTML files (minify)
+# Process HTML files (basic minification without external dependencies)
 for html_file in "${HTML_FILES[@]}"; do
     filename=$(basename "$html_file" .html)
-    echo "Minifying HTML: $filename.html..."
+    echo "Processing HTML: $filename.html..."
     content=$(cat "$html_file")
     original_size=$(echo -n "$content" | wc -c)
     
+    # Basic minification: remove comments and normalize whitespace
     minified=$(python3 -c "
-import htmlmin
+import re
 with open('$html_file', 'r') as f:
     html = f.read()
-    minified = htmlmin.minify(html, remove_comments=True, remove_empty_space=True)
-    print(minified, end='')
+    # Remove HTML comments
+    html = re.sub(r'<!--.*?-->', '', html, flags=re.DOTALL)
+    # Collapse multiple spaces/newlines to single space
+    html = re.sub(r'\s+', ' ', html)
+    # Remove spaces around tags
+    html = re.sub(r'>\s+<', '><', html)
+    # Trim
+    html = html.strip()
+    print(html, end='')
 ")
     
     HTML_CONTENTS["$filename"]="$minified"
@@ -175,9 +178,9 @@ cat > "$OUTPUT_FILE" << 'HEADER_START'
  * Source files are dynamically discovered in src/app/web/ directory.
  * 
  * Processing:
- *   - HTML files: embedded as-is
+ *   - HTML files: basic minification (comments and whitespace removed)
  *   - CSS files:  minified using csscompressor
- *   - JS files:   minified using jsmin
+ *   - JS files:   minified using rjsmin
  * 
  * To modify web assets:
  *   1. Edit source files in src/app/web/
