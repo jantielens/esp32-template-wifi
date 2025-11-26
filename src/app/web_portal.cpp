@@ -266,7 +266,7 @@ void handleGetVersion(AsyncWebServerRequest *request) {
     response->print(WiFi.getHostname());
     response->print("\",\"mdns_name\":\"");
     response->print(WiFi.getHostname());
-    response->print(",\"hostname\":\"");
+    response->print(".local\",\"hostname\":\"");
     response->print(WiFi.getHostname());
     response->print("\",\"project_name\":\"");
     response->print(PROJECT_NAME);
