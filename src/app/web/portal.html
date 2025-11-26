@@ -199,26 +199,17 @@
         </div>
     </div>
 
-    <div id="ota-overlay" class="reboot-overlay" style="display:none;">
-        <div class="reboot-modal">
-            <div id="ota-spinner" class="spinner" style="display:none;"></div>
-            <h2 id="ota-title">Firmware Update</h2>
-            <p id="ota-message">Uploading firmware...</p>
-            <div id="ota-progress-container" style="margin: 25px 0;">
-                <div class="progress-bar" style="height: 30px; background: #e0e0e0; border-radius: 15px; overflow: hidden;">
-                    <div id="ota-progress-fill" style="height: 100%; width: 0%; background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); transition: width 0.3s;"></div>
-                </div>
-                <div id="ota-progress-text" style="margin-top: 10px; font-size: 18px; font-weight: 600; color: #667eea;">0%</div>
-            </div>
-            <div id="ota-reconnect-status" class="reconnect-status" style="display:none;"></div>
-        </div>
-    </div>
-
     <div id="reboot-overlay" class="reboot-overlay" style="display:none;">
         <div class="reboot-modal">
-            <div class="spinner"></div>
-            <h2>Device Rebooting</h2>
+            <div id="reboot-spinner" class="spinner"></div>
+            <h2 id="reboot-title">Device Rebooting</h2>
             <p id="reboot-message">Please wait while the device restarts...</p>
+            <div id="reboot-progress-container" style="margin: 25px 0; display: none;">
+                <div class="progress-bar" style="height: 30px; background: #e0e0e0; border-radius: 15px; overflow: hidden;">
+                    <div id="reboot-progress-fill" style="height: 100%; width: 0%; background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); transition: width 0.3s;"></div>
+                </div>
+                <div id="reboot-progress-text" style="margin-top: 10px; font-size: 18px; font-weight: 600; color: #667eea;">0%</div>
+            </div>
             <p id="reboot-submessage" class="small">This page will automatically refresh when ready</p>
             <div id="reconnect-status" class="reconnect-status"></div>
         </div>

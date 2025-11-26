@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- Fixed missing `API_VERSION` constant that caused 404 errors during device reconnection polling
+
+### Changed
+- Improved reconnection polling strategy: 2s initial delay, then 3s intervals (total 122s timeout)
+- Unified reboot dialog for all scenarios (save config, OTA update, manual reboot, factory reset)
+- Consolidated reconnection logic from two separate functions into single `startReconnection()`
+- Better user feedback with best-effort messaging and manual fallback addresses
+- Enhanced timeout handling with troubleshooting hints
+- Progress display now shows elapsed time during reconnection attempts
+
+### Removed
+- Removed duplicate OTA overlay dialog (now uses unified reboot dialog)
+- Removed deprecated `startOTAReconnect()` function
+
+---
+
 ## [0.0.2] - 2025-11-25
 
 ### Added

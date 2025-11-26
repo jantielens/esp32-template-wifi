@@ -9,6 +9,7 @@ const API_CONFIG = '/api/config';
 const API_INFO = '/api/info';
 const API_MODE = '/api/mode';
 const API_UPDATE = '/api/update';
+const API_VERSION = '/api/info'; // Used for connection polling
 
 let selectedFile = null;
 let portalMode = 'full'; // 'core' or 'full'
@@ -30,56 +31,75 @@ function showMessage(message, type = 'info') {
 }
 
 /**
- * Show overlay with saving message (no reconnection attempts yet)
- * @param {string} newDeviceName - Device name for reconnection
+ * Show unified reboot overlay and handle reconnection
+ * @param {Object} options - Configuration options
+ * @param {string} options.title - Dialog title (e.g., 'Device Rebooting')
+ * @param {string} options.message - Main message to display
+ * @param {string} options.context - Context: 'save', 'ota', 'reboot', 'reset'
+ * @param {string} options.newDeviceName - Optional new device name if changed
+ * @param {boolean} options.showProgress - Show progress bar (for OTA)
  */
-function showSavingOverlay(newDeviceName) {
-    const overlay = document.getElementById('reboot-overlay');
-    const rebootMsg = document.getElementById('reboot-message');
-    const rebootSubMsg = document.getElementById('reboot-submessage');
-    rebootMsg.textContent = 'Saving configuration...';
-    rebootSubMsg.textContent = 'This page will automatically refresh when ready';
-    overlay.style.display = 'flex';
-    // Don't start reconnection attempts yet - wait for save to complete
-}
+function showRebootDialog(options) {
+    const {
+        title = 'Device Rebooting',
+        message = 'Please wait while the device restarts...',
+        context = 'reboot',
+        newDeviceName = null,
+        showProgress = false
+    } = options;
 
-/**
- * Show overlay with resetting message (no reconnection attempts yet)
- */
-function showResettingOverlay() {
     const overlay = document.getElementById('reboot-overlay');
-    const rebootMsg = document.getElementById('reboot-message');
-    const rebootSubMsg = document.getElementById('reboot-submessage');
-    rebootMsg.textContent = 'Resetting configuration...';
-    rebootSubMsg.textContent = 'Device will restart in AP mode. Reconnect to the WiFi access point.';
-    overlay.style.display = 'flex';
-    // Don't start reconnection attempts yet - wait for reset to complete
-}
-
-/**
- * Show the reboot overlay with reconnection attempts
- * @param {string} message - Message to display during reboot
- * @param {string} newDeviceName - Optional new device name if changed
- */
-function showRebootOverlay(message, newDeviceName = null) {
-    const overlay = document.getElementById('reboot-overlay');
+    const titleElement = document.getElementById('reboot-title');
     const rebootMsg = document.getElementById('reboot-message');
     const rebootSubMsg = document.getElementById('reboot-submessage');
     const reconnectStatus = document.getElementById('reconnect-status');
+    const progressContainer = document.getElementById('reboot-progress-container');
+    const spinner = document.getElementById('reboot-spinner');
+
+    // Set dialog content
+    titleElement.textContent = title;
     rebootMsg.textContent = message;
     
-    // Set appropriate submessage based on context
-    if (message.includes('AP mode')) {
-        rebootSubMsg.textContent = 'Device will restart in AP mode. Reconnect to the WiFi access point.';
-        reconnectStatus.style.display = 'none'; // Hide reconnect status for AP mode
-        // Don't start polling for AP mode - user needs to manually reconnect
-    } else {
-        rebootSubMsg.textContent = 'This page will automatically refresh when ready';
-        reconnectStatus.style.display = 'block';
-        startReconnectAttempts(newDeviceName);
+    // Show/hide progress bar
+    if (progressContainer) {
+        progressContainer.style.display = showProgress ? 'block' : 'none';
     }
     
+    // Show/hide spinner
+    if (spinner) {
+        spinner.style.display = showProgress ? 'none' : 'block';
+    }
+    
+    // Handle AP mode reset (no auto-reconnect)
+    if (context === 'reset') {
+        rebootSubMsg.textContent = 'Device will restart in AP mode. You must manually reconnect to the WiFi access point.';
+        reconnectStatus.style.display = 'none';
+        overlay.style.display = 'flex';
+        return; // Don't start polling for AP mode
+    }
+    
+    // Handle OTA (no auto-reconnect yet - wait for upload to complete)
+    if (context === 'ota') {
+        rebootSubMsg.textContent = 'Uploading firmware...';
+        reconnectStatus.style.display = 'none';
+        overlay.style.display = 'flex';
+        return; // Don't start polling yet - OTA handler will start it after upload
+    }
+    
+    // For save/reboot cases, show best-effort reconnection message and start polling
+    const targetAddress = newDeviceName ? `http://${sanitizeForMDNS(newDeviceName)}.local` : window.location.origin;
+    rebootSubMsg.innerHTML = `Attempting automatic reconnection...<br><small style="color: #888; margin-top: 8px; display: block;">If this fails, manually navigate to: <code style="color: #667eea; font-weight: 600;">${targetAddress}</code></small>`;
+    reconnectStatus.style.display = 'block';
+    
     overlay.style.display = 'flex';
+    
+    // Start unified reconnection process
+    startReconnection({
+        context,
+        newDeviceName,
+        statusElement: reconnectStatus,
+        messageElement: rebootMsg
+    });
 }
 
 /**
@@ -149,36 +169,41 @@ function showCaptivePortalWarning() {
 }
 
 /**
- * Start attempting to reconnect to the device after reboot
- * @param {string} newDeviceName - Optional new device name if changed
+ * Unified reconnection logic for all reboot scenarios
+ * @param {Object} options - Reconnection options
+ * @param {string} options.context - Context: 'save', 'ota', 'reboot'
+ * @param {string} options.newDeviceName - Optional new device name if changed
+ * @param {HTMLElement} options.statusElement - Status message element
+ * @param {HTMLElement} options.messageElement - Main message element
  */
-async function startReconnectAttempts(newDeviceName = null) {
-    // Wait for device to start rebooting
-    await new Promise(resolve => setTimeout(resolve, 3000));
+async function startReconnection(options) {
+    const { context, newDeviceName, statusElement, messageElement } = options;
     
-    const statusDiv = document.getElementById('reconnect-status');
+    // Initial delay: device needs time to start rebooting
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
     let attempts = 0;
-    const maxAttempts = 40;
-    const checkInterval = 2000; // Check every 2 seconds
+    const maxAttempts = 40; // 2s initial + (40 × 3s) = 122 seconds total
+    const checkInterval = 3000; // Poll every 3 seconds
     
     // Determine target URL
     let targetUrl = null;
     if (newDeviceName) {
         const mdnsName = sanitizeForMDNS(newDeviceName);
         targetUrl = `http://${mdnsName}.local`;
-        statusDiv.textContent = `Will redirect to ${targetUrl}`;
-        await new Promise(resolve => setTimeout(resolve, 2000));
     }
     
     const checkConnection = async () => {
         attempts++;
         
-        // Try current location first, then mDNS if device name changed
+        // Try new address first (if device name changed), then current location as fallback
         const urlsToTry = targetUrl 
             ? [targetUrl + API_VERSION, window.location.origin + API_VERSION]
             : [window.location.origin + API_VERSION];
         
-        statusDiv.textContent = `Checking connection (${attempts}/${maxAttempts})...`;
+        // Update status with progress
+        const elapsed = 2 + (attempts * 3);
+        statusElement.textContent = `Checking connection (attempt ${attempts}/${maxAttempts}, ${elapsed}s elapsed)...`;
         
         for (const url of urlsToTry) {
             try {
@@ -189,7 +214,8 @@ async function startReconnectAttempts(newDeviceName = null) {
                 });
                 
                 if (response.ok) {
-                    statusDiv.textContent = 'Device is back online! Redirecting...';
+                    messageElement.textContent = 'Device is back online!';
+                    statusElement.textContent = 'Redirecting...';
                     const redirectUrl = targetUrl || window.location.origin;
                     setTimeout(() => {
                         window.location.href = redirectUrl;
@@ -198,6 +224,7 @@ async function startReconnectAttempts(newDeviceName = null) {
                 }
             } catch (e) {
                 // Connection failed, try next URL
+                console.debug(`Connection attempt ${attempts} failed for ${url}:`, e.message);
             }
         }
         
@@ -205,9 +232,15 @@ async function startReconnectAttempts(newDeviceName = null) {
         if (attempts < maxAttempts) {
             setTimeout(checkConnection, checkInterval);
         } else {
+            // Timeout - provide manual fallback
             const fallbackUrl = targetUrl || window.location.origin;
-            statusDiv.innerHTML = `<span style="color:#e74c3c">Reconnection timeout.</span><br>` +
-                `<a href="${fallbackUrl}" style="color:#667eea">Click here to retry</a>`;
+            messageElement.textContent = 'Automatic reconnection failed';
+            statusElement.innerHTML = 
+                `<div style="color:#e74c3c; margin-bottom: 10px;">Could not reconnect after ${2 + (maxAttempts * 3)} seconds.</div>` +
+                `<div style="margin-top: 10px;">Please manually navigate to:<br>` +
+                `<a href="${fallbackUrl}" style="color:#667eea; font-weight: 600; font-size: 16px;">${fallbackUrl}</a></div>` +
+                `<div style="margin-top: 15px; font-size: 13px; color: #888;">` +
+                `Possible issues: WiFi connection failed, incorrect credentials, or device taking longer to boot.</div>`;
         }
     };
     
@@ -388,8 +421,13 @@ async function saveConfig(event) {
     
     const currentDeviceName = document.getElementById('device_name').value;
     
-    // Show overlay immediately with saving message
-    showSavingOverlay(currentDeviceName);
+    // Show overlay immediately
+    showRebootDialog({
+        title: 'Saving Configuration',
+        message: 'Saving configuration...',
+        context: 'save',
+        newDeviceName: currentDeviceName
+    });
     
     try {
         const response = await fetch(API_CONFIG, {
@@ -406,13 +444,13 @@ async function saveConfig(event) {
         
         const result = await response.json();
         if (result.success) {
-            // Update overlay to show rebooting message
-            showRebootOverlay('Configuration saved. Device is rebooting...', currentDeviceName);
+            // Update dialog message
+            document.getElementById('reboot-message').textContent = 'Configuration saved. Device is rebooting...';
         }
     } catch (error) {
-        // If save request fails (e.g., device already rebooting), show reboot overlay anyway
+        // If save request fails (e.g., device already rebooting), assume success
         if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-            showRebootOverlay('Device is rebooting...', currentDeviceName);
+            document.getElementById('reboot-message').textContent = 'Configuration saved. Device is rebooting...';
         } else {
             // Hide overlay and show error
             document.getElementById('reboot-overlay').style.display = 'none';
@@ -430,13 +468,12 @@ async function rebootDevice() {
         return;
     }
     
-    // Show overlay immediately
-    const overlay = document.getElementById('reboot-overlay');
-    const rebootMsg = document.getElementById('reboot-message');
-    const rebootSubMsg = document.getElementById('reboot-submessage');
-    rebootMsg.textContent = 'Device is rebooting...';
-    rebootSubMsg.textContent = 'This page will automatically refresh when ready';
-    overlay.style.display = 'flex';
+    // Show unified dialog
+    showRebootDialog({
+        title: 'Device Rebooting',
+        message: 'Device is rebooting...',
+        context: 'reboot'
+    });
     
     try {
         const response = await fetch('/api/reboot', {
@@ -446,17 +483,10 @@ async function rebootDevice() {
         if (!response.ok) {
             throw new Error('Failed to reboot device');
         }
-        
-        // Start reconnection attempts with current device name
-        const currentDeviceName = document.getElementById('device_name').value;
-        startReconnectAttempts(currentDeviceName);
     } catch (error) {
-        // If reboot request fails (e.g., device already rebooting), continue anyway
-        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-            const currentDeviceName = document.getElementById('device_name').value;
-            startReconnectAttempts(currentDeviceName);
-        } else {
-            // Hide overlay and show error
+        // If reboot request fails (e.g., device already rebooting), that's expected
+        if (!error.message.includes('Failed to fetch') && !error.message.includes('NetworkError')) {
+            // Only show error for non-network errors
             document.getElementById('reboot-overlay').style.display = 'none';
             showMessage('Error rebooting device: ' + error.message, 'error');
             console.error('Reboot error:', error);
@@ -472,8 +502,12 @@ async function resetConfig() {
         return;
     }
     
-    // Show overlay immediately with resetting message
-    showResettingOverlay();
+    // Show unified dialog (no auto-reconnect for AP mode)
+    showRebootDialog({
+        title: 'Factory Reset',
+        message: 'Resetting configuration...',
+        context: 'reset'
+    });
     
     try {
         const response = await fetch(API_CONFIG, {
@@ -486,17 +520,17 @@ async function resetConfig() {
         
         const result = await response.json();
         if (result.success) {
-            // Update overlay to show rebooting message
-            showRebootOverlay('Configuration reset. Device restarting in AP mode...');
+            // Update message
+            document.getElementById('reboot-message').textContent = 'Configuration reset. Device restarting in AP mode...';
         } else {
             // Hide overlay and show error
             document.getElementById('reboot-overlay').style.display = 'none';
             showMessage('Error: ' + (result.message || 'Unknown error'), 'error');
         }
     } catch (error) {
-        // If reset request fails (e.g., device already rebooting), show reboot overlay anyway
+        // If reset request fails (e.g., device already rebooting), assume success
         if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-            showRebootOverlay('Device restarting in AP mode...');
+            document.getElementById('reboot-message').textContent = 'Configuration reset. Device restarting in AP mode...';
         } else {
             // Hide overlay and show error
             document.getElementById('reboot-overlay').style.display = 'none';
@@ -538,27 +572,23 @@ async function uploadFirmware() {
     const uploadBtn = document.getElementById('upload-btn');
     const fileInput = document.getElementById('firmware-file');
     
-    // Show OTA dialog
-    const overlay = document.getElementById('ota-overlay');
-    const title = document.getElementById('ota-title');
-    const message = document.getElementById('ota-message');
-    const progressFill = document.getElementById('ota-progress-fill');
-    const progressText = document.getElementById('ota-progress-text');
-    const progressContainer = document.getElementById('ota-progress-container');
-    const spinner = document.getElementById('ota-spinner');
-    const reconnectStatus = document.getElementById('ota-reconnect-status');
-    
     uploadBtn.disabled = true;
     fileInput.disabled = true;
     
-    title.textContent = 'Firmware Update';
-    message.textContent = 'Uploading firmware...';
-    progressFill.style.width = '0%';
-    progressText.textContent = '0%';
-    progressContainer.style.display = 'block';
-    spinner.style.display = 'none';
-    reconnectStatus.style.display = 'none';
-    overlay.style.display = 'flex';
+    // Show unified reboot dialog with progress bar
+    showRebootDialog({
+        title: 'Firmware Update',
+        message: 'Uploading firmware...',
+        context: 'ota',
+        showProgress: true
+    });
+    
+    const overlay = document.getElementById('reboot-overlay');
+    const message = document.getElementById('reboot-message');
+    const progressFill = document.getElementById('reboot-progress-fill');
+    const progressText = document.getElementById('reboot-progress-text');
+    const progressContainer = document.getElementById('reboot-progress-container');
+    const reconnectStatus = document.getElementById('reconnect-status');
     
     const formData = new FormData();
     formData.append('firmware', selectedFile);
@@ -581,11 +611,21 @@ async function uploadFirmware() {
                 // After a short delay, transition to reconnection
                 setTimeout(() => {
                     progressContainer.style.display = 'none';
-                    spinner.style.display = 'block';
+                    document.getElementById('reboot-spinner').style.display = 'block';
                     reconnectStatus.style.display = 'block';
                     
+                    // Start unified reconnection
                     const currentDeviceName = document.getElementById('device_name').value;
-                    startOTAReconnect(currentDeviceName);
+                    const targetAddress = window.location.origin;
+                    document.getElementById('reboot-submessage').innerHTML = 
+                        `Attempting automatic reconnection...<br><small style="color: #888; margin-top: 8px; display: block;">If this fails, manually navigate to: <code style="color: #667eea; font-weight: 600;">${targetAddress}</code></small>`;
+                    
+                    startReconnection({
+                        context: 'ota',
+                        newDeviceName: null,
+                        statusElement: reconnectStatus,
+                        messageElement: message
+                    });
                 }, 2000);
             }
         }
@@ -602,11 +642,21 @@ async function uploadFirmware() {
             
             setTimeout(() => {
                 progressContainer.style.display = 'none';
-                spinner.style.display = 'block';
+                document.getElementById('reboot-spinner').style.display = 'block';
                 reconnectStatus.style.display = 'block';
                 
+                // Start unified reconnection
                 const currentDeviceName = document.getElementById('device_name').value;
-                startOTAReconnect(currentDeviceName);
+                const targetAddress = window.location.origin;
+                document.getElementById('reboot-submessage').innerHTML = 
+                    `Attempting automatic reconnection...<br><small style="color: #888; margin-top: 8px; display: block;">If this fails, manually navigate to: <code style="color: #667eea; font-weight: 600;">${targetAddress}</code></small>`;
+                
+                startReconnection({
+                    context: 'ota',
+                    newDeviceName: null,
+                    statusElement: reconnectStatus,
+                    messageElement: message
+                });
             }, 2000);
         }
     });
@@ -635,54 +685,7 @@ async function uploadFirmware() {
     xhr.send(formData);
 }
 
-/**
- * Start reconnection attempts after OTA upload (in OTA dialog)
- * @param {string} deviceName - Current device name
- */
-async function startOTAReconnect(deviceName) {
-    // Wait for device to start rebooting
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    
-    const statusDiv = document.getElementById('ota-reconnect-status');
-    const message = document.getElementById('ota-message');
-    let attempts = 0;
-    const maxAttempts = 40;
-    const checkInterval = 2000;
-    
-    const checkConnection = async () => {
-        attempts++;
-        statusDiv.textContent = `Checking connection (${attempts}/${maxAttempts})...`;
-        
-        try {
-            const response = await fetch(API_VERSION, { 
-                cache: 'no-cache',
-                signal: AbortSignal.timeout(3000)
-            });
-            
-            if (response.ok) {
-                message.textContent = 'Device is back online!';
-                statusDiv.textContent = 'Redirecting...';
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1000);
-                return;
-            }
-        } catch (e) {
-            // Connection failed, continue trying
-        }
-        
-        // Continue trying
-        if (attempts < maxAttempts) {
-            setTimeout(checkConnection, checkInterval);
-        } else {
-            message.textContent = 'Reconnection timeout';
-            statusDiv.innerHTML = `<span style="color:#e74c3c">Could not reconnect to device.</span><br>` +
-                `<a href="/" style="color:#667eea">Click here to retry</a>`;
-        }
-    };
-    
-    checkConnection();
-}
+
 
 /**
  * Initialize page on DOM ready

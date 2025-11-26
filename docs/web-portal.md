@@ -157,6 +157,83 @@ Floating status widget with compact and expanded views:
 - **⚙️ Additional Settings**: Custom application settings
 - **📦 Firmware Update**: OTA binary upload (Full Mode only)
 
+## Automatic Reconnection After Reboot
+
+When the device reboots (after saving settings, firmware update, or manual reboot), the portal automatically attempts to reconnect and redirect you to the device.
+
+### Reconnection Behavior
+
+**Unified Dialog:**
+All reboot scenarios (save config, OTA update, manual reboot) use a single dialog that:
+- Shows current operation status
+- Displays best-effort automatic reconnection messages
+- Provides manual fallback address immediately
+- Updates with real-time connection attempts
+
+**Polling Strategy:**
+- **Initial delay:** 2 seconds (device starts rebooting)
+- **Polling interval:** 3 seconds between connection checks
+- **Total timeout:** 122 seconds (2s initial + 40 attempts × 3s)
+- **Endpoint used:** `/api/info` (lightweight health check)
+
+**Progress Display:**
+```
+Checking connection (attempt 5/40, 17s elapsed)...
+```
+
+### Scenarios
+
+#### Config Save / Manual Reboot
+1. Dialog shows: *"Configuration saved. Device is rebooting..."*
+2. Displays: *"Attempting automatic reconnection..."*
+3. Shows manual fallback: *"If this fails, manually navigate to: http://device-name.local"*
+4. Polls both new hostname (if device name changed) and current location
+5. On success: Redirects automatically
+6. On timeout: Provides clickable manual link with troubleshooting hints
+
+#### OTA Firmware Update
+1. Progress bar shows upload (0-100%)
+2. At 95%+: *"Installing firmware & rebooting..."*
+3. Transitions to reconnection polling after 2s delay
+4. Same polling behavior as config save
+5. Redirects to same location (firmware update doesn't change hostname)
+
+#### Factory Reset
+1. Dialog shows: *"Configuration reset. Device restarting in AP mode..."*
+2. Message: *"You must manually reconnect to the WiFi access point"*
+3. **No automatic polling** (user must manually reconnect to AP)
+4. Dialog remains visible with instructions
+
+### Timeout Handling
+
+If reconnection fails after 122 seconds:
+
+```
+Automatic reconnection failed
+
+Could not reconnect after 122 seconds.
+
+Please manually navigate to:
+http://device-name.local
+
+Possible issues: WiFi connection failed, incorrect credentials, 
+or device taking longer to boot.
+```
+
+### Best Practices
+
+**For Users:**
+- Keep the browser tab open during reboot (don't close immediately)
+- If automatic reconnection fails, use the provided manual link
+- For device name changes, bookmark the new address
+- On AP mode reset, reconnect to the WiFi access point before accessing portal
+
+**For Developers:**
+- Automatic reconnection is best-effort (network conditions vary)
+- Always provide manual fallback addresses
+- DNS propagation for hostname changes may take additional time
+- Some networks/browsers block cross-origin polling
+
 ## REST API Reference
 
 All endpoints return JSON responses with proper HTTP status codes.
@@ -279,6 +356,7 @@ Save new configuration. Device reboots after successful save.
 - Only fields present in request are updated
 - Password field: empty string = no change, non-empty = update
 - Device automatically reboots after successful save
+- Web portal automatically polls for reconnection (see [Automatic Reconnection](#automatic-reconnection-after-reboot))
 
 #### `DELETE /api/config`
 
@@ -291,6 +369,10 @@ Reset configuration to factory defaults. Device reboots after reset.
   "message": "Configuration reset"
 }
 ```
+
+**Notes:**
+- Device reboots into AP mode after reset
+- **No automatic reconnection** - user must manually reconnect to WiFi access point
 
 ### Portal Mode
 
@@ -324,6 +406,9 @@ Reboot the device without saving configuration changes.
 }
 ```
 
+**Notes:**
+- Web portal automatically polls for reconnection (see [Automatic Reconnection](#automatic-reconnection-after-reboot))
+
 ### OTA Firmware Update
 
 #### `POST /api/update`
@@ -355,6 +440,7 @@ Upload new firmware binary for over-the-air update.
 - File size must fit in OTA partition
 - Device automatically reboots after successful update
 - Progress logged to serial monitor
+- Web portal shows upload progress bar, then automatically polls for reconnection (see [Automatic Reconnection](#automatic-reconnection-after-reboot))
 
 ## Implementation Details
 
