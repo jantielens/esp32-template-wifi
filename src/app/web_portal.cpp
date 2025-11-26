@@ -224,6 +224,19 @@ void handleGetVersion(AsyncWebServerRequest *request) {
     doc["sketch_size"] = ESP.getSketchSize();
     doc["free_sketch_space"] = ESP.getFreeSketchSpace();
     
+    // Network and discovery information
+    doc["mac_address"] = WiFi.macAddress();
+    doc["wifi_hostname"] = WiFi.getHostname();
+    
+    // Build mDNS name from hostname
+    String hostname = String(WiFi.getHostname());
+    if (hostname.length() > 0) {
+        doc["mdns_name"] = hostname + ".local";
+    } else {
+        doc["mdns_name"] = "";
+    }
+    doc["hostname"] = hostname;
+    
     String response;
     serializeJson(doc, response);
     
@@ -329,10 +342,12 @@ void handleGetHealth(AsyncWebServerRequest *request) {
         doc["wifi_rssi"] = WiFi.RSSI();
         doc["wifi_channel"] = WiFi.channel();
         doc["ip_address"] = WiFi.localIP().toString();
+        doc["hostname"] = WiFi.getHostname();
     } else {
         doc["wifi_rssi"] = nullptr;
         doc["wifi_channel"] = nullptr;
         doc["ip_address"] = nullptr;
+        doc["hostname"] = nullptr;
     }
     
     String response;

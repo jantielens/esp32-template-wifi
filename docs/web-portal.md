@@ -45,6 +45,70 @@ The web portal provides:
 - OTA firmware updates
 - Device reboot
 
+## Device Discovery
+
+When connected to WiFi, devices can be discovered using multiple methods:
+
+### WiFi Hostname (DHCP)
+
+The device sets its WiFi hostname using `WiFi.setHostname()` before connecting. This hostname appears in:
+- Router DHCP client lists
+- Network scanning tools (Fing, WiFiMan, etc.)
+- DHCP server logs
+
+**Format:** Sanitized device name (e.g., "ESP32 1234" → `esp32-1234`)
+
+### mDNS (Bonjour)
+
+The device advertises itself via mDNS with enhanced service records:
+
+**Access:** `http://<hostname>.local` (e.g., `http://esp32-1234.local`)
+
+**Platforms:**
+- ✅ macOS (native support)
+- ✅ Linux (requires `avahi-daemon`)
+- ✅ iOS/iPadOS (native support)
+- ✅ Android (native support in modern versions)
+- ⚠️ Windows (requires Bonjour service)
+
+**Service TXT Records:**
+- `version` - Firmware version
+- `model` - Chip model (ESP32/ESP32-C3/etc)
+- `mac` - Last 4 hex digits of MAC address
+- `ty` - Device type ("iot-device")
+- `mf` - Manufacturer ("ESP32-Tmpl")
+- `features` - Capabilities ("wifi,http,api")
+- `note` - Description ("WiFi Portal Device")
+- `url` - Configuration URL ("http://hostname.local")
+
+**Discovery Example:**
+```bash
+# macOS/Linux
+avahi-browse -rt _http._tcp
+
+# Output includes TXT records:
+# esp32-1234._http._tcp
+#   hostname = [esp32-1234.local]
+#   txt = ["version=0.0.1" "model=ESP32-C3" "mac=1234" "ty=iot-device" 
+#          "mf=ESP32-Tmpl" "features=wifi,http,api" "note=WiFi Portal Device" 
+#          "url=http://esp32-1234.local"]
+```
+
+### Router Discovery
+
+Most routers display connected devices with their hostnames:
+- Check router web interface → DHCP clients
+- Look for device name (e.g., "esp32-1234")
+- Note the assigned IP address
+
+### Network Scanning Apps
+
+Recommended apps for finding devices:
+- **Fing** (iOS/Android) - Shows hostname and MAC
+- **WiFiMan** (iOS/Android) - Network scanner
+- **Angry IP Scanner** (Desktop) - Fast network scanner
+- **nmap** (Linux/macOS) - Command-line scanner
+
 ## User Interface
 
 ### Header Badges
@@ -117,9 +181,19 @@ Returns comprehensive device information.
   "psram_size": 0,
   "free_heap": 250000,
   "sketch_size": 1048576,
-  "free_sketch_space": 2097152
+  "free_sketch_space": 2097152,
+  "mac_address": "AA:BB:CC:DD:EE:FF",
+  "wifi_hostname": "esp32-1234",
+  "mdns_name": "esp32-1234.local",
+  "hostname": "esp32-1234"
 }
 ```
+
+**Discovery Fields:**
+- `mac_address`: Device MAC address
+- `wifi_hostname`: WiFi/DHCP hostname
+- `mdns_name`: Full mDNS name (hostname + `.local`)
+- `hostname`: Short hostname
 
 ### Health Monitoring
 
@@ -143,13 +217,14 @@ Returns real-time device health statistics.
   "flash_total": 3145728,
   "wifi_rssi": -45,
   "wifi_channel": 6,
-  "ip_address": "192.168.1.100"
+  "ip_address": "192.168.1.100",
+  "hostname": "esp32-1234"
 }
 ```
 
 **Notes:**
 - `temperature`: `null` on chips without internal sensor (original ESP32)
-- `wifi_rssi`, `wifi_channel`, `ip_address`: `null` when not connected
+- `wifi_rssi`, `wifi_channel`, `ip_address`, `hostname`: `null` when not connected
 
 ### Configuration Management
 

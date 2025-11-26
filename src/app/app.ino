@@ -3,6 +3,7 @@
 #include "web_portal.h"
 #include <WiFi.h>
 #include <ESPmDNS.h>
+#include <lwip/netif.h>
 
 // Configuration
 DeviceConfig device_config;
@@ -36,6 +37,8 @@ void setup()
   Serial.print("Flash Size: ");
   Serial.print(ESP.getFlashChipSize() / (1024 * 1024));
   Serial.println(" MB");
+  Serial.print("MAC Address: ");
+  Serial.println(WiFi.macAddress());
   Serial.println("=================================\n");
   
   // Initialize configuration manager
@@ -86,7 +89,15 @@ void loop()
     Serial.print("s | Free Heap: ");
     Serial.print(ESP.getFreeHeap());
     Serial.print(" bytes | WiFi: ");
-    Serial.println(WiFi.status() == WL_CONNECTED ? "Connected" : "Disconnected");
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.print("Connected (IP: ");
+      Serial.print(WiFi.localIP());
+      Serial.print(", Hostname: ");
+      Serial.print(WiFi.getHostname());
+      Serial.println(")");
+    } else {
+      Serial.println("Disconnected");
+    }
     
     lastHeartbeat = currentMillis;
   }
@@ -99,7 +110,28 @@ bool connect_wifi() {
   Serial.print("[WiFi] Connecting to ");
   Serial.println(device_config.wifi_ssid);
   
+  // Prepare sanitized hostname
+  char sanitized[CONFIG_DEVICE_NAME_MAX_LEN];
+  config_manager_sanitize_device_name(device_config.device_name, sanitized, CONFIG_DEVICE_NAME_MAX_LEN);
+  
   WiFi.mode(WIFI_STA);
+  
+  // Set WiFi hostname for mDNS and internal use
+  // NOTE: ESP32's lwIP stack has limited DHCP Option 12 (hostname) support
+  // The hostname may not always appear in router DHCP tables due to ESP-IDF/lwIP limitations
+  // Use mDNS (.local) or NetBIOS for reliable device discovery instead
+  if (strlen(sanitized) > 0) {
+    // Set via WiFi library
+    WiFi.setHostname(sanitized);
+    Serial.print("[WiFi] Hostname set to: ");
+    Serial.println(sanitized);
+    
+    // Also set via esp_netif API (for compatibility)
+    esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if (netif != NULL) {
+      esp_netif_set_hostname(netif, sanitized);
+    }
+  }
   
   // Configure fixed IP if provided
   if (strlen(device_config.fixed_ip) > 0) {
@@ -162,12 +194,24 @@ bool connect_wifi() {
     
     while (millis() - start < backoff) {
       if (WiFi.status() == WL_CONNECTED) {
-        Serial.println("\n[WiFi] Connected!");
-        Serial.print("[WiFi] IP address: ");
+        Serial.println("\n[WiFi] ========== CONNECTION SUCCESS ==========");
+        Serial.print("[WiFi] IP Address: ");
         Serial.println(WiFi.localIP());
-        Serial.print("[WiFi] Signal strength: ");
+        Serial.print("[WiFi] Hostname: ");
+        Serial.println(WiFi.getHostname());
+        Serial.print("[WiFi] MAC Address: ");
+        Serial.println(WiFi.macAddress());
+        Serial.print("[WiFi] Signal: ");
         Serial.print(WiFi.RSSI());
         Serial.println(" dBm");
+        Serial.println("\n[Discovery] How to access this device:");
+        Serial.print("[Discovery]   • Direct IP:  http://");
+        Serial.println(WiFi.localIP());
+        Serial.print("[Discovery]   • mDNS:       http://");
+        Serial.print(WiFi.getHostname());
+        Serial.println(".local");
+        Serial.println("[WiFi] =========================================\n");
+        
         return true;
       }
       delay(100);
@@ -178,7 +222,7 @@ bool connect_wifi() {
   return false;
 }
 
-// Start mDNS service
+// Start mDNS service with enhanced TXT records
 void start_mdns() {
   char sanitized[CONFIG_DEVICE_NAME_MAX_LEN];
   config_manager_sanitize_device_name(device_config.device_name, sanitized, CONFIG_DEVICE_NAME_MAX_LEN);
@@ -193,7 +237,39 @@ void start_mdns() {
     Serial.print(sanitized);
     Serial.println(".local");
     
+    // Add HTTP service
     MDNS.addService("http", "tcp", 80);
+    
+    // Add TXT records with device metadata (per RFC 6763)
+    // Keep keys ≤9 chars, total TXT record <400 bytes
+    
+    // Core device identification
+    MDNS.addServiceTxt("http", "tcp", "version", FIRMWARE_VERSION);
+    MDNS.addServiceTxt("http", "tcp", "model", ESP.getChipModel());
+    
+    // MAC address (last 4 hex digits for identification)
+    String mac = WiFi.macAddress();
+    mac.replace(":", "");
+    String mac_short = mac.substring(mac.length() - 4);
+    MDNS.addServiceTxt("http", "tcp", "mac", mac_short.c_str());
+    
+    // Device type and manufacturer
+    MDNS.addServiceTxt("http", "tcp", "ty", "iot-device");
+    MDNS.addServiceTxt("http", "tcp", "mf", "ESP32-Tmpl");
+    
+    // Capabilities
+    MDNS.addServiceTxt("http", "tcp", "features", "wifi,http,api");
+    
+    // User-friendly description
+    MDNS.addServiceTxt("http", "tcp", "note", "WiFi Portal Device");
+    
+    // Configuration URL
+    String config_url = "http://";
+    config_url += sanitized;
+    config_url += ".local";
+    MDNS.addServiceTxt("http", "tcp", "url", config_url.c_str());
+    
+    Serial.println("[mDNS] Added service TXT records (version, model, mac, ty, mf, features, note, url)");
   } else {
     Serial.println("[mDNS] ERROR: Failed to start");
   }

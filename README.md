@@ -102,6 +102,18 @@ The template includes a full-featured web portal for device configuration and mo
 - Real-time health monitoring
 - OTA firmware updates
 
+### Device Discovery
+
+When connected to WiFi, devices can be discovered using multiple methods:
+
+- **📡 Router/DHCP Table**: Device appears with configured hostname (e.g., `esp32-1234`)
+- **🔍 mDNS/Bonjour**: Access via `<hostname>.local` (e.g., `esp32-1234.local`)
+  - Works on macOS, Linux, iOS, Android
+  - Includes rich service metadata (version, model, device type, features, URL)
+- **📊 Network Scanners**: Tools like Fing, WiFiMan show device with hostname
+
+The hostname is automatically set from the device name and includes the last 4 hex digits of the chip ID for uniqueness (e.g., "ESP32 1234" → hostname "esp32-1234").
+
 ### Features
 
 - 🔧 **WiFi Configuration**: SSID, password, fixed IP settings
@@ -114,8 +126,8 @@ The template includes a full-featured web portal for device configuration and mo
 
 | Method | Endpoint | Purpose |
 |--------|----------|----------|
-| GET | `/api/info` | Device info (firmware, chip, cores, flash, PSRAM) |
-| GET | `/api/health` | Real-time health stats (CPU, memory, WiFi, uptime) |
+| GET | `/api/info` | Device info (firmware, chip, cores, flash, PSRAM, hostname, MAC) |
+| GET | `/api/health` | Real-time health stats (CPU, memory, WiFi, uptime, hostname) |
 | GET | `/api/config` | Current configuration |
 | POST | `/api/config` | Save configuration (triggers reboot) |
 | DELETE | `/api/config` | Reset to defaults (triggers reboot) |
