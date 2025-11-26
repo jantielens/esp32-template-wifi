@@ -60,14 +60,28 @@ jobs:
         git checkout ${{ github.head_ref }}
         
         NEW_VERSION="${{ steps.check-version.outputs.new_version }}"
+        VERSION_CHANGED="${{ steps.check-version.outputs.changed }}"
         
-        # Check if changelog has entry for new version
-        if grep -q "\[${NEW_VERSION}\]" CHANGELOG.md; then
-          echo "updated=true" >> $GITHUB_OUTPUT
-          echo "✅ Changelog contains [$NEW_VERSION] section"
+        if [ "$VERSION_CHANGED" == "true" ]; then
+          # Version changed - check for versioned section
+          if grep -q "\[${NEW_VERSION}\]" CHANGELOG.md; then
+            echo "updated=true" >> $GITHUB_OUTPUT
+            echo "✅ Changelog contains [$NEW_VERSION] section"
+          else
+            echo "updated=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Changelog missing [$NEW_VERSION] section"
+          fi
         else
-          echo "updated=false" >> $GITHUB_OUTPUT
-          echo "⚠️ Changelog missing [$NEW_VERSION] section"
+          # Version unchanged - check for Unreleased content
+          # Extract Unreleased section and check if it has content beyond the header
+          UNRELEASED_CONTENT=$(sed -n '/## \[Unreleased\]/,/## \[/p' CHANGELOG.md | grep -v "^## \[" | grep -v "^$" | grep -v "^---" | wc -l)
+          if [ "$UNRELEASED_CONTENT" -gt 0 ]; then
+            echo "updated=true" >> $GITHUB_OUTPUT
+            echo "✅ Changelog has [Unreleased] content"
+          else
+            echo "updated=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Changelog [Unreleased] section is empty"
+          fi
         fi
 
   # Generate build matrix from config.sh
@@ -218,15 +232,29 @@ jobs:
         EOF
         
         if [ "$CHANGELOG_UPDATED" == "true" ]; then
-          cat >> comment.md << EOF
+          if [ "$VERSION_CHANGED" == "true" ]; then
+            cat >> comment.md << EOF
         ✅ **Changelog updated:** Found \`[$NEW_VERSION]\` section in \`CHANGELOG.md\`
         EOF
+          else
+            cat >> comment.md << EOF
+        ✅ **Changelog updated:** Found content in \`[Unreleased]\` section
+        EOF
+          fi
         else
-          cat >> comment.md << EOF
+          if [ "$VERSION_CHANGED" == "true" ]; then
+            cat >> comment.md << EOF
         ⚠️ **Changelog missing entry:** No \`[$NEW_VERSION]\` section found in \`CHANGELOG.md\`
         
         > Add release notes for version \`$NEW_VERSION\` before merging
         EOF
+          else
+            cat >> comment.md << EOF
+        ⚠️ **Changelog missing changes:** \`[Unreleased]\` section is empty
+        
+        > Add change description to \`[Unreleased]\` section before merging
+        EOF
+          fi
         fi
         
         cat >> comment.md << 'EOF'
@@ -259,6 +287,40 @@ jobs:
         - ✅ Generate SHA256 checksums
         
         **Release page:** \`https://github.com/${{ github.repository }}/releases/tag/v$NEW_VERSION\`
+        
+        <details>
+        <summary><b>Alternative: Create Beta Release</b></summary>
+        
+        Test this version before stable release:
+        
+        \`\`\`bash
+        git checkout main && git pull
+        git tag -a v$NEW_VERSION-beta.1 -m "Beta release v$NEW_VERSION-beta.1"
+        git push origin v$NEW_VERSION-beta.1
+        \`\`\`
+        
+        - Marked as "Pre-release" on GitHub
+        - Users can test without affecting stable release
+        - Later create \`v$NEW_VERSION\` tag for stable release
+        
+        </details>
+        
+        <details>
+        <summary><b>Alternative: Delay Release (Combine Changes)</b></summary>
+        
+        Merge this PR but don't create a tag yet:
+        
+        1. Simply merge the PR - version stays at \`$NEW_VERSION\`
+        2. Continue merging other PRs (keep changes in \`[Unreleased]\`)
+        3. When ready, create the tag:
+        
+        \`\`\`bash
+        git checkout main && git pull
+        git tag -a v$NEW_VERSION -m "Release v$NEW_VERSION"
+        git push origin v$NEW_VERSION
+        \`\`\`
+        
+        </details>
         EOF
         else
           cat >> comment.md << 'EOF'
@@ -270,23 +332,33 @@ jobs:
           
           if [ "$VERSION_CHANGED" != "true" ]; then
             cat >> comment.md << EOF
-        - [ ] Bump version in \`src/version.h\` (currently \`$OLD_VERSION\`)
+        - [ ] Bump version in \`src/version.h\` (currently \`$OLD_VERSION\`) **OR** add changes to \`[Unreleased]\` section
         EOF
           fi
           
           if [ "$CHANGELOG_UPDATED" != "true" ]; then
-            cat >> comment.md << EOF
+            if [ "$VERSION_CHANGED" == "true" ]; then
+              cat >> comment.md << EOF
         - [ ] Add \`[$NEW_VERSION]\` section to \`CHANGELOG.md\` with release notes
         EOF
+            else
+              cat >> comment.md << EOF
+        - [ ] Add changes to \`[Unreleased]\` section in \`CHANGELOG.md\`
+        EOF
+            fi
           fi
           
           cat >> comment.md << 'EOF'
         
-        Or use the helper script:
-        
+        **Option 1: Prepare for immediate release**
         ```bash
         ./create-release.sh X.Y.Z "Release description"
         ```
+        
+        **Option 2: Delay release (combine with future changes)**
+        - Keep version unchanged
+        - Add changes to `[Unreleased]` section in CHANGELOG.md
+        - Create release later with combined changes
         EOF
         fi
         
