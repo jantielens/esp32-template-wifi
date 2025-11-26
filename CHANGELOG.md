@@ -15,6 +15,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.6] - 2025-11-26
+
+### Added
+- **WiFi Stability Improvements**: Comprehensive WiFi connection reliability enhancements
+  - WiFi hardware reset sequence on each connection attempt (OFF → STA mode cycle with delays)
+  - Disabled persistent WiFi storage (`WiFi.persistent(false)`) to prevent NVS corruption
+  - Automatic reconnection enabled at WiFi stack level (`WiFi.setAutoReconnect(true)`)
+  - WiFi event handlers for connection lifecycle (connect, got IP, disconnect with reason codes)
+  - WiFi watchdog in main loop (10-second interval) for automatic recovery from connection loss
+  - Detailed connection diagnostics logging (SSID not found, wrong password, connection lost, etc.)
+  - Automatic mDNS restart after reconnection
+
+### Fixed
+- **WiFi Connection Failures After OTA/Reboot**: Hardware reset sequence prevents WiFi radio state corruption that survives software reboots
+- **No Recovery from WiFi Drops**: Watchdog + auto-reconnect + event handlers provide triple-layer protection for runtime connection stability
+- **Limited WiFi Diagnostics**: Status reason logging helps identify connection failure causes
+
+### Changed
+- WiFi initialization now includes proper reset sequence: disconnect → OFF → delay → STA → delay
+- Event-driven WiFi state management with callbacks instead of polling-only approach
+
+---
+
 ## [0.0.5] - 2025-11-26
 
 ### Added

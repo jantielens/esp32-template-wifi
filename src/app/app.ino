@@ -18,11 +18,43 @@ const unsigned long WIFI_BACKOFF_BASE = 5000; // 5 seconds base
 const unsigned long HEARTBEAT_INTERVAL = 60000; // 60 seconds
 unsigned long lastHeartbeat = 0;
 
+// WiFi watchdog (Improvement 3)
+const unsigned long WIFI_CHECK_INTERVAL = 10000; // 10 seconds
+unsigned long lastWiFiCheck = 0;
+
+// WiFi event handlers (Improvement 2)
+void onWiFiConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
+  Logger.logMessage("WiFi", "Connected to AP - waiting for IP");
+}
+
+void onWiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info) {
+  Logger.logMessagef("WiFi", "Got IP: %s", WiFi.localIP().toString().c_str());
+  
+  // Restart mDNS after reconnection
+  MDNS.end();
+  start_mdns();
+}
+
+void onWiFiDisconnected(WiFiEvent_t event, WiFiEventInfo_t info) {
+  uint8_t reason = info.wifi_sta_disconnected.reason;
+  Logger.logMessagef("WiFi", "Disconnected - reason: %d", reason);
+  
+  // Common disconnect reasons:
+  // 2 = AUTH_EXPIRE, 3 = AUTH_LEAVE, 4 = ASSOC_EXPIRE
+  // 8 = ASSOC_LEAVE, 15 = 4WAY_HANDSHAKE_TIMEOUT
+  // 201 = NO_AP_FOUND, 202 = AUTH_FAIL, 205 = HANDSHAKE_TIMEOUT
+}
+
 void setup()
 {
   // Initialize log manager (wraps Serial for web streaming)
   Logger.begin(115200);
   delay(1000);
+  
+  // Register WiFi event handlers (Improvement 2)
+  WiFi.onEvent(onWiFiConnected, ARDUINO_EVENT_WIFI_STA_CONNECTED);
+  WiFi.onEvent(onWiFiGotIP, ARDUINO_EVENT_WIFI_STA_GOT_IP);
+  WiFi.onEvent(onWiFiDisconnected, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
   
   Logger.logBegin("System Boot");
   Logger.logLinef("Firmware: v%s", FIRMWARE_VERSION);
@@ -71,8 +103,20 @@ void loop()
   // Handle web portal (DNS for captive portal)
   web_portal_handle();
   
-  // Check if it's time for heartbeat
   unsigned long currentMillis = millis();
+  
+  // Improvement 3: WiFi watchdog - monitor and reconnect if needed
+  if (config_loaded && currentMillis - lastWiFiCheck >= WIFI_CHECK_INTERVAL) {
+    if (WiFi.status() != WL_CONNECTED && strlen(device_config.wifi_ssid) > 0) {
+      Logger.logMessage("WiFi Watchdog", "Connection lost - attempting reconnect");
+      if (connect_wifi()) {
+        start_mdns();
+      }
+    }
+    lastWiFiCheck = currentMillis;
+  }
+  
+  // Check if it's time for heartbeat
   if (currentMillis - lastHeartbeat >= HEARTBEAT_INTERVAL) {
     if (WiFi.status() == WL_CONNECTED) {
       Logger.logMessagef("Heartbeat", "Up: %ds | Heap: %d | WiFi: %s (%s)", 
@@ -94,11 +138,24 @@ bool connect_wifi() {
   Logger.logBegin("WiFi Connection");
   Logger.logLinef("SSID: %s", device_config.wifi_ssid);
   
+  // === WiFi Hardware Reset Sequence ===
+  // Improvement 5: Disable persistent WiFi config (we manage our own)
+  WiFi.persistent(false);
+  
+  // Improvement 4: Full WiFi reset to clear stale state
+  WiFi.disconnect(true);  // Disconnect + erase stored credentials
+  delay(100);
+  WiFi.mode(WIFI_OFF);    // Turn off WiFi hardware
+  delay(500);             // Wait for hardware to settle
+  WiFi.mode(WIFI_STA);    // Back to station mode
+  delay(100);
+  
+  // Improvement 1: Enable auto-reconnect at WiFi stack level
+  WiFi.setAutoReconnect(true);
+  
   // Prepare sanitized hostname
   char sanitized[CONFIG_DEVICE_NAME_MAX_LEN];
   config_manager_sanitize_device_name(device_config.device_name, sanitized, CONFIG_DEVICE_NAME_MAX_LEN);
-  
-  WiFi.mode(WIFI_STA);
   
   // Set WiFi hostname for mDNS and internal use
   // NOTE: ESP32's lwIP stack has limited DHCP Option 12 (hostname) support
@@ -174,7 +231,8 @@ bool connect_wifi() {
     Logger.logLinef("Attempt %d/%d (timeout %ds)", attempt + 1, WIFI_MAX_ATTEMPTS, backoff / 1000);
     
     while (millis() - start < backoff) {
-      if (WiFi.status() == WL_CONNECTED) {
+      wl_status_t status = WiFi.status();
+      if (status == WL_CONNECTED) {
         Logger.logLinef("IP: %s", WiFi.localIP().toString().c_str());
         Logger.logLinef("Hostname: %s", WiFi.getHostname());
         Logger.logLinef("MAC: %s", WiFi.macAddress().c_str());
@@ -188,6 +246,18 @@ bool connect_wifi() {
         return true;
       }
       delay(100);
+    }
+    
+    // Improvement 6: Log failure reason for diagnostics
+    wl_status_t status = WiFi.status();
+    if (status != WL_CONNECTED) {
+      const char* reason = 
+        (status == WL_NO_SSID_AVAIL) ? "SSID not found" :
+        (status == WL_CONNECT_FAILED) ? "Connect failed (wrong password?)" :
+        (status == WL_CONNECTION_LOST) ? "Connection lost" :
+        (status == WL_DISCONNECTED) ? "Disconnected" :
+        "Unknown";
+      Logger.logLinef("Status: %s (%d)", reason, status);
     }
   }
   
