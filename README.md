@@ -10,6 +10,7 @@ A streamlined ESP32 Arduino development template using `arduino-cli` for headles
 - **Live Device Logs**: Real-time log viewer with syntax highlighting and auto-scroll
 - **Health Monitoring**: Real-time device stats with floating status widget
 - **OTA Updates**: Over-the-air firmware updates via web interface
+- **Optimized Web Assets**: Automatic minification + gzip compression (~80% size reduction)
 - **Version Tracking**: Built-in firmware version management
 - **Clean Project Structure**: Organized directories with best practices
 - **CI/CD Ready**: GitHub Actions workflow for automated validation

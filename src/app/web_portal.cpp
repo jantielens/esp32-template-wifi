@@ -66,40 +66,45 @@ static size_t ota_total = 0;
 // Serve portal HTML
 void handleRoot(AsyncWebServerRequest *request) {
     AsyncWebServerResponse *response = request->beginResponse(200, "text/html", 
-                                                               (const uint8_t*)portal_html, 
-                                                               portal_html_len);
+                                                               portal_html_gz, 
+                                                               portal_html_gz_len);
+    response->addHeader("Content-Encoding", "gzip");
     request->send(response);
 }
 
 // Serve CSS
 void handleCSS(AsyncWebServerRequest *request) {
     AsyncWebServerResponse *response = request->beginResponse(200, "text/css", 
-                                                               (const uint8_t*)portal_css, 
-                                                               portal_css_len);
+                                                               portal_css_gz, 
+                                                               portal_css_gz_len);
+    response->addHeader("Content-Encoding", "gzip");
     request->send(response);
 }
 
 // Serve JavaScript
 void handleJS(AsyncWebServerRequest *request) {
     AsyncWebServerResponse *response = request->beginResponse(200, "application/javascript", 
-                                                               (const uint8_t*)portal_js, 
-                                                               portal_js_len);
+                                                               portal_js_gz, 
+                                                               portal_js_gz_len);
+    response->addHeader("Content-Encoding", "gzip");
     request->send(response);
 }
 
 // Serve logs HTML
 void handleLogsHTML(AsyncWebServerRequest *request) {
     AsyncWebServerResponse *response = request->beginResponse(200, "text/html", 
-                                                               (const uint8_t*)logs_html, 
-                                                               logs_html_len);
+                                                               logs_html_gz, 
+                                                               logs_html_gz_len);
+    response->addHeader("Content-Encoding", "gzip");
     request->send(response);
 }
 
 // Serve logs JavaScript
 void handleLogsJS(AsyncWebServerRequest *request) {
     AsyncWebServerResponse *response = request->beginResponse(200, "application/javascript", 
-                                                               (const uint8_t*)logs_js, 
-                                                               logs_js_len);
+                                                               logs_js_gz, 
+                                                               logs_js_gz_len);
+    response->addHeader("Content-Encoding", "gzip");
     request->send(response);
 }
 

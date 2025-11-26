@@ -526,7 +526,7 @@ Upload new firmware binary for over-the-air update.
 **Backend (C++):**
 - `web_portal.cpp/h` - ESPAsyncWebServer with REST endpoints
 - `config_manager.cpp/h` - NVS (Non-Volatile Storage) for configuration
-- `web_assets.cpp/h` - PROGMEM embedded HTML/CSS/JS
+- `web_assets.cpp/h` - PROGMEM embedded HTML/CSS/JS (gzip compressed)
 - `log_manager.cpp/h` - Print-compatible logging with nested blocks
 - `log_buffer.cpp/h` - Thread-safe circular buffer for log storage
 
@@ -536,6 +536,12 @@ Upload new firmware binary for over-the-air update.
 - `web/portal.js` - Vanilla JavaScript (no frameworks)
 - `web/logs.html` - Full-screen logs viewer interface
 - `web/logs.js` - Polling-based log streaming
+
+**Asset Compression:**
+- All web assets are automatically minified and gzip compressed during build
+- Reduces flash storage and bandwidth by ~80%
+- Assets served with `Content-Encoding: gzip` header
+- Browser automatically decompresses (transparent to user)
 
 ### CPU Usage Calculation
 
@@ -596,6 +602,21 @@ DNS server redirects all requests to device IP in AP mode:
 2. Rebuild to embed assets:
    ```bash
    ./build.sh
+   ```
+   
+   This automatically:
+   - Minifies HTML (removes comments, collapses whitespace)
+   - Minifies CSS using `csscompressor`
+   - Minifies JavaScript using `rjsmin`
+   - Gzip compresses all assets (level 9)
+   - Generates `web_assets.h` with embedded byte arrays
+   
+   The build script shows compression statistics:
+   ```
+   Asset Summary (Original → Minified → Gzipped):
+     HTML portal.html: 11695 → 8261 → 2399 bytes (-80% total)
+     CSS  portal.css:  14348 → 10539 → 2864 bytes (-81% total)
+     JS   portal.js:   32032 → 19700 → 4931 bytes (-85% total)
    ```
 
 3. Upload and test:

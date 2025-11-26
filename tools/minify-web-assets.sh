@@ -92,10 +92,31 @@ format_size_savings() {
 
 # Arrays to store processed content and statistics
 declare -A HTML_CONTENTS
+declare -A HTML_GZIP_CONTENTS
 declare -A CSS_CONTENTS
+declare -A CSS_GZIP_CONTENTS
 declare -A JS_CONTENTS
+declare -A JS_GZIP_CONTENTS
 declare -A ORIGINAL_SIZES
 declare -A PROCESSED_SIZES
+declare -A GZIPPED_SIZES
+
+# Helper function to gzip content and generate C byte array
+gzip_to_c_array() {
+    local content="$1"
+    local temp_file=$(mktemp)
+    local temp_gz=$(mktemp)
+    
+    # Write content to temp file and gzip it
+    echo -n "$content" > "$temp_file"
+    gzip -9 -c "$temp_file" > "$temp_gz"
+    
+    # Convert to C byte array format
+    xxd -i < "$temp_gz" | grep -v "unsigned" | sed 's/^  //'
+    
+    # Cleanup
+    rm -f "$temp_file" "$temp_gz"
+}
 
 # Process HTML files (template substitution + minification)
 for html_file in "${HTML_FILES[@]}"; do
@@ -125,8 +146,15 @@ with open('$html_file', 'r') as f:
     
     HTML_CONTENTS["$filename"]="$minified"
     minified_size=$(echo -n "$minified" | wc -c)
+    
+    # Gzip compress
+    gzipped=$(gzip_to_c_array "$minified")
+    HTML_GZIP_CONTENTS["$filename"]="$gzipped"
+    gzipped_size=$(echo -n "$minified" | gzip -9 -c | wc -c)
+    
     ORIGINAL_SIZES["html_$filename"]=$original_size
     PROCESSED_SIZES["html_$filename"]=$minified_size
+    GZIPPED_SIZES["html_$filename"]=$gzipped_size
 done
 
 # Process CSS files (minify)
@@ -146,8 +174,15 @@ with open('$css_file', 'r') as f:
     
     CSS_CONTENTS["$filename"]="$minified"
     minified_size=$(echo -n "$minified" | wc -c)
+    
+    # Gzip compress
+    gzipped=$(gzip_to_c_array "$minified")
+    CSS_GZIP_CONTENTS["$filename"]="$gzipped"
+    gzipped_size=$(echo -n "$minified" | gzip -9 -c | wc -c)
+    
     ORIGINAL_SIZES["css_$filename"]=$original_size
     PROCESSED_SIZES["css_$filename"]=$minified_size
+    GZIPPED_SIZES["css_$filename"]=$gzipped_size
 done
 
 # Process JS files (minify)
@@ -167,8 +202,15 @@ with open('$js_file', 'r') as f:
     
     JS_CONTENTS["$filename"]="$minified"
     minified_size=$(echo -n "$minified" | wc -c)
+    
+    # Gzip compress
+    gzipped=$(gzip_to_c_array "$minified")
+    JS_GZIP_CONTENTS["$filename"]="$gzipped"
+    gzipped_size=$(echo -n "$minified" | gzip -9 -c | wc -c)
+    
     ORIGINAL_SIZES["js_$filename"]=$original_size
     PROCESSED_SIZES["js_$filename"]=$minified_size
+    GZIPPED_SIZES["js_$filename"]=$gzipped_size
 done
 
 echo
@@ -187,13 +229,16 @@ cat > "$OUTPUT_FILE" << 'HEADER_START'
  * Source files are dynamically discovered in src/app/web/ directory.
  * 
  * Processing:
- *   - HTML files: template substitution + basic minification
- *   - CSS files:  minified using csscompressor
- *   - JS files:   minified using rjsmin
+ *   - HTML files: template substitution + basic minification + gzip compression
+ *   - CSS files:  minified using csscompressor + gzip compression
+ *   - JS files:   minified using rjsmin + gzip compression
+ * 
+ * All assets are stored in gzipped format with Content-Encoding: gzip headers.
+ * This reduces flash storage and bandwidth by 60-80%.
  * 
  * To modify web assets:
  *   1. Edit source files in src/app/web/
- *   2. Run ./build.sh (automatically runs minification)
+ *   2. Run ./build.sh (automatically runs minification and gzip compression)
  *   3. Upload new firmware to device
  */
 
@@ -212,55 +257,55 @@ cat >> "$OUTPUT_FILE" << EOF
 
 EOF
 
-# Generate HTML sections
+# Generate HTML sections (gzipped)
 for filename in "${!HTML_CONTENTS[@]}"; do
     cat >> "$OUTPUT_FILE" << EOF
-// HTML content from src/app/web/${filename}.html
-const char ${filename}_html[] PROGMEM = R"rawliteral(
-${HTML_CONTENTS[$filename]}
-)rawliteral";
+// HTML content from src/app/web/${filename}.html (gzipped)
+const uint8_t ${filename}_html_gz[] PROGMEM = {
+${HTML_GZIP_CONTENTS[$filename]}
+};
 
 EOF
 done
 
-# Generate CSS sections
+# Generate CSS sections (gzipped)
 for filename in "${!CSS_CONTENTS[@]}"; do
     cat >> "$OUTPUT_FILE" << EOF
-// CSS styles (minified) from src/app/web/${filename}.css
-const char ${filename}_css[] PROGMEM = R"rawliteral(
-${CSS_CONTENTS[$filename]}
-)rawliteral";
+// CSS styles from src/app/web/${filename}.css (minified + gzipped)
+const uint8_t ${filename}_css_gz[] PROGMEM = {
+${CSS_GZIP_CONTENTS[$filename]}
+};
 
 EOF
 done
 
-# Generate JS sections
+# Generate JS sections (gzipped)
 for filename in "${!JS_CONTENTS[@]}"; do
     cat >> "$OUTPUT_FILE" << EOF
-// JavaScript (minified) from src/app/web/${filename}.js
-const char ${filename}_js[] PROGMEM = R"rawliteral(
-${JS_CONTENTS[$filename]}
-)rawliteral";
+// JavaScript from src/app/web/${filename}.js (minified + gzipped)
+const uint8_t ${filename}_js_gz[] PROGMEM = {
+${JS_GZIP_CONTENTS[$filename]}
+};
 
 EOF
 done
 
-# Add size constants (avoids strlen_P() overhead at runtime)
+# Add size constants (gzipped sizes)
 cat >> "$OUTPUT_FILE" << 'SIZE_CONSTANTS'
 
-// Asset sizes (calculated at compile time, avoids strlen_P() overhead)
+// Asset sizes (gzipped, calculated at compile time)
 SIZE_CONSTANTS
 
 for filename in "${!HTML_CONTENTS[@]}"; do
-    echo "const size_t ${filename}_html_len = sizeof(${filename}_html) - 1;" >> "$OUTPUT_FILE"
+    echo "const size_t ${filename}_html_gz_len = sizeof(${filename}_html_gz);" >> "$OUTPUT_FILE"
 done
 
 for filename in "${!CSS_CONTENTS[@]}"; do
-    echo "const size_t ${filename}_css_len = sizeof(${filename}_css) - 1;" >> "$OUTPUT_FILE"
+    echo "const size_t ${filename}_css_gz_len = sizeof(${filename}_css_gz);" >> "$OUTPUT_FILE"
 done
 
 for filename in "${!JS_CONTENTS[@]}"; do
-    echo "const size_t ${filename}_js_len = sizeof(${filename}_js) - 1;" >> "$OUTPUT_FILE"
+    echo "const size_t ${filename}_js_gz_len = sizeof(${filename}_js_gz);" >> "$OUTPUT_FILE"
 done
 
 # Close header file
@@ -272,33 +317,50 @@ HEADER_END
 # Display summary with statistics
 echo "✓ Successfully generated web_assets.h"
 echo
-echo "Asset Summary:"
+echo "Asset Summary (Original → Minified → Gzipped):"
 
 # Calculate totals
 total_original=0
 total_processed=0
+total_gzipped=0
 
 for filename in "${!HTML_CONTENTS[@]}"; do
     key="html_$filename"
-    format_size_savings ${ORIGINAL_SIZES[$key]} ${PROCESSED_SIZES[$key]} "HTML ${filename}.html"
-    total_original=$((total_original + ORIGINAL_SIZES[$key]))
-    total_processed=$((total_processed + PROCESSED_SIZES[$key]))
+    orig=${ORIGINAL_SIZES[$key]}
+    proc=${PROCESSED_SIZES[$key]}
+    gzip=${GZIPPED_SIZES[$key]}
+    percent=$((100 - (gzip * 100 / orig)))
+    echo "  HTML ${filename}.html: $orig → $proc → $gzip bytes (-${percent}% total)"
+    total_original=$((total_original + orig))
+    total_processed=$((total_processed + proc))
+    total_gzipped=$((total_gzipped + gzip))
 done
 
 for filename in "${!CSS_CONTENTS[@]}"; do
     key="css_$filename"
-    format_size_savings ${ORIGINAL_SIZES[$key]} ${PROCESSED_SIZES[$key]} "CSS  ${filename}.css"
-    total_original=$((total_original + ORIGINAL_SIZES[$key]))
-    total_processed=$((total_processed + PROCESSED_SIZES[$key]))
+    orig=${ORIGINAL_SIZES[$key]}
+    proc=${PROCESSED_SIZES[$key]}
+    gzip=${GZIPPED_SIZES[$key]}
+    percent=$((100 - (gzip * 100 / orig)))
+    echo "  CSS  ${filename}.css:  $orig → $proc → $gzip bytes (-${percent}% total)"
+    total_original=$((total_original + orig))
+    total_processed=$((total_processed + proc))
+    total_gzipped=$((total_gzipped + gzip))
 done
 
 for filename in "${!JS_CONTENTS[@]}"; do
     key="js_$filename"
-    format_size_savings ${ORIGINAL_SIZES[$key]} ${PROCESSED_SIZES[$key]} "JS   ${filename}.js"
-    total_original=$((total_original + ORIGINAL_SIZES[$key]))
-    total_processed=$((total_processed + PROCESSED_SIZES[$key]))
+    orig=${ORIGINAL_SIZES[$key]}
+    proc=${PROCESSED_SIZES[$key]}
+    gzip=${GZIPPED_SIZES[$key]}
+    percent=$((100 - (gzip * 100 / orig)))
+    echo "  JS   ${filename}.js:   $orig → $proc → $gzip bytes (-${percent}% total)"
+    total_original=$((total_original + orig))
+    total_processed=$((total_processed + proc))
+    total_gzipped=$((total_gzipped + gzip))
 done
 
-echo "  ───────────────────────────────────────────────────"
-format_size_savings $total_original $total_processed "TOTAL"
+echo "  ─────────────────────────────────────────────────────────────"
+total_percent=$((100 - (total_gzipped * 100 / total_original)))
+echo "  TOTAL: $total_original → $total_processed → $total_gzipped bytes (-${total_percent}% total)"
 echo
