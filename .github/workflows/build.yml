@@ -29,17 +29,17 @@ jobs:
       id: check-version
       run: |
         # Get version from PR branch
-        NEW_MAJOR=$(grep "VERSION_MAJOR" src/version.h | awk '{print $3}')
-        NEW_MINOR=$(grep "VERSION_MINOR" src/version.h | awk '{print $3}')
-        NEW_PATCH=$(grep "VERSION_PATCH" src/version.h | awk '{print $3}')
+        NEW_MAJOR=$(grep "#define VERSION_MAJOR" src/version.h | grep -o '[0-9]\+' | head -1)
+        NEW_MINOR=$(grep "#define VERSION_MINOR" src/version.h | grep -o '[0-9]\+' | head -1)
+        NEW_PATCH=$(grep "#define VERSION_PATCH" src/version.h | grep -o '[0-9]\+' | head -1)
         NEW_VERSION="$NEW_MAJOR.$NEW_MINOR.$NEW_PATCH"
         
         # Get version from base branch
         git fetch origin ${{ github.base_ref }}
         git checkout origin/${{ github.base_ref }} -- src/version.h
-        OLD_MAJOR=$(grep "VERSION_MAJOR" src/version.h | awk '{print $3}')
-        OLD_MINOR=$(grep "VERSION_MINOR" src/version.h | awk '{print $3}')
-        OLD_PATCH=$(grep "VERSION_PATCH" src/version.h | awk '{print $3}')
+        OLD_MAJOR=$(grep "#define VERSION_MAJOR" src/version.h | grep -o '[0-9]\+' | head -1)
+        OLD_MINOR=$(grep "#define VERSION_MINOR" src/version.h | grep -o '[0-9]\+' | head -1)
+        OLD_PATCH=$(grep "#define VERSION_PATCH" src/version.h | grep -o '[0-9]\+' | head -1)
         OLD_VERSION="$OLD_MAJOR.$OLD_MINOR.$OLD_PATCH"
         
         echo "old_version=$OLD_VERSION" >> $GITHUB_OUTPUT
