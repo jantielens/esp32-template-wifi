@@ -5,7 +5,71 @@ on:
     branches: [ main, develop ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
+  # Validate version and changelog for PRs
+  validate-release:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      version_changed: ${{ steps.check-version.outputs.changed }}
+      changelog_updated: ${{ steps.check-changelog.outputs.updated }}
+      new_version: ${{ steps.check-version.outputs.new_version }}
+      old_version: ${{ steps.check-version.outputs.old_version }}
+    steps:
+    - name: Checkout PR branch
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Check version change
+      id: check-version
+      run: |
+        # Get version from PR branch
+        NEW_MAJOR=$(grep "VERSION_MAJOR" src/version.h | awk '{print $3}')
+        NEW_MINOR=$(grep "VERSION_MINOR" src/version.h | awk '{print $3}')
+        NEW_PATCH=$(grep "VERSION_PATCH" src/version.h | awk '{print $3}')
+        NEW_VERSION="$NEW_MAJOR.$NEW_MINOR.$NEW_PATCH"
+        
+        # Get version from base branch
+        git fetch origin ${{ github.base_ref }}
+        git checkout origin/${{ github.base_ref }} -- src/version.h
+        OLD_MAJOR=$(grep "VERSION_MAJOR" src/version.h | awk '{print $3}')
+        OLD_MINOR=$(grep "VERSION_MINOR" src/version.h | awk '{print $3}')
+        OLD_PATCH=$(grep "VERSION_PATCH" src/version.h | awk '{print $3}')
+        OLD_VERSION="$OLD_MAJOR.$OLD_MINOR.$OLD_PATCH"
+        
+        echo "old_version=$OLD_VERSION" >> $GITHUB_OUTPUT
+        echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+        
+        if [ "$NEW_VERSION" != "$OLD_VERSION" ]; then
+          echo "changed=true" >> $GITHUB_OUTPUT
+          echo "✅ Version changed: $OLD_VERSION → $NEW_VERSION"
+        else
+          echo "changed=false" >> $GITHUB_OUTPUT
+          echo "ℹ️ Version unchanged: $OLD_VERSION"
+        fi
+    
+    - name: Check changelog update
+      id: check-changelog
+      run: |
+        # Checkout PR branch again
+        git checkout ${{ github.head_ref }}
+        
+        NEW_VERSION="${{ steps.check-version.outputs.new_version }}"
+        
+        # Check if changelog has entry for new version
+        if grep -q "\[${NEW_VERSION}\]" CHANGELOG.md; then
+          echo "updated=true" >> $GITHUB_OUTPUT
+          echo "✅ Changelog contains [$NEW_VERSION] section"
+        else
+          echo "updated=false" >> $GITHUB_OUTPUT
+          echo "⚠️ Changelog missing [$NEW_VERSION] section"
+        fi
+
   # Generate build matrix from config.sh
   prepare-matrix:
     runs-on: ubuntu-latest
@@ -114,3 +178,139 @@ jobs:
             echo "| $name | $size |" >> $GITHUB_STEP_SUMMARY
           fi
         done
+
+  # Post PR comment with release instructions
+  pr-comment:
+    if: github.event_name == 'pull_request'
+    needs: [validate-release, build]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Generate PR comment
+      id: comment
+      run: |
+        VERSION_CHANGED="${{ needs.validate-release.outputs.version_changed }}"
+        CHANGELOG_UPDATED="${{ needs.validate-release.outputs.changelog_updated }}"
+        NEW_VERSION="${{ needs.validate-release.outputs.new_version }}"
+        OLD_VERSION="${{ needs.validate-release.outputs.old_version }}"
+        
+        # Create comment body
+        cat > comment.md << 'EOF'
+        ## 🔍 Build & Release Validation
+        
+        ### Version Check
+        EOF
+        
+        if [ "$VERSION_CHANGED" == "true" ]; then
+          cat >> comment.md << EOF
+        ✅ **Version updated:** \`$OLD_VERSION\` → \`$NEW_VERSION\`
+        EOF
+        else
+          cat >> comment.md << EOF
+        ℹ️ **Version unchanged:** \`$OLD_VERSION\`
+        
+        > If this PR introduces changes, consider bumping the version in \`src/version.h\`
+        EOF
+        fi
+        
+        cat >> comment.md << 'EOF'
+        
+        ### Changelog Check
+        EOF
+        
+        if [ "$CHANGELOG_UPDATED" == "true" ]; then
+          cat >> comment.md << EOF
+        ✅ **Changelog updated:** Found \`[$NEW_VERSION]\` section in \`CHANGELOG.md\`
+        EOF
+        else
+          cat >> comment.md << EOF
+        ⚠️ **Changelog missing entry:** No \`[$NEW_VERSION]\` section found in \`CHANGELOG.md\`
+        
+        > Add release notes for version \`$NEW_VERSION\` before merging
+        EOF
+        fi
+        
+        cat >> comment.md << 'EOF'
+        
+        ---
+        
+        EOF
+        
+        # Add release instructions if ready
+        if [ "$VERSION_CHANGED" == "true" ] && [ "$CHANGELOG_UPDATED" == "true" ]; then
+          cat >> comment.md << EOF
+        ### 🚀 Ready to Release!
+        
+        This PR is prepared for release **v$NEW_VERSION**. After merging, create the release:
+        
+        \`\`\`bash
+        # 1. Switch to main and pull merged changes
+        git checkout main
+        git pull
+        
+        # 2. Create and push the release tag
+        git tag -a v$NEW_VERSION -m "Release v$NEW_VERSION"
+        git push origin v$NEW_VERSION
+        \`\`\`
+        
+        The [Release Workflow](https://github.com/${{ github.repository }}/blob/main/.github/workflows/release.yml) will automatically:
+        - ✅ Build firmware for all board variants
+        - ✅ Extract changelog notes for v$NEW_VERSION
+        - ✅ Create GitHub Release with firmware binaries
+        - ✅ Generate SHA256 checksums
+        
+        **Release page:** \`https://github.com/${{ github.repository }}/releases/tag/v$NEW_VERSION\`
+        EOF
+        else
+          cat >> comment.md << 'EOF'
+        ### 📋 Before Merging
+        
+        This PR is not yet ready for release. Complete these steps:
+        
+        EOF
+          
+          if [ "$VERSION_CHANGED" != "true" ]; then
+            cat >> comment.md << EOF
+        - [ ] Bump version in \`src/version.h\` (currently \`$OLD_VERSION\`)
+        EOF
+          fi
+          
+          if [ "$CHANGELOG_UPDATED" != "true" ]; then
+            cat >> comment.md << EOF
+        - [ ] Add \`[$NEW_VERSION]\` section to \`CHANGELOG.md\` with release notes
+        EOF
+          fi
+          
+          cat >> comment.md << 'EOF'
+        
+        Or use the helper script:
+        
+        ```bash
+        ./create-release.sh X.Y.Z "Release description"
+        ```
+        EOF
+        fi
+        
+        cat >> comment.md << 'EOF'
+        
+        ---
+        
+        <sub>🤖 This comment is automatically updated on each commit</sub>
+        EOF
+        
+        cat comment.md
+    
+    - name: Find existing comment
+      id: find-comment
+      uses: peter-evans/find-comment@v3
+      with:
+        issue-number: ${{ github.event.pull_request.number }}
+        comment-author: 'github-actions[bot]'
+        body-includes: '🔍 Build & Release Validation'
+    
+    - name: Create or update PR comment
+      uses: peter-evans/create-or-update-comment@v4
+      with:
+        comment-id: ${{ steps.find-comment.outputs.comment-id }}
+        issue-number: ${{ github.event.pull_request.number }}
+        body-path: comment.md
+        edit-mode: replace
