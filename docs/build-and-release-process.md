@@ -458,6 +458,25 @@ Follow [Semantic Versioning](https://semver.org/):
   git push origin v0.0.5
   ```
 
+### Tag Created but Release Workflow Didn't Run
+
+**Symptom**: After using `/release` command, the tag exists but no GitHub Release was created.
+
+**Cause**: The PR commands workflow uses `GITHUB_TOKEN` which doesn't trigger other workflows (security feature).
+
+**Solution**:
+1. Configure `PAT_TOKEN` secret (see [PR Commands Workflow](#pr-commands-workflow-githubworkflowspr-commandsyml) section)
+2. For existing orphaned tags, manually recreate them:
+   ```bash
+   # Delete tag remotely and locally
+   git push --delete origin v0.0.6
+   git tag -d v0.0.6
+   
+   # Recreate and push (this will trigger release workflow)
+   git tag -a v0.0.6 -m "Release v0.0.6"
+   git push origin v0.0.6
+   ```
+
 ---
 
 ## CI/CD Pipeline Summary
@@ -484,6 +503,47 @@ Follow [Semantic Versioning](https://semver.org/):
 4. Create GitHub Release
 5. Upload firmware binaries
 6. Generate checksums
+
+### PR Commands Workflow (`.github/workflows/pr-commands.yml`)
+
+**Triggers**:
+- PR comments containing `/release`, `/release-beta`, or `/merge-only`
+
+**Purpose**: Streamlined release process via PR comments
+
+**Setup Required**:
+
+⚠️ **Important**: To allow the release workflow to trigger automatically, you must configure a Personal Access Token (PAT):
+
+1. **Create PAT**:
+   - Go to GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)
+   - Click "Generate new token (classic)"
+   - Name: `ESP32 Release Token`
+   - Expiration: Choose appropriate duration
+   - Scopes: Select `repo` (full control of private repositories)
+   - Click "Generate token" and copy it immediately
+
+2. **Add Secret**:
+   - Go to repository Settings → Secrets and variables → Actions
+   - Click "New repository secret"
+   - Name: `PAT_TOKEN`
+   - Value: Paste your PAT
+   - Click "Add secret"
+
+**Why PAT is needed**: GitHub Actions doesn't trigger workflows when tags are created by `GITHUB_TOKEN` (security feature). Using a PAT allows the tag push to trigger the release workflow.
+
+**Commands**:
+- `/release` - Merge PR and create stable release tag
+- `/release-beta <N>` - Merge PR and create beta release tag (e.g., `/release-beta 1`)
+- `/merge-only` - Just merge PR without creating a tag
+
+**Process**:
+1. Check user has write permissions
+2. Verify PR is mergeable
+3. Extract version from `src/version.h`
+4. Merge PR with descriptive commit message
+5. Create and push tag (triggers release workflow)
+6. Comment with workflow links
 
 ---
 
