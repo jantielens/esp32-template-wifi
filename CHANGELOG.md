@@ -5,13 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+---
+
+## [0.0.7] - 2025-11-26
 
 ### Added
+- **Gzip Compression for Web Assets**: All HTML, CSS, and JavaScript files are now automatically gzip compressed
+  - Reduces flash storage usage by ~80% (64KB → 12KB for web assets)
+  - Reduces bandwidth usage for web portal access
+  - Automatic compression during build via `tools/minify-web-assets.sh`
+  - Assets served with `Content-Encoding: gzip` header
+  - Browser automatically decompresses (transparent to users)
+  - Build output shows compression statistics (Original → Minified → Gzipped)
 
 ### Changed
-
-### Fixed
+- Modified `tools/minify-web-assets.sh` to add gzip compression step after minification
+- Updated `web_portal.cpp` handlers to serve gzipped content with proper headers
+- Web assets now stored as `uint8_t` byte arrays instead of string literals
 
 ---
 
