@@ -7,8 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Enhanced mDNS service discovery with 5 additional TXT records following RFC 6763 DNS-SD best practices:
+  - `ty`: device type classification (`iot-device`)
+  - `mf`: manufacturer identifier (`ESP32-Tmpl`)
+  - `features`: device capabilities (`wifi,http,api`)
+  - `note`: human-readable description
+  - `url`: direct configuration URL
+
 ### Fixed
 - Fixed missing `API_VERSION` constant that caused 404 errors during device reconnection polling
+- Fixed OTA polling starting prematurely during firmware upload instead of after completion
 
 ### Changed
 - Improved reconnection polling strategy: 2s initial delay, then 3s intervals (total 122s timeout)
@@ -17,10 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Better user feedback with best-effort messaging and manual fallback addresses
 - Enhanced timeout handling with troubleshooting hints
 - Progress display now shows elapsed time during reconnection attempts
+- Updated documentation to reflect 8-field mDNS TXT record structure
 
 ### Removed
 - Removed duplicate OTA overlay dialog (now uses unified reboot dialog)
 - Removed deprecated `startOTAReconnect()` function
+- Removed NetBIOS references from documentation (functionality removed earlier)
 
 ---
 
