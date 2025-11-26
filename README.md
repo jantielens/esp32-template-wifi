@@ -275,6 +275,95 @@ GitHub Actions automatically validates builds on push:
 - Uploads separate build artifacts per board (.bin and .elf files)
 - Generates build summary with firmware sizes
 
+## 🚀 Release Process
+
+Releases are automated via GitHub Actions when version tags are pushed.
+
+### Creating a Release
+
+#### Option 1: Automated Script (Recommended)
+
+```bash
+# Run the release preparation script
+./create-release.sh 0.0.5 "Improved logging and stability"
+
+# This will:
+# 1. Create release/v0.0.5 branch
+# 2. Update src/version.h with version numbers
+# 3. Update CHANGELOG.md (move [Unreleased] to [0.0.5])
+# 4. Commit and push changes
+# 5. Provide PR creation URL
+
+# After PR is merged:
+git checkout main
+git pull
+git tag -a v0.0.5 -m "Release v0.0.5"
+git push origin v0.0.5
+```
+
+#### Option 2: Manual Process
+
+```bash
+# 1. Create release branch
+git checkout -b release/v0.0.5
+
+# 2. Update src/version.h
+#    VERSION_MAJOR 0
+#    VERSION_MINOR 0
+#    VERSION_PATCH 5
+
+# 3. Update CHANGELOG.md
+#    Move [Unreleased] items to [0.0.5] - YYYY-MM-DD
+
+# 4. Commit and push
+git add src/version.h CHANGELOG.md
+git commit -m "chore: bump version to 0.0.5"
+git push origin release/v0.0.5
+
+# 5. Create and merge PR: release/v0.0.5 → main
+
+# 6. Tag the release
+git checkout main
+git pull
+git tag -a v0.0.5 -m "Release v0.0.5"
+git push origin v0.0.5
+```
+
+### What Happens Automatically
+
+When you push a tag matching `v*.*.*`:
+
+1. **GitHub Actions triggers** `.github/workflows/release.yml`
+2. **Builds firmware** for all board variants
+3. **Creates GitHub Release** with:
+   - Release notes extracted from CHANGELOG.md
+   - Firmware binaries: `<board>-firmware-vX.Y.Z.bin`
+   - Debug symbols: `<board>-firmware-vX.Y.Z.elf`
+   - Build metadata: `build-info-<board>.txt`
+   - SHA256 checksums: `SHA256SUMS.txt`
+4. **Marks as pre-release** if version contains hyphen (e.g., `v1.0.0-beta.1`)
+
+### Release Artifacts
+
+Each release includes per-board artifacts:
+- `esp32-firmware-v0.0.5.bin` - Ready to flash
+- `esp32-firmware-v0.0.5.elf` - Debug symbols
+- `esp32c3-firmware-v0.0.5.bin`
+- `esp32c3-firmware-v0.0.5.elf`
+- `build-info-esp32.txt` - Build metadata (version, commit, flash command)
+- `SHA256SUMS.txt` - Checksums for verification
+
+### Pre-Release Testing
+
+Test release workflow with pre-release tags:
+
+```bash
+git tag -a v0.0.5-beta.1 -m "Pre-release v0.0.5-beta.1"
+git push origin v0.0.5-beta.1
+```
+
+Pre-release tags automatically mark the release as "Pre-release" on GitHub.
+
 ## 🐛 Troubleshooting
 
 ### Permission Denied on Serial Port

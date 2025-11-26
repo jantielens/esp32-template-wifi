@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Automated Release Workflow**: GitHub Actions workflow for automated releases
+  - `.github/workflows/release.yml` - Tag-triggered release pipeline
+  - `tools/extract-changelog.sh` - Changelog parser for release notes
+  - `create-release.sh` - Helper script for release preparation
+  - Multi-board firmware artifacts with version naming
+  - SHA256 checksums generation
+  - Pre-release support (tags with hyphens)
+
+### Changed
+- Updated README.md with comprehensive release process documentation
+
+---
+
 ## [0.0.4] - 2025-11-26
 
 ### Added
