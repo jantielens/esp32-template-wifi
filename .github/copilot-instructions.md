@@ -187,7 +187,7 @@ After every significant change, the agent must:
    - `docs/web-portal.md` - Web portal and REST API guide
    - `docs/scripts.md` - Script usage guide
    - `docs/library-management.md` - Library management guide
-   - `docs/release-process.md` - Release workflow and versioning guide
+   - `docs/build-and-release-process.md` - Project branding, build system, and release workflow guide
    - `docs/wsl-development.md` - WSL setup guide
    - `.github/copilot-instructions.md` - This file
    - `.github/workflows/build.yml` - CI/CD build pipeline
@@ -213,12 +213,12 @@ After every significant change, the agent must:
 - New script added → Update `README.md` script table and `docs/scripts.md`
 - Library management changed → Update `docs/library-management.md`
 - Build workflow modified → Update `README.md` CI/CD section
-- Release workflow modified → Update `docs/release-process.md` and `README.md` release section
+- Release workflow modified → Update `docs/build-and-release-process.md` and `README.md` release section
 - New requirement added → Update `README.md` prerequisites
 - REST API endpoint added/changed → Update `docs/web-portal.md` and `README.md` API table
 - Web UI feature changed → Update `docs/web-portal.md` features section
 - New version released → Update `CHANGELOG.md` with changes, update `src/version.h` with new version number
-- Release process changed → Update `docs/release-process.md` with new workflow
+- Release process changed → Update `docs/build-and-release-process.md` with new workflow
 
 ### Build Verification
 

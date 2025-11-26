@@ -1,13 +1,114 @@
-# Release Process Guide
+# Build and Release Process Guide
 
-This document describes the automated release workflow for the ESP32 Template project using scenario-driven examples.
+This document describes the build system configuration and automated release workflow for the ESP32 Template project.
 
-## Overview
+## Table of Contents
 
-The project uses an automated release workflow that triggers on version tags. Releases are created through GitHub Actions, which builds firmware for all board variants and publishes them to GitHub Releases.
+- [Project Branding Configuration](#project-branding-configuration)
+- [Build System](#build-system)
+- [Release Workflow](#release-workflow)
+- [Release Scenarios](#release-scenarios)
 
-## Workflow Components
+---
 
+## Project Branding Configuration
+
+### Overview
+
+The project uses a centralized branding system defined in `config.sh`. These values control your project's identity across builds, releases, web UI, and device names.
+
+### Configuration Variables
+
+Located at the top of `config.sh`:
+
+```bash
+PROJECT_NAME="esp32-template-wifi"       # Slug format (no spaces)
+PROJECT_DISPLAY_NAME="ESP32 Template WiFi"   # Human-readable format
+```
+
+### Usage Map
+
+#### `PROJECT_NAME` (filename-safe slug)
+
+Used for technical identifiers and filenames:
+
+| Location | Usage | Example |
+|----------|-------|---------|
+| **Build artifacts** | Local build output | `build/esp32/app.ino.bin` |
+| **CI/CD artifacts** | GitHub Actions artifact names | `esp32-template-wifi-esp32` |
+| **Release files** | GitHub Release download files | `esp32-template-wifi-esp32-v0.0.5.bin` |
+| **AP SSID** | WiFi Access Point name (uppercase) | `ESP32-TEMPLATE-WIFI-1A2B3C4D` |
+| **API response** | `/api/info` endpoint | `{"project_name": "esp32-template-wifi"}` |
+
+#### `PROJECT_DISPLAY_NAME` (human-readable)
+
+Used for user-facing text and branding:
+
+| Location | Usage | Example |
+|----------|-------|---------|
+| **Web portal title** | Browser tab title | `"ESP32 Template WiFi Configuration Portal"` |
+| **Web portal header** | Main page heading | `"ESP32 Template WiFi Configuration"` |
+| **Logs page title** | Browser tab title | `"Device Logs - ESP32 Template WiFi"` |
+| **Default device name** | First-time device name | `"ESP32 Template WiFi 1A2B"` |
+| **API response** | `/api/info` endpoint | `{"project_display_name": "ESP32 Template WiFi"}` |
+
+### Customizing for Your Project
+
+1. **Edit `config.sh`** at the top of the file:
+   ```bash
+   PROJECT_NAME="my-iot-device"
+   PROJECT_DISPLAY_NAME="My IoT Device"
+   ```
+
+2. **Rebuild** to apply changes:
+   ```bash
+   ./build.sh
+   ```
+
+3. **What gets updated automatically**:
+   - HTML page titles and headers (baked in at build time)
+   - AP SSID prefix (defined in firmware)
+   - Default device names (defined in firmware)
+   - GitHub workflow artifact names
+   - Release file names
+
+**Note**: No code changes required - everything is templated!
+
+---
+
+## Build System
+
+### Build Configuration
+
+The build system automatically applies project branding during compilation:
+
+1. `build.sh` sources `config.sh` to get `PROJECT_NAME` and `PROJECT_DISPLAY_NAME`
+2. `tools/minify-web-assets.sh` performs template substitution in HTML files
+3. C++ `#define` statements are generated in `web_assets.h`
+4. Firmware compiles with branded values embedded
+
+### Template Syntax
+
+HTML files use simple placeholder syntax:
+
+```html
+<title>{{PROJECT_DISPLAY_NAME}} Configuration Portal</title>
+<h1>{{PROJECT_DISPLAY_NAME}} Configuration</h1>
+```
+
+These are replaced at build time with actual values from `config.sh`.
+
+---
+
+## Release Workflow
+
+### Overview
+
+The project uses an automated release workflow that triggers on version tags. Releases are created through GitHub Actions, which builds firmware for all board variants and publishes them to GitHub Releases with branded filenames.
+
+### Workflow Components
+
+- **`config.sh`** - Project branding configuration
 - **`.github/workflows/release.yml`** - Automated release pipeline triggered by version tags
 - **`tools/extract-changelog.sh`** - Parses CHANGELOG.md for version-specific notes
 - **`create-release.sh`** - Helper script to automate release preparation
@@ -15,6 +116,8 @@ The project uses an automated release workflow that triggers on version tags. Re
 - **`CHANGELOG.md`** - Release notes in Keep a Changelog format
 
 ---
+
+## Release Scenarios
 
 ## Scenario 1: Standard Release (Recommended)
 

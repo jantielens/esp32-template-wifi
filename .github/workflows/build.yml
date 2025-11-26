@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
+      project_name: ${{ steps.set-matrix.outputs.project_name }}
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -18,8 +19,11 @@ jobs:
     - name: Generate board matrix from config.sh
       id: set-matrix
       run: |
-        # Source config.sh and extract FQBN_TARGETS
+        # Source config.sh and extract FQBN_TARGETS and PROJECT_NAME
         source config.sh
+        
+        # Export PROJECT_NAME for artifact naming
+        echo "project_name=$PROJECT_NAME" >> $GITHUB_OUTPUT
         
         # Build JSON array for matrix
         boards_json="["
@@ -86,7 +90,7 @@ jobs:
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: esp32-firmware-${{ matrix.board.name }}
+        name: ${{ needs.prepare-matrix.outputs.project_name }}-${{ matrix.board.name }}
         path: |
           build/${{ matrix.board.name }}/*.bin
           build/${{ matrix.board.name }}/*.elf

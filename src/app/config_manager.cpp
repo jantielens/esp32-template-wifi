@@ -6,6 +6,7 @@
  */
 
 #include "config_manager.h"
+#include "web_assets.h"
 #include "log_manager.h"
 #include <Preferences.h>
 
@@ -38,7 +39,7 @@ String config_manager_get_default_device_name() {
         chipId |= ((ESP.getEfuseMac() >> (40 - i)) & 0xff) << i;
     }
     char name[32];
-    snprintf(name, sizeof(name), "ESP32 %04X", (uint16_t)(chipId & 0xFFFF));
+    snprintf(name, sizeof(name), PROJECT_DISPLAY_NAME " %04X", (uint16_t)(chipId & 0xFFFF));
     return String(name);
 }
 

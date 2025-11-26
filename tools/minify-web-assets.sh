@@ -4,9 +4,9 @@
 #
 # This script dynamically discovers HTML, CSS, and JavaScript files in src/app/web/
 # and generates a C header file with embedded assets for the ESP32 web server.
-# CSS and JS files are minified; HTML files are embedded as-is.
+# CSS and JS files are minified; HTML files are processed with template substitution.
 #
-# Usage: ./tools/minify-web-assets.sh
+# Usage: ./tools/minify-web-assets.sh <PROJECT_NAME> <PROJECT_DISPLAY_NAME>
 #
 
 set -e  # Exit on error
@@ -15,14 +15,20 @@ set -e  # Exit on error
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
+# Accept project name arguments
+PROJECT_NAME="${1:-esp32-template-wifi}"
+PROJECT_DISPLAY_NAME="${2:-ESP32 Template WiFi}"
+
 # Source and output paths
 WEB_DIR="$PROJECT_ROOT/src/app/web"
 OUTPUT_FILE="$PROJECT_ROOT/src/app/web_assets.h"
 
 echo "=== Web Assets Minification ==="
-echo "Project root: $PROJECT_ROOT"
-echo "Web sources:  $WEB_DIR"
-echo "Output:       $OUTPUT_FILE"
+echo "Project root:         $PROJECT_ROOT"
+echo "Project name:         $PROJECT_NAME"
+echo "Project display name: $PROJECT_DISPLAY_NAME"
+echo "Web sources:          $WEB_DIR"
+echo "Output:               $OUTPUT_FILE"
 echo
 
 # Check if web directory exists
@@ -91,18 +97,21 @@ declare -A JS_CONTENTS
 declare -A ORIGINAL_SIZES
 declare -A PROCESSED_SIZES
 
-# Process HTML files (basic minification without external dependencies)
+# Process HTML files (template substitution + minification)
 for html_file in "${HTML_FILES[@]}"; do
     filename=$(basename "$html_file" .html)
     echo "Processing HTML: $filename.html..."
     content=$(cat "$html_file")
     original_size=$(echo -n "$content" | wc -c)
     
-    # Basic minification: remove comments and normalize whitespace
+    # Template substitution and minification
     minified=$(python3 -c "
 import re
 with open('$html_file', 'r') as f:
     html = f.read()
+    # Template substitution
+    html = html.replace('{{PROJECT_NAME}}', '$PROJECT_NAME')
+    html = html.replace('{{PROJECT_DISPLAY_NAME}}', '$PROJECT_DISPLAY_NAME')
     # Remove HTML comments
     html = re.sub(r'<!--.*?-->', '', html, flags=re.DOTALL)
     # Collapse multiple spaces/newlines to single space
@@ -178,7 +187,7 @@ cat > "$OUTPUT_FILE" << 'HEADER_START'
  * Source files are dynamically discovered in src/app/web/ directory.
  * 
  * Processing:
- *   - HTML files: basic minification (comments and whitespace removed)
+ *   - HTML files: template substitution + basic minification
  *   - CSS files:  minified using csscompressor
  *   - JS files:   minified using rjsmin
  * 
@@ -194,6 +203,14 @@ cat > "$OUTPUT_FILE" << 'HEADER_START'
 #include <Arduino.h>
 
 HEADER_START
+
+# Add project name defines
+cat >> "$OUTPUT_FILE" << EOF
+// Project branding (from config.sh)
+#define PROJECT_NAME "$PROJECT_NAME"
+#define PROJECT_DISPLAY_NAME "$PROJECT_DISPLAY_NAME"
+
+EOF
 
 # Generate HTML sections
 for filename in "${!HTML_CONTENTS[@]}"; do

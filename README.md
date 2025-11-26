@@ -30,7 +30,18 @@ cd esp32-template
 ./setup.sh
 ```
 
-### 2. Build, Upload, Monitor
+### 2. Configure Project Branding (Optional)
+
+Customize your project name by editing `config.sh`:
+
+```bash
+PROJECT_NAME="my-iot-device"              # Slug for filenames/artifacts
+PROJECT_DISPLAY_NAME="My IoT Device"      # Human-readable name for UI
+```
+
+This updates web portal titles, device names, AP SSID, and release artifacts. See [Build and Release Process](docs/build-and-release-process.md#project-branding-configuration) for details.
+
+### 3. Build, Upload, Monitor
 
 ```bash
 ./build.sh              # Compile firmware for all boards
@@ -43,7 +54,7 @@ cd esp32-template
 ./um.sh esp32           # Upload + Monitor
 ```
 
-### 3. Start Developing
+### 4. Start Developing
 
 Edit `src/app/app.ino` with your code and repeat step 2.
 
@@ -399,7 +410,7 @@ usbipd list
 
 - [Web Portal Guide](docs/web-portal.md) - Configuration portal & REST API
 - [Script Reference](docs/scripts.md) - Detailed script usage
-- [Release Process](docs/release-process.md) - Release workflow and versioning
+- [Build and Release Process](docs/build-and-release-process.md) - Project branding, build system, and release workflow
 - [WSL Development Guide](docs/wsl-development.md) - Windows/WSL setup
 - [Library Management](docs/library-management.md) - Managing dependencies
 - [Changelog](CHANGELOG.md) - Version history and release notes
