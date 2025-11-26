@@ -13,6 +13,7 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       version: ${{ steps.extract-version.outputs.version }}
       is_prerelease: ${{ steps.extract-version.outputs.is_prerelease }}
+      project_name: ${{ steps.set-matrix.outputs.project_name }}
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -37,8 +38,11 @@ jobs:
     - name: Generate board matrix from config.sh
       id: set-matrix
       run: |
-        # Source config.sh and extract FQBN_TARGETS
+        # Source config.sh and extract FQBN_TARGETS and PROJECT_NAME
         source config.sh
+        
+        # Export PROJECT_NAME for artifact naming
+        echo "project_name=$PROJECT_NAME" >> $GITHUB_OUTPUT
         
         # Build JSON array for matrix
         boards_json="["
@@ -105,33 +109,36 @@ jobs:
     - name: Rename artifacts with version
       run: |
         VERSION="${{ needs.prepare-matrix.outputs.version }}"
+        PROJECT_NAME="${{ needs.prepare-matrix.outputs.project_name }}"
         BOARD_DIR="build/${{ matrix.board.name }}"
         
         # Find and rename .bin file
         BIN_FILE=$(find "$BOARD_DIR" -name "*.bin" -type f | head -n 1)
         if [ -n "$BIN_FILE" ]; then
-          cp "$BIN_FILE" "$BOARD_DIR/${{ matrix.board.name }}-firmware-v$VERSION.bin"
-          echo "Created: ${{ matrix.board.name }}-firmware-v$VERSION.bin"
+          cp "$BIN_FILE" "$BOARD_DIR/$PROJECT_NAME-${{ matrix.board.name }}-v$VERSION.bin"
+          echo "Created: $PROJECT_NAME-${{ matrix.board.name }}-v$VERSION.bin"
         fi
         
         # Find and rename .elf file
         ELF_FILE=$(find "$BOARD_DIR" -name "*.elf" -type f | head -n 1)
         if [ -n "$ELF_FILE" ]; then
-          cp "$ELF_FILE" "$BOARD_DIR/${{ matrix.board.name }}-firmware-v$VERSION.elf"
-          echo "Created: ${{ matrix.board.name }}-firmware-v$VERSION.elf"
+          cp "$ELF_FILE" "$BOARD_DIR/$PROJECT_NAME-${{ matrix.board.name }}-v$VERSION.elf"
+          echo "Created: $PROJECT_NAME-${{ matrix.board.name }}-v$VERSION.elf"
         fi
         
-        ls -lh "$BOARD_DIR"/*-firmware-v$VERSION.*
+        ls -lh "$BOARD_DIR"/$PROJECT_NAME-*-v$VERSION.*
     
     - name: Generate build metadata
       run: |
         VERSION="${{ needs.prepare-matrix.outputs.version }}"
+        PROJECT_NAME="${{ needs.prepare-matrix.outputs.project_name }}"
         BOARD_DIR="build/${{ matrix.board.name }}"
         
         cat > "$BOARD_DIR/build-info-${{ matrix.board.name }}.txt" <<EOF
         ESP32 Firmware Build Information
         =================================
         
+        Project: $PROJECT_NAME
         Board: ${{ matrix.board.name }}
         FQBN: ${{ matrix.board.fqbn }}
         Version: $VERSION
@@ -142,11 +149,11 @@ jobs:
         Workflow: ${{ github.workflow }}
         
         Firmware Files:
-        - ${{ matrix.board.name }}-firmware-v$VERSION.bin (flash image)
-        - ${{ matrix.board.name }}-firmware-v$VERSION.elf (debug symbols)
+        - $PROJECT_NAME-${{ matrix.board.name }}-v$VERSION.bin (flash image)
+        - $PROJECT_NAME-${{ matrix.board.name }}-v$VERSION.elf (debug symbols)
         
         Flash Command:
-        esptool.py --chip auto --port /dev/ttyUSB0 --baud 921600 write_flash 0x0 ${{ matrix.board.name }}-firmware-v$VERSION.bin
+        esptool.py --chip auto --port /dev/ttyUSB0 --baud 921600 write_flash 0x0 $PROJECT_NAME-${{ matrix.board.name }}-v$VERSION.bin
         EOF
         
         cat "$BOARD_DIR/build-info-${{ matrix.board.name }}.txt"
@@ -154,22 +161,23 @@ jobs:
     - name: Upload versioned artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: firmware-${{ matrix.board.name }}-v${{ needs.prepare-matrix.outputs.version }}
+        name: ${{ needs.prepare-matrix.outputs.project_name }}-${{ matrix.board.name }}-v${{ needs.prepare-matrix.outputs.version }}
         path: |
-          build/${{ matrix.board.name }}/*-firmware-v${{ needs.prepare-matrix.outputs.version }}.bin
-          build/${{ matrix.board.name }}/*-firmware-v${{ needs.prepare-matrix.outputs.version }}.elf
+          build/${{ matrix.board.name }}/${{ needs.prepare-matrix.outputs.project_name }}-*-v${{ needs.prepare-matrix.outputs.version }}.bin
+          build/${{ matrix.board.name }}/${{ needs.prepare-matrix.outputs.project_name }}-*-v${{ needs.prepare-matrix.outputs.version }}.elf
           build/${{ matrix.board.name }}/build-info-*.txt
         retention-days: 90
     
     - name: Prepare release files (bin only)
       run: |
+        PROJECT_NAME="${{ needs.prepare-matrix.outputs.project_name }}"
         mkdir -p release-files-${{ matrix.board.name }}
-        cp build/${{ matrix.board.name }}/*-firmware-v${{ needs.prepare-matrix.outputs.version }}.bin release-files-${{ matrix.board.name }}/
+        cp build/${{ matrix.board.name }}/$PROJECT_NAME-*-v${{ needs.prepare-matrix.outputs.version }}.bin release-files-${{ matrix.board.name }}/
     
     - name: Upload release files
       uses: actions/upload-artifact@v4
       with:
-        name: release-${{ matrix.board.name }}-v${{ needs.prepare-matrix.outputs.version }}
+        name: ${{ needs.prepare-matrix.outputs.project_name }}-release-${{ matrix.board.name }}-v${{ needs.prepare-matrix.outputs.version }}
         path: release-files-${{ matrix.board.name }}/*.bin
         retention-days: 90
 
@@ -206,7 +214,7 @@ jobs:
     - name: Download release artifacts
       uses: actions/download-artifact@v4
       with:
-        pattern: release-*-v${{ needs.prepare-matrix.outputs.version }}
+        pattern: ${{ needs.prepare-matrix.outputs.project_name }}-release-*-v${{ needs.prepare-matrix.outputs.version }}
         path: release-artifacts
     
     - name: Organize release files

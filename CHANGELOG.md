@@ -8,18 +8,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+---
+
+## [0.0.5] - 2025-11-26
+
+### Added
+- **Project Branding System**: Centralized configuration for project identity
+  - `PROJECT_NAME` and `PROJECT_DISPLAY_NAME` variables in `config.sh`
+  - Template substitution in HTML files at build time (e.g., `{{PROJECT_DISPLAY_NAME}}`)
+  - Auto-generated C++ defines in `web_assets.h` for firmware use
+  - Branded AP SSID, device names, web portal titles, and release artifacts
 - **Automated Release Workflow**: GitHub Actions workflow for automated releases
-  - `.github/workflows/release.yml` - Tag-triggered release pipeline
+  - `.github/workflows/release.yml` - Tag-triggered release pipeline with branded artifact names
   - `tools/extract-changelog.sh` - Changelog parser for release notes
   - `create-release.sh` - Helper script for release preparation
-  - Multi-board firmware artifacts with version naming
+  - Multi-board firmware artifacts with project name in filenames
   - SHA256 checksums generation
   - Pre-release support (tags with hyphens)
   - Lightweight releases with only .bin files (debug symbols in workflow artifacts)
 
 ### Changed
+- **Documentation Restructure**: Renamed and expanded documentation
+  - `docs/release-process.md` → `docs/build-and-release-process.md`
+  - Added comprehensive project branding configuration guide
+  - Updated README.md with branding customization steps
+- **Build System**: Enhanced `minify-web-assets.sh` to accept and apply project name variables
+- **Artifact Naming**: GitHub workflows now use `PROJECT_NAME` for consistent artifact naming
+  - Build artifacts: `{PROJECT_NAME}-{board}` (e.g., `esp32-template-wifi-esp32`)
+  - Release files: `{PROJECT_NAME}-{board}-v{version}.bin`
 - Updated README.md with comprehensive release process documentation
 - Streamlined release artifacts to include only firmware binaries and checksums
+
+### Fixed
+- AP SSID now uses configurable project name instead of hardcoded "ESP32-"
+- Default device name now uses configurable display name instead of hardcoded "ESP32"
 
 ---
 

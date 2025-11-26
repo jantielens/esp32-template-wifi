@@ -47,7 +47,7 @@ build_board() {
 
 # Generate web assets (once for all builds)
 echo "Generating web assets..."
-"$SCRIPT_DIR/tools/minify-web-assets.sh"
+"$SCRIPT_DIR/tools/minify-web-assets.sh" "$PROJECT_NAME" "$PROJECT_DISPLAY_NAME"
 echo ""
 
 # Determine which boards to build

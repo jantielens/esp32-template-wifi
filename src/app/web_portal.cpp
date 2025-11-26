@@ -51,7 +51,6 @@ DNSServer dnsServer;
 LogBuffer *logBuffer = nullptr;
 
 // AP configuration
-#define AP_SSID_PREFIX "ESP32-"
 #define DNS_PORT 53
 #define CAPTIVE_PORTAL_IP IPAddress(192, 168, 4, 1)
 
@@ -269,6 +268,10 @@ void handleGetVersion(AsyncWebServerRequest *request) {
     response->print(WiFi.getHostname());
     response->print(".local\",\"hostname\":\"");
     response->print(WiFi.getHostname());
+    response->print("\",\"project_name\":\"");
+    response->print(PROJECT_NAME);
+    response->print("\",\"project_display_name\":\"");
+    response->print(PROJECT_DISPLAY_NAME);
     response->print("\"}");
     request->send(response);
 }
@@ -608,8 +611,10 @@ void web_portal_start_ap() {
         chipId |= ((ESP.getEfuseMac() >> (40 - i)) & 0xff) << i;
     }
     
-    String apName = String(AP_SSID_PREFIX) + String(chipId, HEX);
-    apName.toUpperCase();
+    // Convert PROJECT_NAME to uppercase for AP SSID
+    String apPrefix = String(PROJECT_NAME);
+    apPrefix.toUpperCase();
+    String apName = apPrefix + "-" + String(chipId, HEX);
     
     Logger.logLinef("SSID: %s", apName.c_str());
     

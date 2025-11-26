@@ -7,7 +7,33 @@
 # Get script directory (works when sourced)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Color definitions
+# ============================================================================
+# PROJECT BRANDING CONFIGURATION
+# ============================================================================
+# These values define your project's identity across the entire system.
+# Change these to customize your project name and branding.
+#
+# PROJECT_NAME (slug format - no spaces, lowercase with hyphens)
+#   Used for:
+#   - Build artifact filenames: {PROJECT_NAME}-{board}-v{version}.bin
+#   - GitHub release files: {PROJECT_NAME}-esp32-v0.0.5.bin
+#   - GitHub artifact names in CI/CD workflows
+#   - WiFi Access Point SSID: {PROJECT_NAME}-1A2B3C4D (uppercase)
+#   Example: "esp32-template-wifi" → "ESP32-TEMPLATE-WIFI-1A2B3C4D"
+#
+# PROJECT_DISPLAY_NAME (human-readable format)
+#   Used for:
+#   - Web portal page title: "{PROJECT_DISPLAY_NAME} Configuration Portal"
+#   - Web portal header: "{PROJECT_DISPLAY_NAME} Configuration"
+#   - Default device name: "{PROJECT_DISPLAY_NAME} 1A2B"
+#   - Logs page title: "Device Logs - {PROJECT_DISPLAY_NAME}"
+#   - REST API /api/info response (both values included)
+#   Example: "ESP32 Template WiFi"
+#
+PROJECT_NAME="esp32-template-wifi"
+PROJECT_DISPLAY_NAME="ESP32 Template WiFi"
+
+# Color definitions for terminal output
 BLUE='\033[0;34m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -15,8 +41,7 @@ RED='\033[0;31m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-# Project configuration
-PROJECT_NAME="esp32-template-wifi"
+# Project paths
 SKETCH_PATH="$SCRIPT_DIR/src/app/app.ino"
 BUILD_PATH="$SCRIPT_DIR/build"
 
