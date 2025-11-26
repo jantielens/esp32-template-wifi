@@ -658,6 +658,15 @@ curl http://192.168.1.100/api/info
 - Check router DHCP settings
 - Use fixed IP if DHCP fails
 
+### WiFi Connection Issues After OTA or Reboot
+
+If WiFi fails to connect after firmware update or reboot:
+- Device has automatic reconnection with 10-second watchdog
+- Hardware reset sequence clears stale WiFi state on each connection attempt
+- Check serial logs for detailed connection status (SSID not found, wrong password, etc.)
+- If persistent, use physical reset button to fully power-cycle WiFi hardware
+- Auto-reconnect and event handlers ensure recovery from temporary drops
+
 ### OTA Update Fails
 
 - Verify `.bin` file (not `.elf` or other format)
