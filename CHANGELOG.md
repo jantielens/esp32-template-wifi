@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.8] - 2025-11-26
+
+### Fixed
+- **CPU Usage Calculation**: Fixed CPU usage metric to show real-time usage instead of cumulative average
+  - Changed from cumulative runtime to delta-based calculation between measurements
+  - Added 100ms minimum interval to prevent measurement jitter
+  - Now accurately reflects current CPU load, especially noticeable under stress testing
+  - First measurement returns 0%, subsequent calls show accurate real-time usage percentage
+
+---
+
 ## [0.0.7] - 2025-11-26
 
 ### Added

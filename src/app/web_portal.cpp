@@ -61,6 +61,11 @@ static bool ota_in_progress = false;
 static size_t ota_progress = 0;
 static size_t ota_total = 0;
 
+// CPU usage tracking
+static uint32_t last_idle_runtime = 0;
+static uint32_t last_total_runtime = 0;
+static unsigned long last_cpu_check = 0;
+
 // ===== WEB SERVER HANDLERS =====
 
 // Serve portal HTML
@@ -309,7 +314,7 @@ void handleGetHealth(AsyncWebServerRequest *request) {
     // CPU
     doc["cpu_freq"] = ESP.getCpuFreqMHz();
     
-    // CPU usage via IDLE task calculation
+    // CPU usage via IDLE task delta calculation
     TaskStatus_t task_stats[16];
     uint32_t total_runtime;
     int task_count = uxTaskGetSystemState(task_stats, 16, &total_runtime);
@@ -321,13 +326,29 @@ void handleGetHealth(AsyncWebServerRequest *request) {
         }
     }
     
-    if (total_runtime > 0) {
-        float idle_percent = ((float)idle_runtime / total_runtime) * 100.0;
-        float cpu_percent = 100.0 - idle_percent;
-        doc["cpu_usage"] = (int)cpu_percent;
-    } else {
-        doc["cpu_usage"] = 0;
+    // Calculate CPU usage based on delta since last measurement
+    unsigned long now = millis();
+    int cpu_usage = 0;
+    
+    if (last_cpu_check > 0 && (now - last_cpu_check) > 100) {  // Minimum 100ms between measurements
+        uint32_t idle_delta = idle_runtime - last_idle_runtime;
+        uint32_t total_delta = total_runtime - last_total_runtime;
+        
+        if (total_delta > 0) {
+            float idle_percent = ((float)idle_delta / total_delta) * 100.0;
+            cpu_usage = (int)(100.0 - idle_percent);
+            // Clamp to valid range
+            if (cpu_usage < 0) cpu_usage = 0;
+            if (cpu_usage > 100) cpu_usage = 100;
+        }
     }
+    
+    // Update tracking variables
+    last_idle_runtime = idle_runtime;
+    last_total_runtime = total_runtime;
+    last_cpu_check = now;
+    
+    doc["cpu_usage"] = cpu_usage;
     
     // Temperature - Internal sensor (supported on ESP32-C3, S2, S3, C2, C6, H2)
 #if SOC_TEMP_SENSOR_SUPPORTED
