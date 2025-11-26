@@ -18,11 +18,11 @@ const unsigned long WIFI_BACKOFF_BASE = 5000; // 5 seconds base
 const unsigned long HEARTBEAT_INTERVAL = 60000; // 60 seconds
 unsigned long lastHeartbeat = 0;
 
-// WiFi watchdog (Improvement 3)
+// WiFi watchdog for connection monitoring
 const unsigned long WIFI_CHECK_INTERVAL = 10000; // 10 seconds
 unsigned long lastWiFiCheck = 0;
 
-// WiFi event handlers (Improvement 2)
+// WiFi event handlers for connection lifecycle monitoring
 void onWiFiConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
   Logger.logMessage("WiFi", "Connected to AP - waiting for IP");
 }
@@ -51,7 +51,7 @@ void setup()
   Logger.begin(115200);
   delay(1000);
   
-  // Register WiFi event handlers (Improvement 2)
+  // Register WiFi event handlers for connection lifecycle
   WiFi.onEvent(onWiFiConnected, ARDUINO_EVENT_WIFI_STA_CONNECTED);
   WiFi.onEvent(onWiFiGotIP, ARDUINO_EVENT_WIFI_STA_GOT_IP);
   WiFi.onEvent(onWiFiDisconnected, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
@@ -105,7 +105,7 @@ void loop()
   
   unsigned long currentMillis = millis();
   
-  // Improvement 3: WiFi watchdog - monitor and reconnect if needed
+  // WiFi watchdog - monitor connection and reconnect if needed
   if (config_loaded && currentMillis - lastWiFiCheck >= WIFI_CHECK_INTERVAL) {
     if (WiFi.status() != WL_CONNECTED && strlen(device_config.wifi_ssid) > 0) {
       Logger.logMessage("WiFi Watchdog", "Connection lost - attempting reconnect");
@@ -139,10 +139,10 @@ bool connect_wifi() {
   Logger.logLinef("SSID: %s", device_config.wifi_ssid);
   
   // === WiFi Hardware Reset Sequence ===
-  // Improvement 5: Disable persistent WiFi config (we manage our own)
+  // Disable persistent WiFi config (we manage our own via NVS)
   WiFi.persistent(false);
   
-  // Improvement 4: Full WiFi reset to clear stale state
+  // Full WiFi reset to clear stale state and prevent hardware corruption
   WiFi.disconnect(true);  // Disconnect + erase stored credentials
   delay(100);
   WiFi.mode(WIFI_OFF);    // Turn off WiFi hardware
@@ -150,7 +150,7 @@ bool connect_wifi() {
   WiFi.mode(WIFI_STA);    // Back to station mode
   delay(100);
   
-  // Improvement 1: Enable auto-reconnect at WiFi stack level
+  // Enable auto-reconnect at WiFi stack level
   WiFi.setAutoReconnect(true);
   
   // Prepare sanitized hostname
@@ -248,7 +248,7 @@ bool connect_wifi() {
       delay(100);
     }
     
-    // Improvement 6: Log failure reason for diagnostics
+    // Log detailed failure reason for diagnostics
     wl_status_t status = WiFi.status();
     if (status != WL_CONNECTED) {
       const char* reason = 
