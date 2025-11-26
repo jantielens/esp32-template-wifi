@@ -399,6 +399,7 @@ usbipd list
 
 - [Web Portal Guide](docs/web-portal.md) - Configuration portal & REST API
 - [Script Reference](docs/scripts.md) - Detailed script usage
+- [Release Process](docs/release-process.md) - Release workflow and versioning
 - [WSL Development Guide](docs/wsl-development.md) - Windows/WSL setup
 - [Library Management](docs/library-management.md) - Managing dependencies
 - [Changelog](CHANGELOG.md) - Version history and release notes

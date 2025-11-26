@@ -1,0 +1,419 @@
+# Release Process Guide
+
+This document describes the automated release workflow for the ESP32 Template project using scenario-driven examples.
+
+## Overview
+
+The project uses an automated release workflow that triggers on version tags. Releases are created through GitHub Actions, which builds firmware for all board variants and publishes them to GitHub Releases.
+
+## Workflow Components
+
+- **`.github/workflows/release.yml`** - Automated release pipeline triggered by version tags
+- **`tools/extract-changelog.sh`** - Parses CHANGELOG.md for version-specific notes
+- **`create-release.sh`** - Helper script to automate release preparation
+- **`src/version.h`** - Firmware version tracking
+- **`CHANGELOG.md`** - Release notes in Keep a Changelog format
+
+---
+
+## Scenario 1: Standard Release (Recommended)
+
+**When to use**: Regular version releases (e.g., v0.0.5, v1.0.0)
+
+### Step 1: Prepare the Release
+
+```bash
+# Run the release preparation script
+./create-release.sh 0.0.5 "Improved logging and stability"
+```
+
+**What happens**:
+- Creates branch `release/v0.0.5`
+- Updates `src/version.h` with version numbers (0, 0, 5)
+- Moves `[Unreleased]` section in `CHANGELOG.md` to `[0.0.5] - 2025-11-26`
+- Adds new empty `[Unreleased]` section
+- Commits changes
+- Pushes branch and provides PR URL
+
+### Step 2: Review and Merge PR
+
+1. Open the PR URL provided by the script
+2. Review the version bump and changelog changes
+3. CI validates the build (GitHub Actions runs on PR)
+4. Approve and merge the PR
+
+### Step 3: Tag and Publish
+
+```bash
+# Switch to main and pull merged changes
+git checkout main
+git pull
+
+# Create annotated tag
+git tag -a v0.0.5 -m "Release v0.0.5"
+
+# Push the tag to trigger release workflow
+git push origin v0.0.5
+```
+
+**What happens automatically**:
+- GitHub Actions builds firmware for all boards (esp32, esp32c3, esp32c6)
+- Extracts changelog section for v0.0.5
+- Creates GitHub Release with:
+  - `esp32-firmware-v0.0.5.bin`
+  - `esp32c3-firmware-v0.0.5.bin`
+  - `esp32c6-firmware-v0.0.5.bin`
+  - `SHA256SUMS.txt`
+- Release notes populated from CHANGELOG.md
+- Debug symbols (`.elf`) and build metadata available in workflow artifacts
+
+### Step 4: Verify
+
+Check the release page: `https://github.com/jantielens/esp32-template-wifi/releases/tag/v0.0.5`
+
+Verify:
+- ✅ Release notes match CHANGELOG
+- ✅ All firmware binaries present
+- ✅ SHA256 checksums included
+- ✅ Not marked as pre-release
+
+---
+
+## Scenario 2: Pre-Release / Beta Testing
+
+**When to use**: Testing release workflow, beta versions, release candidates
+
+### Create Pre-Release
+
+```bash
+# Tag with hyphen suffix for pre-release
+git tag -a v0.0.5-beta.1 -m "Pre-release v0.0.5-beta.1"
+git push origin v0.0.5-beta.1
+```
+
+**What happens**:
+- Same build process as standard release
+- Release automatically marked as **"Pre-release"** on GitHub
+- Useful for testing without affecting stable release stream
+
+**Pre-release naming examples**:
+- `v1.0.0-beta.1`, `v1.0.0-beta.2` - Beta versions
+- `v1.0.0-rc.1`, `v1.0.0-rc.2` - Release candidates
+- `v1.0.0-alpha.1` - Alpha versions
+
+---
+
+## Scenario 3: Hotfix Release
+
+**When to use**: Critical bug fixes that need immediate release
+
+### Quick Process
+
+```bash
+# Create hotfix branch from main
+git checkout main
+git pull
+git checkout -b hotfix/v0.0.6
+
+# Make your fixes
+# ... edit files ...
+
+# Update version and changelog manually
+# Edit src/version.h: VERSION_PATCH 6
+# Edit CHANGELOG.md: Add [0.0.6] section with fix details
+
+# Commit, push, and create PR
+git add .
+git commit -m "fix: critical bug in WiFi reconnection"
+git push origin hotfix/v0.0.6
+
+# After PR merged:
+git checkout main
+git pull
+git tag -a v0.0.6 -m "Hotfix v0.0.6"
+git push origin v0.0.6
+```
+
+**Note**: You can use `./create-release.sh 0.0.6 "Critical hotfix"` instead of manual edits.
+
+---
+
+## Scenario 4: Manual Release (Without Helper Script)
+
+**When to use**: Custom workflows, special cases
+
+### Step-by-Step Manual Process
+
+```bash
+# 1. Create release branch
+git checkout -b release/v1.0.0
+
+# 2. Edit src/version.h
+# Change:
+#   #define VERSION_MAJOR 0
+#   #define VERSION_MINOR 0
+#   #define VERSION_PATCH 4
+# To:
+#   #define VERSION_MAJOR 1
+#   #define VERSION_MINOR 0
+#   #define VERSION_PATCH 0
+
+# 3. Edit CHANGELOG.md
+# Replace:
+#   ## [Unreleased]
+# With:
+#   ## [1.0.0] - 2025-11-26
+# Add new [Unreleased] section at top
+
+# 4. Commit and push
+git add src/version.h CHANGELOG.md
+git commit -m "chore: bump version to 1.0.0"
+git push origin release/v1.0.0
+
+# 5. Create PR, review, and merge
+
+# 6. Tag the release
+git checkout main
+git pull
+git tag -a v1.0.0 -m "Release v1.0.0"
+git push origin v1.0.0
+```
+
+---
+
+## Scenario 5: Testing Release Workflow Changes
+
+**When to use**: Validating changes to `.github/workflows/release.yml`
+
+### Safe Testing Process
+
+```bash
+# Use a test pre-release tag
+git tag -a v0.0.0-test.1 -m "Testing release workflow"
+git push origin v0.0.0-test.1
+
+# Watch GitHub Actions: https://github.com/jantielens/esp32-template-wifi/actions
+
+# If successful, delete test release and tag
+# Via GitHub UI: Delete the release
+# Via CLI:
+git push --delete origin v0.0.0-test.1
+git tag -d v0.0.0-test.1
+```
+
+---
+
+## Scenario 6: Feature Branch with Multiple Commits
+
+**When to use**: Large feature development over multiple commits
+
+### Development Process
+
+```bash
+# 1. Create feature branch
+git checkout -b feature/new-sensor-support
+
+# 2. Make multiple commits during development
+git add .
+git commit -m "feat: add sensor library"
+# ... more work ...
+git commit -m "feat: implement sensor reading"
+# ... more work ...
+git commit -m "docs: update sensor documentation"
+
+# 3. Push and create PR
+git push origin feature/new-sensor-support
+# Create PR: feature/new-sensor-support → main
+
+# 4. Update CHANGELOG.md during PR review
+# Add feature details to [Unreleased] section
+
+# 5. After PR merged, prepare release as normal
+git checkout main
+git pull
+./create-release.sh 0.1.0 "Added sensor support"
+```
+
+**Best Practice**: Update CHANGELOG.md in the feature branch or during PR review, so the Unreleased section is always current.
+
+---
+
+## Scenario 7: Rollback Release
+
+**When to use**: Critical issue discovered in a release
+
+### Immediate Actions
+
+```bash
+# Option 1: Delete the release (GitHub UI or API)
+# Go to: https://github.com/jantielens/esp32-template-wifi/releases
+# Edit release → Delete release
+
+# Option 2: Mark release as "Pre-release" to hide from latest
+# Edit release → Check "Set as a pre-release"
+
+# Then create a hotfix release with the fix
+./create-release.sh 0.0.7 "Hotfix for v0.0.6 issue"
+```
+
+**Note**: Git tags are permanent in history. Deleting a release only removes the GitHub Release, not the tag.
+
+---
+
+## Release Artifacts
+
+### What's in GitHub Releases (Public)
+
+Each release includes:
+- **Firmware binaries**: `<board>-firmware-vX.Y.Z.bin` for each board variant
+- **Checksums**: `SHA256SUMS.txt` for verification
+- **Release notes**: Extracted from CHANGELOG.md
+
+### What's in Workflow Artifacts (Developers)
+
+Available for 90 days in GitHub Actions:
+- **Debug symbols**: `.elf` files for debugging
+- **Build metadata**: `build-info-*.txt` with version, commit SHA, flash commands
+
+---
+
+## Changelog Format
+
+Follow [Keep a Changelog](https://keepachangelog.com/) format:
+
+```markdown
+## [Unreleased]
+
+### Added
+- New feature description
+
+### Changed
+- Changed behavior description
+
+### Fixed
+- Bug fix description
+
+---
+
+## [0.0.5] - 2025-11-26
+
+### Added
+- Feature that was released
+
+### Fixed
+- Bug that was fixed
+```
+
+**Categories**: Added, Changed, Deprecated, Removed, Fixed, Security
+
+---
+
+## Versioning Strategy
+
+Follow [Semantic Versioning](https://semver.org/):
+
+- **MAJOR** (X.0.0): Breaking changes, incompatible API changes
+- **MINOR** (0.X.0): New features, backward-compatible
+- **PATCH** (0.0.X): Bug fixes, backward-compatible
+
+**Examples**:
+- `0.0.1` → `0.0.2`: Bug fix
+- `0.0.5` → `0.1.0`: New feature added
+- `0.9.0` → `1.0.0`: Major milestone or breaking change
+- `1.0.0-beta.1`: Pre-release before 1.0.0
+
+---
+
+## Troubleshooting
+
+### Release Workflow Fails
+
+1. Check GitHub Actions logs: `https://github.com/jantielens/esp32-template-wifi/actions`
+2. Common issues:
+   - **Compilation error**: Fix code and push new tag
+   - **Changelog parsing error**: Verify CHANGELOG.md format
+   - **Missing tag**: Ensure tag was pushed (`git push origin v0.0.5`)
+
+### Changelog Not Extracted
+
+- Verify CHANGELOG.md has exact format: `## [0.0.5] - 2025-11-26`
+- Test locally: `./tools/extract-changelog.sh 0.0.5`
+
+### Wrong Version in Firmware
+
+- Check `src/version.h` matches the tag
+- Rebuild: Delete tag, fix version.h, re-tag
+
+### Duplicate Release
+
+- Delete existing release in GitHub UI
+- Delete and re-push tag:
+  ```bash
+  git tag -d v0.0.5
+  git push --delete origin v0.0.5
+  git tag -a v0.0.5 -m "Release v0.0.5"
+  git push origin v0.0.5
+  ```
+
+---
+
+## CI/CD Pipeline Summary
+
+### Build Workflow (`.github/workflows/build.yml`)
+
+**Triggers**:
+- Pull requests to `main` or `develop`
+- Manual trigger
+
+**Purpose**: Validate code compiles before merge
+
+### Release Workflow (`.github/workflows/release.yml`)
+
+**Triggers**:
+- Tags matching `v*.*.*`
+
+**Purpose**: Build and publish firmware releases
+
+**Process**:
+1. Extract version from tag
+2. Build firmware for all boards (matrix)
+3. Extract changelog section
+4. Create GitHub Release
+5. Upload firmware binaries
+6. Generate checksums
+
+---
+
+## Quick Reference
+
+| Task | Command |
+|------|---------|
+| Prepare release | `./create-release.sh X.Y.Z "Title"` |
+| Create tag | `git tag -a vX.Y.Z -m "Message"` |
+| Push tag | `git push origin vX.Y.Z` |
+| Delete remote tag | `git push --delete origin vX.Y.Z` |
+| Delete local tag | `git tag -d vX.Y.Z` |
+| Test changelog parser | `./tools/extract-changelog.sh X.Y.Z` |
+| Pre-release tag | `git tag -a vX.Y.Z-beta.1 -m "Message"` |
+
+---
+
+## Best Practices
+
+1. **Always use the helper script** for consistency
+2. **Update CHANGELOG.md regularly** during development
+3. **Test with pre-release tags** before stable releases
+4. **Review release PR carefully** - last chance to verify version/changelog
+5. **Keep version.h in sync** with git tags
+6. **Use semantic versioning** for clear version progression
+7. **Write descriptive release titles** for clarity
+8. **Verify releases** after creation on GitHub
+
+---
+
+## Related Documentation
+
+- [Main README](../README.md) - Project overview
+- [Scripts Guide](scripts.md) - Build and upload scripts
+- [Library Management](library-management.md) - Managing dependencies
+- [CHANGELOG](../CHANGELOG.md) - Release history
