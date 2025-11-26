@@ -345,13 +345,13 @@ When you push a tag matching `v*.*.*`:
 
 ### Release Artifacts
 
-Each release includes per-board artifacts:
+Each release includes firmware binaries for all board variants:
 - `esp32-firmware-v0.0.5.bin` - Ready to flash
-- `esp32-firmware-v0.0.5.elf` - Debug symbols
 - `esp32c3-firmware-v0.0.5.bin`
-- `esp32c3-firmware-v0.0.5.elf`
-- `build-info-esp32.txt` - Build metadata (version, commit, flash command)
+- `esp32c6-firmware-v0.0.5.bin`
 - `SHA256SUMS.txt` - Checksums for verification
+
+Debug symbols (`.elf`) and build metadata (`.txt`) are available in the workflow artifacts but not included in releases to keep downloads lightweight.
 
 ### Pre-Release Testing
 

@@ -160,6 +160,18 @@ jobs:
           build/${{ matrix.board.name }}/*-firmware-v${{ needs.prepare-matrix.outputs.version }}.elf
           build/${{ matrix.board.name }}/build-info-*.txt
         retention-days: 90
+    
+    - name: Prepare release files (bin only)
+      run: |
+        mkdir -p release-files-${{ matrix.board.name }}
+        cp build/${{ matrix.board.name }}/*-firmware-v${{ needs.prepare-matrix.outputs.version }}.bin release-files-${{ matrix.board.name }}/
+    
+    - name: Upload release files
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-${{ matrix.board.name }}-v${{ needs.prepare-matrix.outputs.version }}
+        path: release-files-${{ matrix.board.name }}/*.bin
+        retention-days: 90
 
   release:
     needs: [prepare-matrix, build]
@@ -191,17 +203,18 @@ jobs:
         echo "Changelog content:"
         cat release-notes.md
     
-    - name: Download all artifacts
+    - name: Download release artifacts
       uses: actions/download-artifact@v4
       with:
+        pattern: release-*-v${{ needs.prepare-matrix.outputs.version }}
         path: release-artifacts
     
     - name: Organize release files
       run: |
         mkdir -p release-files
         
-        # Move all firmware files to release-files directory
-        find release-artifacts -type f \( -name "*.bin" -o -name "*.elf" -o -name "build-info-*.txt" \) -exec mv {} release-files/ \;
+        # Move only .bin files to release-files directory
+        find release-artifacts -type f -name "*.bin" -exec mv {} release-files/ \;
         
         echo "Release files:"
         ls -lh release-files/
@@ -209,7 +222,7 @@ jobs:
     - name: Generate SHA256 checksums
       run: |
         cd release-files
-        sha256sum *.bin *.elf > SHA256SUMS.txt
+        sha256sum *.bin > SHA256SUMS.txt
         echo "Checksums generated:"
         cat SHA256SUMS.txt
     

@@ -15,9 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Multi-board firmware artifacts with version naming
   - SHA256 checksums generation
   - Pre-release support (tags with hyphens)
+  - Lightweight releases with only .bin files (debug symbols in workflow artifacts)
 
 ### Changed
 - Updated README.md with comprehensive release process documentation
+- Streamlined release artifacts to include only firmware binaries and checksums
 
 ---
 
