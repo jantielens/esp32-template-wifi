@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.4] - 2025-11-26
+
+### Added
+- **Log Management System**: New structured logging with nested blocks and automatic timing
+  - `LogManager` class: Print-compatible wrapper for Serial with log buffer integration
+  - `LogBuffer`: Thread-safe circular buffer (50 entries, 200 chars each)
+  - Automatic routing to both Serial output and web buffer
+  - Indentation-based nested log blocks with elapsed time tracking
+- **Web Logs Viewer**: New full-screen logs interface at `/logs`
+  - Real-time polling of device logs (2s interval)
+  - Syntax highlighting for error/warning/info messages
+  - Auto-scroll toggle and connection controls
+  - Formatted timestamps (HH:MM:SS.milliseconds since boot)
+  - Link from main portal in Advanced section
+- **Memory Optimizations**: AsyncResponseStream for JSON responses to reduce stack usage
+- **Build Tool Enhancement**: `minify-web-assets.sh` now generates size constants for PROGMEM assets
+
+### Changed
+- Replaced all `Serial.print/println` calls with `Logger` methods throughout codebase
+- Reduced heartbeat interval from 5s to 60s for less verbose logging
+- Improved web portal asset serving with explicit size constants (avoids `strlen_P()` overhead)
+- Enhanced AsyncTCP stack size to 16KB for large web assets
+- Updated `config.sh` with detailed CDCOnBoot documentation for USB serial support
+
+### Fixed
+- Improved error handling in `config.sh` board name resolution
+- Cleaned up duplicate CSS rules in portal.css
+
+---
+
 ## [0.0.3] - 2025-11-26
 
 ### Added

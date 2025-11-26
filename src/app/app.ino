@@ -1,6 +1,7 @@
 #include "../version.h"
 #include "config_manager.h"
 #include "web_portal.h"
+#include "log_manager.h"
 #include <WiFi.h>
 #include <ESPmDNS.h>
 #include <lwip/netif.h>
@@ -14,32 +15,22 @@ const int WIFI_MAX_ATTEMPTS = 5;
 const unsigned long WIFI_BACKOFF_BASE = 5000; // 5 seconds base
 
 // Heartbeat interval
-const unsigned long HEARTBEAT_INTERVAL = 5000;
+const unsigned long HEARTBEAT_INTERVAL = 60000; // 60 seconds
 unsigned long lastHeartbeat = 0;
 
 void setup()
 {
-  // Initialize serial communication
-  Serial.begin(115200);
+  // Initialize log manager (wraps Serial for web streaming)
+  Logger.begin(115200);
   delay(1000);
   
-  // Print startup message
-  Serial.println("\n\n=================================");
-  Serial.printf("ESP32 WiFi Portal v%s\n", FIRMWARE_VERSION);
-  Serial.println("=================================");
-  Serial.print("Chip Model: ");
-  Serial.println(ESP.getChipModel());
-  Serial.print("Chip Revision: ");
-  Serial.println(ESP.getChipRevision());
-  Serial.print("CPU Frequency: ");
-  Serial.print(ESP.getCpuFreqMHz());
-  Serial.println(" MHz");
-  Serial.print("Flash Size: ");
-  Serial.print(ESP.getFlashChipSize() / (1024 * 1024));
-  Serial.println(" MB");
-  Serial.print("MAC Address: ");
-  Serial.println(WiFi.macAddress());
-  Serial.println("=================================\n");
+  Logger.logBegin("System Boot");
+  Logger.logLinef("Firmware: v%s", FIRMWARE_VERSION);
+  Logger.logLinef("Chip: %s (Rev %d)", ESP.getChipModel(), ESP.getChipRevision());
+  Logger.logLinef("CPU: %d MHz", ESP.getCpuFreqMHz());
+  Logger.logLinef("Flash: %d MB", ESP.getFlashChipSize() / (1024 * 1024));
+  Logger.logLinef("MAC: %s", WiFi.macAddress().c_str());
+  Logger.logEnd();
   
   // Initialize configuration manager
   config_manager_init();
@@ -56,15 +47,14 @@ void setup()
   
   // Start WiFi BEFORE initializing web server (critical for ESP32-C3)
   if (!config_loaded) {
-    Serial.println("[Main] No configuration found - starting AP mode");
+    Logger.logMessage("Main", "No config - starting AP mode");
     web_portal_start_ap();
   } else {
-    Serial.println("[Main] Configuration loaded - connecting to WiFi");
+    Logger.logMessage("Main", "Config loaded - connecting to WiFi");
     if (connect_wifi()) {
-      Serial.println("[Main] WiFi connected - starting mDNS");
       start_mdns();
     } else {
-      Serial.println("[Main] WiFi connection failed - falling back to AP mode");
+      Logger.logMessage("Main", "WiFi failed - fallback to AP");
       web_portal_start_ap();
     }
   }
@@ -73,7 +63,7 @@ void setup()
   web_portal_init(&device_config);
   
   lastHeartbeat = millis();
-  Serial.println("[Main] Setup complete\n");
+  Logger.logMessage("Main", "Setup complete");
 }
 
 void loop()
@@ -84,19 +74,13 @@ void loop()
   // Check if it's time for heartbeat
   unsigned long currentMillis = millis();
   if (currentMillis - lastHeartbeat >= HEARTBEAT_INTERVAL) {
-    Serial.print("[Heartbeat] Uptime: ");
-    Serial.print(currentMillis / 1000);
-    Serial.print("s | Free Heap: ");
-    Serial.print(ESP.getFreeHeap());
-    Serial.print(" bytes | WiFi: ");
     if (WiFi.status() == WL_CONNECTED) {
-      Serial.print("Connected (IP: ");
-      Serial.print(WiFi.localIP());
-      Serial.print(", Hostname: ");
-      Serial.print(WiFi.getHostname());
-      Serial.println(")");
+      Logger.logMessagef("Heartbeat", "Up: %ds | Heap: %d | WiFi: %s (%s)", 
+        currentMillis / 1000, ESP.getFreeHeap(), 
+        WiFi.localIP().toString().c_str(), WiFi.getHostname());
     } else {
-      Serial.println("Disconnected");
+      Logger.logMessagef("Heartbeat", "Up: %ds | Heap: %d | WiFi: Disconnected", 
+        currentMillis / 1000, ESP.getFreeHeap());
     }
     
     lastHeartbeat = currentMillis;
@@ -107,8 +91,8 @@ void loop()
 
 // Connect to WiFi with exponential backoff
 bool connect_wifi() {
-  Serial.print("[WiFi] Connecting to ");
-  Serial.println(device_config.wifi_ssid);
+  Logger.logBegin("WiFi Connection");
+  Logger.logLinef("SSID: %s", device_config.wifi_ssid);
   
   // Prepare sanitized hostname
   char sanitized[CONFIG_DEVICE_NAME_MAX_LEN];
@@ -123,8 +107,7 @@ bool connect_wifi() {
   if (strlen(sanitized) > 0) {
     // Set via WiFi library
     WiFi.setHostname(sanitized);
-    Serial.print("[WiFi] Hostname set to: ");
-    Serial.println(sanitized);
+    Logger.logLinef("Hostname: %s", sanitized);
     
     // Also set via esp_netif API (for compatibility)
     esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
@@ -135,22 +118,25 @@ bool connect_wifi() {
   
   // Configure fixed IP if provided
   if (strlen(device_config.fixed_ip) > 0) {
-    Serial.println("[WiFi] Configuring fixed IP...");
+    Logger.logBegin("Fixed IP Config");
     
     IPAddress local_ip, gateway, subnet, dns1, dns2;
     
     if (!local_ip.fromString(device_config.fixed_ip)) {
-      Serial.println("[WiFi] ERROR: Invalid fixed IP address");
+      Logger.logEnd("Invalid IP address");
+      Logger.logEnd("Connection failed");
       return false;
     }
     
     if (!subnet.fromString(device_config.subnet_mask)) {
-      Serial.println("[WiFi] ERROR: Invalid subnet mask");
+      Logger.logEnd("Invalid subnet mask");
+      Logger.logEnd("Connection failed");
       return false;
     }
     
     if (!gateway.fromString(device_config.gateway)) {
-      Serial.println("[WiFi] ERROR: Invalid gateway");
+      Logger.logEnd("Invalid gateway");
+      Logger.logEnd("Connection failed");
       return false;
     }
     
@@ -169,12 +155,13 @@ bool connect_wifi() {
     }
     
     if (!WiFi.config(local_ip, gateway, subnet, dns1, dns2)) {
-      Serial.println("[WiFi] ERROR: Failed to configure fixed IP");
+      Logger.logEnd("Configuration failed");
+      Logger.logEnd("Connection failed");
       return false;
     }
     
-    Serial.print("[WiFi] Fixed IP: ");
-    Serial.println(device_config.fixed_ip);
+    Logger.logLinef("IP: %s", device_config.fixed_ip);
+    Logger.logEnd();
   }
   
   WiFi.begin(device_config.wifi_ssid, device_config.wifi_password);
@@ -184,33 +171,19 @@ bool connect_wifi() {
     unsigned long backoff = WIFI_BACKOFF_BASE * (attempt + 1);
     unsigned long start = millis();
     
-    Serial.print("[WiFi] Attempt ");
-    Serial.print(attempt + 1);
-    Serial.print("/");
-    Serial.print(WIFI_MAX_ATTEMPTS);
-    Serial.print(" (waiting ");
-    Serial.print(backoff / 1000);
-    Serial.println("s)");
+    Logger.logLinef("Attempt %d/%d (timeout %ds)", attempt + 1, WIFI_MAX_ATTEMPTS, backoff / 1000);
     
     while (millis() - start < backoff) {
       if (WiFi.status() == WL_CONNECTED) {
-        Serial.println("\n[WiFi] ========== CONNECTION SUCCESS ==========");
-        Serial.print("[WiFi] IP Address: ");
-        Serial.println(WiFi.localIP());
-        Serial.print("[WiFi] Hostname: ");
-        Serial.println(WiFi.getHostname());
-        Serial.print("[WiFi] MAC Address: ");
-        Serial.println(WiFi.macAddress());
-        Serial.print("[WiFi] Signal: ");
-        Serial.print(WiFi.RSSI());
-        Serial.println(" dBm");
-        Serial.println("\n[Discovery] How to access this device:");
-        Serial.print("[Discovery]   • Direct IP:  http://");
-        Serial.println(WiFi.localIP());
-        Serial.print("[Discovery]   • mDNS:       http://");
-        Serial.print(WiFi.getHostname());
-        Serial.println(".local");
-        Serial.println("[WiFi] =========================================\n");
+        Logger.logLinef("IP: %s", WiFi.localIP().toString().c_str());
+        Logger.logLinef("Hostname: %s", WiFi.getHostname());
+        Logger.logLinef("MAC: %s", WiFi.macAddress().c_str());
+        Logger.logLinef("Signal: %d dBm", WiFi.RSSI());
+        Logger.logLine("");
+        Logger.logLine("Access via:");
+        Logger.logLinef("  http://%s", WiFi.localIP().toString().c_str());
+        Logger.logLinef("  http://%s.local", WiFi.getHostname());
+        Logger.logEnd("Connected");
         
         return true;
       }
@@ -218,24 +191,24 @@ bool connect_wifi() {
     }
   }
   
-  Serial.println("[WiFi] Connection failed after all attempts");
+  Logger.logEnd("All attempts failed");
   return false;
 }
 
 // Start mDNS service with enhanced TXT records
 void start_mdns() {
+  Logger.logBegin("mDNS");
+  
   char sanitized[CONFIG_DEVICE_NAME_MAX_LEN];
   config_manager_sanitize_device_name(device_config.device_name, sanitized, CONFIG_DEVICE_NAME_MAX_LEN);
   
   if (strlen(sanitized) == 0) {
-    Serial.println("[mDNS] ERROR: Sanitized name is empty");
+    Logger.logEnd("Empty hostname");
     return;
   }
   
   if (MDNS.begin(sanitized)) {
-    Serial.print("[mDNS] Started as ");
-    Serial.print(sanitized);
-    Serial.println(".local");
+    Logger.logLinef("Name: %s.local", sanitized);
     
     // Add HTTP service
     MDNS.addService("http", "tcp", 80);
@@ -269,8 +242,9 @@ void start_mdns() {
     config_url += ".local";
     MDNS.addServiceTxt("http", "tcp", "url", config_url.c_str());
     
-    Serial.println("[mDNS] Added service TXT records (version, model, mac, ty, mf, features, note, url)");
+    Logger.logLine("TXT records: version, model, mac, ty, features");
+    Logger.logEnd();
   } else {
-    Serial.println("[mDNS] ERROR: Failed to start");
+    Logger.logEnd("Failed to start");
   }
 }

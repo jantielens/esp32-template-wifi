@@ -228,8 +228,27 @@ ${JS_CONTENTS[$filename]}
 EOF
 done
 
+# Add size constants (avoids strlen_P() overhead at runtime)
+cat >> "$OUTPUT_FILE" << 'SIZE_CONSTANTS'
+
+// Asset sizes (calculated at compile time, avoids strlen_P() overhead)
+SIZE_CONSTANTS
+
+for filename in "${!HTML_CONTENTS[@]}"; do
+    echo "const size_t ${filename}_html_len = sizeof(${filename}_html) - 1;" >> "$OUTPUT_FILE"
+done
+
+for filename in "${!CSS_CONTENTS[@]}"; do
+    echo "const size_t ${filename}_css_len = sizeof(${filename}_css) - 1;" >> "$OUTPUT_FILE"
+done
+
+for filename in "${!JS_CONTENTS[@]}"; do
+    echo "const size_t ${filename}_js_len = sizeof(${filename}_js) - 1;" >> "$OUTPUT_FILE"
+done
+
 # Close header file
 cat >> "$OUTPUT_FILE" << 'HEADER_END'
+
 #endif // WEB_ASSETS_H
 HEADER_END
 

@@ -154,8 +154,50 @@ Floating status widget with compact and expanded views:
 - **📶 WiFi Settings**: SSID, password, fixed IP configuration
 - **🔧 Device Settings**: Device name (used for mDNS hostname)
 - **🌐 Network Settings**: Fixed IP, subnet, gateway, DNS servers
+- **🔧 Advanced**: Link to device logs viewer
 - **⚙️ Additional Settings**: Custom application settings
 - **📦 Firmware Update**: OTA binary upload (Full Mode only)
+
+### Live Device Logs
+
+The portal includes a dedicated logs viewer for real-time device monitoring.
+
+**Access:**
+- From main portal: Click "📋 View Device Logs" in Advanced section
+- Direct URL: `http://<device-ip>/logs` or `http://<hostname>.local/logs`
+
+**Features:**
+- Full-screen console-style interface
+- Real-time log streaming (2-second polling)
+- Syntax highlighting (errors in red, warnings in yellow, info in cyan)
+- Formatted timestamps (HH:MM:SS.milliseconds since boot)
+- Auto-scroll toggle
+- Connection status indicator
+- Start/Stop streaming controls
+- Circular buffer (last 50 entries, 200 chars each)
+
+**Log Format:**
+```
+00:00:05.123  [System Boot] Starting...
+00:00:05.125    Firmware: v0.0.4
+00:00:05.127    Chip: ESP32-C3 (Rev 4)
+00:00:05.130    CPU: 160 MHz
+00:00:05.132  Done (8ms)
+```
+
+**Usage:**
+1. Click "View Device Logs" button in portal
+2. Click "Start Streaming" to begin polling
+3. Logs display with indentation showing nested operations
+4. Toggle "Auto-scroll" to control scrolling behavior
+5. Click "Stop Streaming" to pause updates
+
+**Log Categories (Color-coded):**
+- **System Events**: Purple (Config, mDNS)
+- **Network**: Teal (Portal, WiFi)
+- **Errors**: Red ([ERROR])
+- **Warnings**: Yellow ([WARNING])
+- **Info**: Cyan ([INFO])
 
 ## Automatic Reconnection After Reboot
 
@@ -409,6 +451,41 @@ Reboot the device without saving configuration changes.
 **Notes:**
 - Web portal automatically polls for reconnection (see [Automatic Reconnection](#automatic-reconnection-after-reboot))
 
+### Device Logs
+
+#### `GET /api/logs`
+
+Returns buffered log entries from device.
+
+**Response:**
+```json
+{
+  "count": 25,
+  "logs": [
+    {
+      "ts": 5123,
+      "msg": "[System Boot] Starting..."
+    },
+    {
+      "ts": 5125,
+      "msg": "  Firmware: v0.0.4"
+    }
+  ]
+}
+```
+
+**Fields:**
+- `count`: Number of log entries returned
+- `logs`: Array of log entries
+  - `ts`: Timestamp in milliseconds since boot
+  - `msg`: Log message text with indentation
+
+**Notes:**
+- Returns last 50 entries (circular buffer)
+- Messages truncated to 200 characters max
+- Used by logs viewer for polling updates
+- Special characters in messages are JSON-escaped
+
 ### OTA Firmware Update
 
 #### `POST /api/update`
@@ -450,11 +527,15 @@ Upload new firmware binary for over-the-air update.
 - `web_portal.cpp/h` - ESPAsyncWebServer with REST endpoints
 - `config_manager.cpp/h` - NVS (Non-Volatile Storage) for configuration
 - `web_assets.cpp/h` - PROGMEM embedded HTML/CSS/JS
+- `log_manager.cpp/h` - Print-compatible logging with nested blocks
+- `log_buffer.cpp/h` - Thread-safe circular buffer for log storage
 
 **Frontend (HTML/CSS/JS):**
 - `web/portal.html` - Semantic HTML structure
 - `web/portal.css` - Minimalist card-based design with gradients
 - `web/portal.js` - Vanilla JavaScript (no frameworks)
+- `web/logs.html` - Full-screen logs viewer interface
+- `web/logs.js` - Polling-based log streaming
 
 ### CPU Usage Calculation
 

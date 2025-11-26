@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Logs - ESP32</title>
+    <link rel="stylesheet" href="/portal.css">
+    <style>
+        body {
+            padding: 0;
+            margin: 0;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .container {
+            max-width: none;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        header {
+            margin-bottom: 0;
+            border-radius: 0;
+            flex-shrink: 0;
+        }
+        .section.logs-section {
+            margin: 0;
+            border-radius: 0;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .logs-viewer {
+            flex: 1;
+            max-height: none;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📋 Device Logs</h1>
+            <div class="version-badges">
+                <a href="/" class="version-badge" style="background: rgba(52, 199, 89, 0.9); text-decoration: none;">← Back to Config</a>
+            </div>
+        </header>
+
+        <div id="status-message" class="message" style="display:none;"></div>
+
+        <section class="section logs-section">
+            <h2>Live Device Logs</h2>
+            <div class="logs-controls">
+                <button type="button" id="logs-connect-btn" class="btn btn-secondary">Start Streaming</button>
+                <button type="button" id="logs-disconnect-btn" class="btn btn-secondary" style="display:none;">Stop Streaming</button>
+                <label class="logs-autoscroll">
+                    <input type="checkbox" id="logs-autoscroll" checked>
+                    Auto-scroll
+                </label>
+                <span id="logs-status" class="logs-status">Disconnected</span>
+            </div>
+            <div id="logs-viewer" class="logs-viewer">
+                <div class="logs-placeholder">Click "Start Streaming" to view live device logs</div>
+            </div>
+            <div style="margin-top: 12px; color: #666; font-size: 13px;">
+                <strong>Timestamps:</strong> Logs are prefixed with time since device boot (HH:MM:SS.milliseconds)
+            </div>
+        </section>
+    </div>
+
+    <script src="/logs.js"></script>
+</body>
+</html>

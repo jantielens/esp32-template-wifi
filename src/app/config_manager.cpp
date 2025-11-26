@@ -6,6 +6,7 @@
  */
 
 #include "config_manager.h"
+#include "log_manager.h"
 #include <Preferences.h>
 
 // NVS namespace
@@ -27,7 +28,7 @@ static Preferences preferences;
 
 // Initialize NVS
 void config_manager_init() {
-    Serial.println("[Config] Initializing NVS...");
+    Logger.logMessage("Config", "NVS initialized");
 }
 
 // Get default device name with unique chip ID
@@ -76,19 +77,19 @@ void config_manager_sanitize_device_name(const char *input, char *output, size_t
 // Load configuration from NVS
 bool config_manager_load(DeviceConfig *config) {
     if (!config) {
-        Serial.println("[Config] ERROR: NULL config pointer");
+        Logger.logMessage("Config", "Load failed: NULL pointer");
         return false;
     }
     
-    Serial.println("[Config] Loading from NVS...");
+    Logger.logBegin("Config Load");
     
     preferences.begin(CONFIG_NAMESPACE, true); // Read-only mode
     
     // Check magic number first
     uint32_t magic = preferences.getUInt(KEY_MAGIC, 0);
     if (magic != CONFIG_MAGIC) {
-        Serial.println("[Config] No valid configuration found");
         preferences.end();
+        Logger.logEnd("No config found");
         return false;
     }
     
@@ -119,28 +120,28 @@ bool config_manager_load(DeviceConfig *config) {
     
     // Validate loaded config
     if (!config_manager_is_valid(config)) {
-        Serial.println("[Config] Loaded config is invalid");
+        Logger.logEnd("Invalid config");
         return false;
     }
     
-    Serial.println("[Config] Configuration loaded successfully");
     config_manager_print(config);
+    Logger.logEnd();
     return true;
 }
 
 // Save configuration to NVS
 bool config_manager_save(const DeviceConfig *config) {
     if (!config) {
-        Serial.println("[Config] ERROR: NULL config pointer");
+        Logger.logMessage("Config", "Save failed: NULL pointer");
         return false;
     }
     
     if (!config_manager_is_valid(config)) {
-        Serial.println("[Config] ERROR: Invalid config, refusing to save");
+        Logger.logMessage("Config", "Save failed: Invalid config");
         return false;
     }
     
-    Serial.println("[Config] Saving to NVS...");
+    Logger.logBegin("Config Save");
     
     preferences.begin(CONFIG_NAMESPACE, false); // Read-write mode
     
@@ -166,23 +167,23 @@ bool config_manager_save(const DeviceConfig *config) {
     
     preferences.end();
     
-    Serial.println("[Config] Configuration saved successfully");
     config_manager_print(config);
+    Logger.logEnd();
     return true;
 }
 
 // Reset configuration (erase from NVS)
 bool config_manager_reset() {
-    Serial.println("[Config] Resetting configuration...");
+    Logger.logBegin("Config Reset");
     
     preferences.begin(CONFIG_NAMESPACE, false);
     bool success = preferences.clear();
     preferences.end();
     
     if (success) {
-        Serial.println("[Config] Configuration reset successfully");
+        Logger.logEnd();
     } else {
-        Serial.println("[Config] ERROR: Failed to reset configuration");
+        Logger.logEnd("Failed to reset");
     }
     
     return success;
@@ -201,34 +202,22 @@ bool config_manager_is_valid(const DeviceConfig *config) {
 void config_manager_print(const DeviceConfig *config) {
     if (!config) return;
     
-    Serial.println("[Config] Current configuration:");
-    Serial.print("  Device Name: ");
-    Serial.println(config->device_name);
+    Logger.logLinef("Device: %s", config->device_name);
     
     // Show sanitized name for mDNS
     char sanitized[CONFIG_DEVICE_NAME_MAX_LEN];
     config_manager_sanitize_device_name(config->device_name, sanitized, CONFIG_DEVICE_NAME_MAX_LEN);
-    Serial.print("  mDNS Name: ");
-    Serial.println(sanitized);
+    Logger.logLinef("mDNS: %s.local", sanitized);
     
-    Serial.print("  WiFi SSID: ");
-    Serial.println(config->wifi_ssid);
-    Serial.print("  WiFi Password: ");
-    Serial.println(strlen(config->wifi_password) > 0 ? "***" : "(empty)");
+    Logger.logLinef("WiFi SSID: %s", config->wifi_ssid);
+    Logger.logLinef("WiFi Pass: %s", strlen(config->wifi_password) > 0 ? "***" : "(none)");
     
-    Serial.print("  Fixed IP: ");
-    Serial.println(strlen(config->fixed_ip) > 0 ? config->fixed_ip : "(DHCP)");
     if (strlen(config->fixed_ip) > 0) {
-        Serial.print("  Subnet Mask: ");
-        Serial.println(config->subnet_mask);
-        Serial.print("  Gateway: ");
-        Serial.println(config->gateway);
-        Serial.print("  DNS1: ");
-        Serial.println(config->dns1);
-        Serial.print("  DNS2: ");
-        Serial.println(strlen(config->dns2) > 0 ? config->dns2 : "(none)");
+        Logger.logLinef("IP: %s", config->fixed_ip);
+        Logger.logLinef("Subnet: %s", config->subnet_mask);
+        Logger.logLinef("Gateway: %s", config->gateway);
+        Logger.logLinef("DNS: %s, %s", config->dns1, strlen(config->dns2) > 0 ? config->dns2 : "(none)");
+    } else {
+        Logger.logLine("IP: DHCP");
     }
-    
-    Serial.print("  Dummy Setting: ");
-    Serial.println(strlen(config->dummy_setting) > 0 ? config->dummy_setting : "(empty)");
 }

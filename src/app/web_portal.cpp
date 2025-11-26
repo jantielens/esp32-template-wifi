@@ -5,9 +5,15 @@
  * Serves static files and provides REST API for configuration.
  */
 
+// Increase AsyncTCP task stack size to prevent overflow
+// Default is 8192, increase to 16384 for web assets
+#define CONFIG_ASYNC_TCP_STACK_SIZE 16384
+
 #include "web_portal.h"
 #include "web_assets.h"
 #include "config_manager.h"
+#include "log_manager.h"
+#include "log_buffer.h"
 #include "../version.h"
 #include <ESPAsyncWebServer.h>
 #include <DNSServer.h>
@@ -24,6 +30,8 @@
 void handleRoot(AsyncWebServerRequest *request);
 void handleCSS(AsyncWebServerRequest *request);
 void handleJS(AsyncWebServerRequest *request);
+void handleLogsHTML(AsyncWebServerRequest *request);
+void handleLogsJS(AsyncWebServerRequest *request);
 void handleGetConfig(AsyncWebServerRequest *request);
 void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total);
 void handleDeleteConfig(AsyncWebServerRequest *request);
@@ -31,12 +39,16 @@ void handleGetVersion(AsyncWebServerRequest *request);
 void handleGetMode(AsyncWebServerRequest *request);
 void handleGetHealth(AsyncWebServerRequest *request);
 void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
+void handleGetLogs(AsyncWebServerRequest *request);
 
 // Web server on port 80 (pointer to avoid constructor issues)
 AsyncWebServer *server = nullptr;
 
 // DNS server for captive portal (port 53)
 DNSServer dnsServer;
+
+// Log buffer for web viewing
+LogBuffer *logBuffer = nullptr;
 
 // AP configuration
 #define AP_SSID_PREFIX "ESP32-"
@@ -54,39 +66,58 @@ static size_t ota_total = 0;
 
 // Serve portal HTML
 void handleRoot(AsyncWebServerRequest *request) {
-    Serial.println("[Portal] Serving portal.html");
-    request->send_P(200, "text/html", portal_html);
+    AsyncWebServerResponse *response = request->beginResponse(200, "text/html", 
+                                                               (const uint8_t*)portal_html, 
+                                                               portal_html_len);
+    request->send(response);
 }
 
 // Serve CSS
 void handleCSS(AsyncWebServerRequest *request) {
-    Serial.println("[Portal] Serving portal.css");
-    request->send_P(200, "text/css", portal_css);
+    AsyncWebServerResponse *response = request->beginResponse(200, "text/css", 
+                                                               (const uint8_t*)portal_css, 
+                                                               portal_css_len);
+    request->send(response);
 }
 
 // Serve JavaScript
 void handleJS(AsyncWebServerRequest *request) {
-    Serial.println("[Portal] Serving portal.js");
-    request->send_P(200, "application/javascript", portal_js);
+    AsyncWebServerResponse *response = request->beginResponse(200, "application/javascript", 
+                                                               (const uint8_t*)portal_js, 
+                                                               portal_js_len);
+    request->send(response);
+}
+
+// Serve logs HTML
+void handleLogsHTML(AsyncWebServerRequest *request) {
+    AsyncWebServerResponse *response = request->beginResponse(200, "text/html", 
+                                                               (const uint8_t*)logs_html, 
+                                                               logs_html_len);
+    request->send(response);
+}
+
+// Serve logs JavaScript
+void handleLogsJS(AsyncWebServerRequest *request) {
+    AsyncWebServerResponse *response = request->beginResponse(200, "application/javascript", 
+                                                               (const uint8_t*)logs_js, 
+                                                               logs_js_len);
+    request->send(response);
 }
 
 // GET /api/mode - Return portal mode (core vs full)
 void handleGetMode(AsyncWebServerRequest *request) {
-    Serial.println("[Portal] GET /api/mode");
     
-    JsonDocument doc;
-    doc["mode"] = ap_mode_active ? "core" : "full";
-    doc["ap_active"] = ap_mode_active;
-    
-    String response;
-    serializeJson(doc, response);
-    
-    request->send(200, "application/json", response);
+    AsyncResponseStream *response = request->beginResponseStream("application/json");
+    response->print("{\"mode\":\"");
+    response->print(ap_mode_active ? "core" : "full");
+    response->print("\",\"ap_active\":");
+    response->print(ap_mode_active ? "true" : "false");
+    response->print("}");
+    request->send(response);
 }
 
 // GET /api/config - Return current configuration
 void handleGetConfig(AsyncWebServerRequest *request) {
-    Serial.println("[Portal] GET /api/config");
     
     if (!current_config) {
         request->send(500, "application/json", "{\"error\":\"Config not initialized\"}");
@@ -122,7 +153,6 @@ void handleGetConfig(AsyncWebServerRequest *request) {
 
 // POST /api/config - Save new configuration
 void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
-    Serial.println("[Portal] POST /api/config");
     
     if (!current_config) {
         request->send(500, "application/json", "{\"success\":false,\"message\":\"Config not initialized\"}");
@@ -134,8 +164,7 @@ void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len,
     DeserializationError error = deserializeJson(doc, data, len);
     
     if (error) {
-        Serial.print("[Portal] JSON parse error: ");
-        Serial.println(error.c_str());
+        Logger.logMessagef("Portal", "JSON parse error: %s", error.c_str());
         request->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid JSON\"}");
         return;
     }
@@ -179,21 +208,20 @@ void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len,
     
     // Save to NVS
     if (config_manager_save(current_config)) {
-        Serial.println("[Portal] Configuration saved successfully");
+        Logger.logMessage("Portal", "Config saved - rebooting");
         request->send(200, "application/json", "{\"success\":true,\"message\":\"Configuration saved\"}");
         
         // Schedule reboot after response is sent
         delay(100);
         ESP.restart();
     } else {
-        Serial.println("[Portal] Failed to save configuration");
+        Logger.logMessage("Portal", "Config save failed");
         request->send(500, "application/json", "{\"success\":false,\"message\":\"Failed to save\"}");
     }
 }
 
 // DELETE /api/config - Reset configuration
 void handleDeleteConfig(AsyncWebServerRequest *request) {
-    Serial.println("[Portal] DELETE /api/config");
     
     if (config_manager_reset()) {
         request->send(200, "application/json", "{\"success\":true,\"message\":\"Configuration reset\"}");
@@ -208,45 +236,45 @@ void handleDeleteConfig(AsyncWebServerRequest *request) {
 
 // GET /api/info - Get device information
 void handleGetVersion(AsyncWebServerRequest *request) {
-    Serial.println("[Portal] GET /api/info");
-    
-    JsonDocument doc;
-    doc["version"] = FIRMWARE_VERSION;
-    doc["build_date"] = BUILD_DATE;
-    doc["build_time"] = BUILD_TIME;
-    doc["chip_model"] = ESP.getChipModel();
-    doc["chip_revision"] = ESP.getChipRevision();
-    doc["chip_cores"] = ESP.getChipCores();
-    doc["cpu_freq"] = ESP.getCpuFreqMHz();
-    doc["flash_chip_size"] = ESP.getFlashChipSize();
-    doc["psram_size"] = ESP.getPsramSize();
-    doc["free_heap"] = ESP.getFreeHeap();
-    doc["sketch_size"] = ESP.getSketchSize();
-    doc["free_sketch_space"] = ESP.getFreeSketchSpace();
-    
-    // Network and discovery information
-    doc["mac_address"] = WiFi.macAddress();
-    doc["wifi_hostname"] = WiFi.getHostname();
-    
-    // Build mDNS name from hostname
-    String hostname = String(WiFi.getHostname());
-    if (hostname.length() > 0) {
-        doc["mdns_name"] = hostname + ".local";
-    } else {
-        doc["mdns_name"] = "";
-    }
-    doc["hostname"] = hostname;
-    
-    String response;
-    serializeJson(doc, response);
-    
-    request->send(200, "application/json", response);
+    AsyncResponseStream *response = request->beginResponseStream("application/json");
+    response->print("{\"version\":\"");
+    response->print(FIRMWARE_VERSION);
+    response->print("\",\"build_date\":\"");
+    response->print(BUILD_DATE);
+    response->print("\",\"build_time\":\"");
+    response->print(BUILD_TIME);
+    response->print("\",\"chip_model\":\"");
+    response->print(ESP.getChipModel());
+    response->print("\",\"chip_revision\":");
+    response->print(ESP.getChipRevision());
+    response->print(",\"chip_cores\":");
+    response->print(ESP.getChipCores());
+    response->print(",\"cpu_freq\":");
+    response->print(ESP.getCpuFreqMHz());
+    response->print(",\"flash_chip_size\":");
+    response->print(ESP.getFlashChipSize());
+    response->print(",\"psram_size\":");
+    response->print(ESP.getPsramSize());
+    response->print(",\"free_heap\":");
+    response->print(ESP.getFreeHeap());
+    response->print(",\"sketch_size\":");
+    response->print(ESP.getSketchSize());
+    response->print(",\"free_sketch_space\":");
+    response->print(ESP.getFreeSketchSpace());
+    response->print(",\"mac_address\":\"");
+    response->print(WiFi.macAddress());
+    response->print("\",\"wifi_hostname\":\"");
+    response->print(WiFi.getHostname());
+    response->print("\",\"mdns_name\":\"");
+    response->print(WiFi.getHostname());
+    response->print(".local\",\"hostname\":\"");
+    response->print(WiFi.getHostname());
+    response->print("\"}");
+    request->send(response);
 }
 
 // GET /api/health - Get device health statistics
 void handleGetHealth(AsyncWebServerRequest *request) {
-    Serial.println("[Portal] GET /api/health");
-    
     JsonDocument doc;
     
     // System
@@ -356,22 +384,59 @@ void handleGetHealth(AsyncWebServerRequest *request) {
     request->send(200, "application/json", response);
 }
 
+// GET /api/logs - Return buffered log entries
+void handleGetLogs(AsyncWebServerRequest *request) {
+    if (!logBuffer) {
+        request->send(500, "application/json", "{\"error\":\"Log buffer not initialized\"}");
+        return;
+    }
+    
+    // Get all log entries from buffer
+    LogEntry entries[LOG_BUFFER_SIZE];
+    int count = logBuffer->getAll(entries, LOG_BUFFER_SIZE);
+    
+    // Use AsyncResponseStream for lower memory usage
+    AsyncResponseStream *response = request->beginResponseStream("application/json");
+    
+    // Manually build JSON to avoid large stack allocation
+    response->print("{\"count\":");
+    response->print(count);
+    response->print(",\"logs\":[");
+    
+    for (int i = 0; i < count; i++) {
+        if (i > 0) response->print(",");
+        response->print("{\"ts\":");
+        response->print(entries[i].timestamp_ms);
+        response->print(",\"msg\":\"");
+        
+        // Escape special characters in message
+        const char* msg = entries[i].message;
+        for (size_t j = 0; j < entries[i].length; j++) {
+            char c = msg[j];
+            if (c == '"') response->print("\\\"");
+            else if (c == '\\') response->print("\\\\");
+            else if (c == '\n') response->print("\\n");
+            else if (c == '\r') response->print("\\r");
+            else if (c == '\t') response->print("\\t");
+            else response->print(c);
+        }
+        
+        response->print("\"}");
+    }
+    
+    response->print("]}");
+    request->send(response);
+}
+
 // POST /api/reboot - Reboot device without saving
 void handleReboot(AsyncWebServerRequest *request) {
-    Serial.println("[Portal] POST /api/reboot");
+    Logger.logMessage("API", "POST /api/reboot");
     
-    JsonDocument doc;
-    doc["success"] = true;
-    doc["message"] = "Rebooting device...";
-    
-    String response;
-    serializeJson(doc, response);
-    
-    request->send(200, "application/json", response);
+    request->send(200, "application/json", "{\"success\":true,\"message\":\"Rebooting device...\"}");
     
     // Schedule reboot after response is sent
     delay(100);
-    Serial.println("[Portal] Rebooting...");
+    Logger.logMessage("Portal", "Rebooting");
     ESP.restart();
 }
 
@@ -379,21 +444,19 @@ void handleReboot(AsyncWebServerRequest *request) {
 void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
     // First chunk - initialize OTA
     if (index == 0) {
-        Serial.println("[OTA] Upload started");
-        Serial.print("[OTA] Filename: ");
-        Serial.println(filename);
+
+        
+        Logger.logBegin("OTA Update");
+        Logger.logLinef("File: %s", filename.c_str());
+        Logger.logLinef("Size: %d bytes", request->contentLength());
         
         ota_in_progress = true;
         ota_progress = 0;
         ota_total = request->contentLength();
         
-        Serial.print("[OTA] Total size: ");
-        Serial.print(ota_total);
-        Serial.println(" bytes");
-        
         // Check if filename ends with .bin
         if (!filename.endsWith(".bin")) {
-            Serial.println("[OTA] Error: Not a .bin file");
+            Logger.logEnd("Not a .bin file");
             request->send(400, "application/json", "{\"success\":false,\"message\":\"Only .bin files are supported\"}");
             ota_in_progress = false;
             return;
@@ -401,14 +464,13 @@ void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t ind
         
         // Get OTA partition size
         size_t updateSize = (ota_total > 0) ? ota_total : UPDATE_SIZE_UNKNOWN;
+        size_t freeSpace = ESP.getFreeSketchSpace();
         
-        Serial.print("[OTA] Free sketch space: ");
-        Serial.print(ESP.getFreeSketchSpace());
-        Serial.println(" bytes");
+        Logger.logLinef("Free space: %d bytes", freeSpace);
         
         // Validate size before starting
-        if (ota_total > 0 && ota_total > ESP.getFreeSketchSpace()) {
-            Serial.println("[OTA] Error: Firmware too large for OTA partition");
+        if (ota_total > 0 && ota_total > freeSpace) {
+            Logger.logEnd("Firmware too large");
             request->send(400, "application/json", "{\"success\":false,\"message\":\"Firmware too large\"}");
             ota_in_progress = false;
             return;
@@ -416,20 +478,18 @@ void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t ind
         
         // Begin OTA update
         if (!Update.begin(updateSize, U_FLASH)) {
-            Serial.println("[OTA] Error: Failed to begin OTA update");
+            Logger.logEnd("Begin failed");
             Update.printError(Serial);
             request->send(500, "application/json", "{\"success\":false,\"message\":\"OTA begin failed\"}");
             ota_in_progress = false;
             return;
         }
-        
-        Serial.println("[OTA] Update initialized successfully");
     }
     
     // Write chunk to flash
     if (len) {
         if (Update.write(data, len) != len) {
-            Serial.println("[OTA] Error: Write failed");
+            Logger.logEnd("Write failed");
             Update.printError(Serial);
             request->send(500, "application/json", "{\"success\":false,\"message\":\"Write failed\"}");
             ota_in_progress = false;
@@ -442,31 +502,23 @@ void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t ind
         static uint8_t last_percent = 0;
         uint8_t percent = (ota_progress * 100) / ota_total;
         if (percent >= last_percent + 10) {
-            Serial.print("[OTA] Progress: ");
-            Serial.print(percent);
-            Serial.println("%");
+            Logger.logLinef("Progress: %d%%", percent);
             last_percent = percent;
         }
     }
     
     // Final chunk - complete OTA
     if (final) {
-        Serial.println("[OTA] Upload complete, finalizing...");
-        
         if (Update.end(true)) {
-            Serial.println("[OTA] Update successful!");
-            Serial.print("[OTA] Written: ");
-            Serial.print(ota_progress);
-            Serial.println(" bytes");
+            Logger.logLinef("Written: %d bytes", ota_progress);
+            Logger.logEnd("Success - rebooting");
             
             request->send(200, "application/json", "{\"success\":true,\"message\":\"Update successful! Rebooting...\"}");
             
             delay(500);
-            
-            Serial.println("[OTA] Rebooting...");
             ESP.restart();
         } else {
-            Serial.println("[OTA] Error: Update failed");
+            Logger.logEnd("Update failed");
             Update.printError(Serial);
             request->send(500, "application/json", "{\"success\":false,\"message\":\"Update failed\"}");
         }
@@ -479,7 +531,7 @@ void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t ind
 
 // Initialize web portal
 void web_portal_init(DeviceConfig *config) {
-    Serial.println("[Portal] Initializing web server...");
+    Logger.logBegin("Portal Init");
     
     current_config = config;
     
@@ -488,19 +540,18 @@ void web_portal_init(DeviceConfig *config) {
         yield();
         delay(100);
         
-        Serial.println("[Portal] Creating AsyncWebServer instance...");
         server = new AsyncWebServer(80);
-        Serial.println("[Portal] Web server instance created");
         
         yield();
         delay(100);
     }
-    
-    // Serve static files (embedded in PROGMEM)
-    Serial.println("[Portal] Configuring routes...");
+
     server->on("/", HTTP_GET, handleRoot);
     server->on("/portal.css", HTTP_GET, handleCSS);
     server->on("/portal.js", HTTP_GET, handleJS);
+    server->on("/logs", HTTP_GET, handleLogsHTML);
+    server->on("/logs.html", HTTP_GET, handleLogsHTML);
+    server->on("/logs.js", HTTP_GET, handleLogsJS);
     
     // API endpoints
     server->on("/api/mode", HTTP_GET, handleGetMode);
@@ -523,11 +574,15 @@ void web_portal_init(DeviceConfig *config) {
         handleOTAUpload
     );
     
+    // Initialize log buffer
+    logBuffer = new LogBuffer();
+    Logger.setLogBuffer(logBuffer);
+    
+    // Log polling endpoint (safer than SSE for async contexts)
+    server->on("/api/logs", HTTP_GET, handleGetLogs);
+    
     // 404 handler
     server->onNotFound([](AsyncWebServerRequest *request) {
-        Serial.print("[Portal] Not found: ");
-        Serial.println(request->url());
-        
         // In AP mode, redirect to root for captive portal
         if (ap_mode_active) {
             request->redirect("/");
@@ -537,16 +592,15 @@ void web_portal_init(DeviceConfig *config) {
     });
     
     // Start server
-    Serial.println("[Portal] Starting server...");
     yield();
     delay(100);
     server->begin();
-    Serial.println("[Portal] Web server started");
+    Logger.logEnd();
 }
 
 // Start AP mode with captive portal
 void web_portal_start_ap() {
-    Serial.println("[Portal] Starting AP mode...");
+    Logger.logBegin("AP Mode");
     
     // Generate AP name with chip ID
     uint32_t chipId = 0;
@@ -557,8 +611,7 @@ void web_portal_start_ap() {
     String apName = String(AP_SSID_PREFIX) + String(chipId, HEX);
     apName.toUpperCase();
     
-    Serial.print("[Portal] AP SSID: ");
-    Serial.println(apName);
+    Logger.logLinef("SSID: %s", apName.c_str());
     
     // Configure AP
     WiFi.mode(WIFI_AP);
@@ -568,17 +621,16 @@ void web_portal_start_ap() {
     // Start DNS server for captive portal (redirect all DNS queries to our IP)
     dnsServer.start(DNS_PORT, "*", CAPTIVE_PORTAL_IP);
     
-    ap_mode_active = true;
+    WiFi.softAPsetHostname(apName.c_str());
     
-    Serial.print("[Portal] AP IP address: ");
-    Serial.println(WiFi.softAPIP());
-    Serial.println("[Portal] Captive portal active - connect to configure");
+    Logger.logLinef("IP: %s", WiFi.softAPIP().toString().c_str());
+    Logger.logEnd("Captive portal active");
 }
 
 // Stop AP mode
 void web_portal_stop_ap() {
     if (ap_mode_active) {
-        Serial.println("[Portal] Stopping AP mode...");
+        Logger.logMessage("Portal", "Stopping AP mode");
         dnsServer.stop();
         WiFi.softAPdisconnect(true);
         ap_mode_active = false;

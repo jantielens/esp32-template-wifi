@@ -1,10 +1,12 @@
 #ifndef VERSION_H
 #define VERSION_H
 
+#include "app/log_manager.h"
+
 // Firmware version information
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 0
-#define VERSION_PATCH 3
+#define VERSION_PATCH 4
 
 // Build date (automatically set by compiler)
 #define BUILD_DATE __DATE__
@@ -18,14 +20,14 @@
 
 // Function to print version information
 inline void printVersionInfo() {
-  Serial.println("=== Firmware Version ===");
-  Serial.print("Version: ");
-  Serial.println(VERSION_STRING);
-  Serial.print("Build Date: ");
-  Serial.println(BUILD_DATE);
-  Serial.print("Build Time: ");
-  Serial.println(BUILD_TIME);
-  Serial.println("========================");
+  Logger.println("=== Firmware Version ===");
+  Logger.print("Version: ");
+  Logger.println(VERSION_STRING);
+  Logger.print("Build Date: ");
+  Logger.println(BUILD_DATE);
+  Logger.print("Build Time: ");
+  Logger.println(BUILD_TIME);
+  Logger.println("========================");
 }
 
 #endif // VERSION_H

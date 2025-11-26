@@ -24,9 +24,16 @@ BUILD_PATH="$SCRIPT_DIR/build"
 # Define target boards as an associative array: [FQBN]="board-name"
 # - Provide custom board name for clean directory naming
 # - Omit board name (or leave empty) to auto-extract from FQBN (3rd segment)
+#
+# USB Serial Support (CDCOnBoot):
+# - ESP32-C3, C6, S3: Add `:CDCOnBoot=cdc` to enable USB serial output
+# - ESP32 (classic): No USB-OTG, uses hardware UART - no CDC parameter needed
+# - To check if a board needs CDC: `arduino-cli board details <FQBN> | grep CDCOnBoot`
+#
 # Examples:
-#   ["esp32:esp32:esp32"]="esp32"                                        # Custom name
-#   ["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"]             # Auto-extract → "nologo_esp32c3_super_mini"
+#   ["esp32:esp32:esp32"]="esp32"                                        # Classic ESP32 - hardware UART
+#   ["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"]="esp32c3"   # C3 with USB CDC enabled
+#   ["esp32:esp32:dfrobot_firebeetle2_esp32c6:CDCOnBoot=cdc"]="esp32c6" # C6 with USB CDC enabled
 declare -A FQBN_TARGETS=(
     ["esp32:esp32:esp32"]="esp32"
     ["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"]="esp32c3"
@@ -128,7 +135,7 @@ parse_board_and_port_args() {
     fi
     
     # Get FQBN for the board
-    FQBN=$(get_fqbn_for_board "$BOARD")
+    FQBN=$(get_fqbn_for_board "$BOARD") || true
     if [[ -z "$FQBN" ]]; then
         echo -e "${RED}Error: Board '$BOARD' not found${NC}"
         echo ""

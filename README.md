@@ -7,6 +7,7 @@ A streamlined ESP32 Arduino development template using `arduino-cli` for headles
 - **Zero System Dependencies**: Local `arduino-cli` installation (no sudo required)
 - **Simple Build Scripts**: One-command compilation, upload, and monitoring
 - **Web Configuration Portal**: WiFi setup via captive portal with REST API
+- **Live Device Logs**: Real-time log viewer with syntax highlighting and auto-scroll
 - **Health Monitoring**: Real-time device stats with floating status widget
 - **OTA Updates**: Over-the-air firmware updates via web interface
 - **Version Tracking**: Built-in firmware version management
