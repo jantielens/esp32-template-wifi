@@ -219,16 +219,11 @@ jobs:
             releaseType = 'beta release';
           }
           
-          const body = `🚀 **${releaseType.charAt(0).toUpperCase() + releaseType.slice(1)} Created!**
-
-Tag \`${tag}\` has been created and pushed.
-
-The [Release Workflow](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/workflows/release.yml) is now building firmware.
-
-📦 **Release page:** https://github.com/${context.repo.owner}/${context.repo.repo}/releases/tag/${tag}
-
-🔄 **Workflow run:** https://github.com/${context.repo.owner}/${context.repo.repo}/actions/workflows/release.yml
-`;
+          const body = '🚀 **' + releaseType.charAt(0).toUpperCase() + releaseType.slice(1) + ' Created!**\n\n' +
+            'Tag `' + tag + '` has been created and pushed.\n\n' +
+            'The [Release Workflow](https://github.com/' + context.repo.owner + '/' + context.repo.repo + '/actions/workflows/release.yml) is now building firmware.\n\n' +
+            '📦 **Release page:** https://github.com/' + context.repo.owner + '/' + context.repo.repo + '/releases/tag/' + tag + '\n\n' +
+            '🔄 **Workflow run:** https://github.com/' + context.repo.owner + '/' + context.repo.repo + '/actions/workflows/release.yml';
           
           await github.rest.issues.createComment({
             owner: context.repo.owner,
