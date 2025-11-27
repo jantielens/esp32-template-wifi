@@ -62,6 +62,7 @@ BUILD_PATH="$SCRIPT_DIR/build"
 declare -A FQBN_TARGETS=(
     ["esp32:esp32:esp32"]="esp32"
     ["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"]="esp32c3"
+    ["esp32:esp32:esp32c6:CDCOnBoot=cdc"]="esp32c6"
 )
 
 # Default board (used when only one board is configured)

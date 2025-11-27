@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Removed
+- **Streaming Logs Feature**: Removed unstable web portal log streaming functionality
+  - Deleted `LogBuffer` class and circular buffer implementation (`log_buffer.cpp/h`)
+  - Removed `/api/logs` endpoint and log polling mechanism
+  - Removed `/logs` web viewer page and associated JavaScript
+  - Simplified `LogManager` to output directly to Serial only
+  - **Preserved**: All log formatting features (nesting, indentation, automatic timing)
+  - Reason: Feature caused stability issues due to memory overhead and threading complexity
+  - Impact: Logs now only visible via serial monitor, improving overall system stability
+
+---
+
 ## [0.0.8] - 2025-11-26
 
 ### Fixed

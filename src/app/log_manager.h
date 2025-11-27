@@ -1,18 +1,16 @@
 /*
- * Log Manager - Print Wrapper for Serial Logging
+ * Log Manager - Serial Logging with Formatting
  * 
- * Intercepts Serial.print/println calls and routes them to:
- * 1. Hardware Serial (unchanged behavior)
- * 2. Log buffer (for web portal history)
- * 3. SSE clients (for real-time streaming)
+ * Provides structured logging with:
+ * - Nested blocks with automatic indentation
+ * - Automatic timing for each block
+ * - Printf-style formatting
  */
 
 #ifndef LOG_MANAGER_H
 #define LOG_MANAGER_H
 
 #include <Arduino.h>
-#include "log_buffer.h"
-#include <ESPAsyncWebServer.h>
 
 class LogManager : public Print {
 public:
@@ -20,9 +18,6 @@ public:
     
     // Initialize with hardware serial
     void begin(unsigned long baud);
-    
-    // Set the log buffer (called by web portal)
-    void setLogBuffer(LogBuffer* buffer);
     
     // Print interface implementation (backward compatible)
     size_t write(uint8_t c) override;
@@ -38,11 +33,11 @@ public:
     void logMessage(const char* module, const char* message);
     void logMessagef(const char* module, const char* format, ...);
     
-private:
-    LogBuffer* logBuffer;
-    String lineBuffer;                // Accumulate characters until newline
-    static const size_t MAX_LINE = 256;
+    // Single-line logging with timing (no nesting)
+    void logQuick(const char* module, const char* message);
+    void logQuickf(const char* module, const char* format, ...);
     
+private:
     // Nested block tracking
     static unsigned long startTimes[3];  // Start time for each nesting level
     static uint8_t nestLevel;            // Current nesting depth (0-2, 3+ = overflow)

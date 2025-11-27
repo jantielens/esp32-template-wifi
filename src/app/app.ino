@@ -119,11 +119,11 @@ void loop()
   // Check if it's time for heartbeat
   if (currentMillis - lastHeartbeat >= HEARTBEAT_INTERVAL) {
     if (WiFi.status() == WL_CONNECTED) {
-      Logger.logMessagef("Heartbeat", "Up: %ds | Heap: %d | WiFi: %s (%s)", 
+      Logger.logQuickf("Heartbeat", "Up: %ds | Heap: %d | WiFi: %s (%s)", 
         currentMillis / 1000, ESP.getFreeHeap(), 
         WiFi.localIP().toString().c_str(), WiFi.getHostname());
     } else {
-      Logger.logMessagef("Heartbeat", "Up: %ds | Heap: %d | WiFi: Disconnected", 
+      Logger.logQuickf("Heartbeat", "Up: %ds | Heap: %d | WiFi: Disconnected", 
         currentMillis / 1000, ESP.getFreeHeap());
     }
     
