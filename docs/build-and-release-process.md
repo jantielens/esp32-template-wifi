@@ -86,6 +86,46 @@ The build system automatically applies project branding during compilation:
 3. C++ `#define` statements are generated in `web_assets.h`
 4. Firmware compiles with branded values embedded
 
+### Board-Specific Configuration
+
+The build system supports optional board-specific configuration overrides:
+
+**Default Behavior**: All boards use `src/app/board_config.h` with common settings
+- Hardware capabilities (LED, PSRAM, Bluetooth, etc.)
+- Pin mappings (LED_PIN, etc.)
+- WiFi settings (max attempts, retry delays)
+- Power management settings
+- Display configuration (if applicable)
+
+**Board-Specific Overrides** (Optional): Create `src/boards/[board-name]/board_config.h` when a board needs different settings:
+
+```bash
+# Example: ESP32 Dev Module has a built-in LED on GPIO2
+mkdir -p src/boards/esp32
+cat > src/boards/esp32/board_config.h << 'EOF'
+#ifndef BOARD_CONFIG_H
+#define BOARD_CONFIG_H
+
+#define BOARD_NAME "ESP32 Dev Module"
+#define HAS_BUILTIN_LED true
+#define LED_PIN 2
+#define LED_ACTIVE_HIGH true
+
+#endif
+EOF
+```
+
+**Build Detection**: The build script automatically:
+1. Checks if `src/boards/[board-name]/` directory exists
+2. If yes, adds it to the compiler include path (overrides take precedence)
+3. If no, uses default configuration from `src/app/board_config.h`
+
+**Benefits**:
+- Zero code duplication when boards are identical
+- Add customization only when needed
+- Clear separation of common vs board-specific settings
+- Compile-time optimization (zero runtime overhead)
+
 ### Template Syntax
 
 HTML files use simple placeholder syntax:

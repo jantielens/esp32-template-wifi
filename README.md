@@ -1,18 +1,29 @@
 # ESP32 Development Template
 
-A streamlined ESP32 Arduino development template using `arduino-cli` for headless builds. Optimized for WSL2/Linux environments with local toolchain installation and no system dependencies.
+Skip the boilerplate and start building. ESP32 Arduino template with automated builds, captive portal WiFi setup, OTA updates, and flexible multi-board build system. Add new board variants in seconds with a simple config change, customize board-specific code when needed. Same build system powers local development and GitHub Actions workflows for CI/CD and releases.
 
 ## ✨ Features
 
-- **Zero System Dependencies**: Local `arduino-cli` installation (no sudo required)
-- **Simple Build Scripts**: One-command compilation, upload, and monitoring
-- **Web Configuration Portal**: WiFi setup via captive portal with REST API
-- **Health Monitoring**: Real-time device stats with floating status widget
-- **OTA Updates**: Over-the-air firmware updates via web interface
-- **Optimized Web Assets**: Automatic minification + gzip compression (~80% size reduction)
-- **Version Tracking**: Built-in firmware version management
-- **Clean Project Structure**: Organized directories with best practices
-- **CI/CD Ready**: GitHub Actions workflow for automated validation
+- **🚀 Get Started Instantly**
+  - **Zero Dependencies**: Local `arduino-cli` installation (no sudo, no system packages)
+  - **One-Command Setup**: `./setup.sh` downloads toolchain and configures ESP32 platform
+  - **Simple Scripts**: Build with `./build.sh`, upload with `./upload.sh`, monitor with `./monitor.sh`
+
+- **📡 Production-Ready WiFi Management**
+  - **Auto-AP Mode**: Device creates captive portal when unconfigured
+  - **Web Configuration**: User-friendly interface at `192.168.4.1` for WiFi setup
+  - **REST API**: Full `/api/*` endpoints for device control and monitoring
+  - **OTA Updates**: Upload new firmware over WiFi without USB cable
+
+- **🎯 Multi-Board Made Easy**
+  - **Flexible Build System**: Add ESP32 variants with single config line
+  - **Board-Specific Code**: Optional overrides for different GPIO pins and hardware
+  - **Matrix Builds**: GitHub Actions compiles all boards in parallel
+
+- **⚙️ Professional Development Workflow**
+  - **Automated Releases**: Tag-based releases with firmware binaries and changelogs
+  - **CI/CD Integration**: Same build scripts work locally and in GitHub Actions
+  - **Version Management**: Semantic versioning with automatic firmware stamping
 
 ## 🚀 Quick Start
 
@@ -62,39 +73,44 @@ Edit `src/app/app.ino` with your code and repeat step 2.
 
 ```
 esp32-template-wifi/
-├── bin/                    # Local arduino-cli installation
-├── build/                  # Compiled firmware binaries
-│   ├── esp32/             # ESP32 Dev Module builds
-│   └── esp32c3/           # ESP32-C3 Super Mini builds
-├── docs/                   # Documentation
-│   ├── scripts.md         # Script usage guide
-│   ├── web-portal.md      # Web portal guide
-│   ├── wsl-development.md # WSL/USB setup
-│   └── library-management.md # Library management
+├── bin/                           # Local arduino-cli installation
+├── build/                         # Compiled firmware binaries
+│   ├── esp32/                     # ESP32 Dev Module builds
+│   └── esp32c3/                   # ESP32-C3 Super Mini builds
+├── docs/                          # Documentation
+│   ├── scripts.md                 # Script usage guide
+│   ├── web-portal.md              # Web portal guide
+│   ├── wsl-development.md         # WSL/USB setup
+│   └── library-management.md      # Library management
 ├── src/
 │   ├── app/
-│   │   ├── app.ino        # Main sketch file
-│   │   ├── config_manager.cpp/h  # NVS config storage
-│   │   ├── web_portal.cpp/h      # Web server & API
-│   │   ├── web_assets.cpp/h      # Embedded HTML/CSS/JS
+│   │   ├── app.ino                # Main sketch file
+│   │   ├── board_config.h         # Default board configuration
+│   │   ├── config_manager.cpp/h   # NVS config storage
+│   │   ├── web_portal.cpp/h       # Web server & API
+│   │   ├── web_assets.cpp/h       # Embedded HTML/CSS/JS
 │   │   └── web/
-│   │       ├── portal.html   # Portal interface
-│   │       ├── portal.css    # Styles
-│   │       └── portal.js     # Client logic
-│   └── version.h          # Firmware version tracking
+│   │       ├── portal.html        # Portal interface
+│   │       ├── portal.css         # Styles
+│   │       └── portal.js          # Client logic
+│   ├── boards/                    # Board-specific overrides (optional)
+│   │   └── esp32c3/               # Sample ESP32-C3 Super Mini config
+│   │       ├── board_config.h     # Sample LED GPIO8 + custom function (commented out)
+│   │       └── board_config.cpp   # Sample Board-specific implementation (commented out)
+│   └── version.h                  # Firmware version tracking
 ├── .github/
 │   └── workflows/
-│       └── build.yml      # CI/CD pipeline
-├── config.sh              # Common configuration
-├── build.sh               # Compile sketch
-├── upload.sh              # Upload firmware
-├── upload-erase.sh        # Erase flash memory
-├── monitor.sh             # Serial monitor
-├── clean.sh               # Clean build artifacts
-├── library.sh             # Library management
-├── bum.sh / um.sh         # Convenience scripts
-├── setup.sh               # Environment setup
-└── arduino-libraries.txt  # Library dependencies
+│       └── build.yml              # CI/CD pipeline
+├── config.sh                      # Common configuration
+├── build.sh                       # Compile sketch
+├── upload.sh                      # Upload firmware
+├── upload-erase.sh                # Erase flash memory
+├── monitor.sh                     # Serial monitor
+├── clean.sh                       # Clean build artifacts
+├── library.sh                     # Library management
+├── bum.sh / um.sh                 # Convenience scripts
+├── setup.sh                       # Environment setup
+└── arduino-libraries.txt          # Library dependencies
 ```
 
 ## 🌐 Web Configuration Portal
@@ -125,14 +141,6 @@ When connected to WiFi, devices can be discovered using multiple methods:
 - **📊 Network Scanners**: Tools like Fing, WiFiMan show device with hostname
 
 The hostname is automatically set from the device name and includes the last 4 hex digits of the chip ID for uniqueness (e.g., "ESP32 1234" → hostname "esp32-1234").
-
-### Features
-
-- 🔧 **WiFi Configuration**: SSID, password, fixed IP settings
-- 📊 **Health Monitoring**: CPU usage, temperature, memory, uptime
-- 🔄 **OTA Updates**: Upload firmware via web interface
-- 💾 **Config Management**: Save, reset, export settings
-- 📱 **Responsive UI**: Works on desktop and mobile
 
 ### REST API Endpoints
 
@@ -200,6 +208,38 @@ declare -A FQBN_TARGETS=(
 ./upload.sh esp32c3 /dev/ttyACM0  # With explicit port
 ```
 
+### Board-Specific Configuration
+
+The project uses a flexible board configuration system that supports board-specific customization without code duplication.
+
+**Default Configuration**: All boards use `src/app/board_config.h` with common settings (LED pins, WiFi settings, hardware capabilities).
+
+**Board-Specific Overrides** (Optional): Create `src/boards/[board-name]/board_config.h` to customize specific boards:
+
+```bash
+# Example: ESP32 Dev Module has built-in LED
+mkdir -p src/boards/esp32
+cat > src/boards/esp32/board_config.h << 'EOF'
+#ifndef BOARD_CONFIG_H
+#define BOARD_CONFIG_H
+
+#define BOARD_NAME "ESP32 Dev Module"
+#define HAS_BUILTIN_LED true
+#define LED_PIN 2
+
+#endif
+EOF
+```
+
+The build system automatically detects and uses board-specific overrides when present. If no override exists, default configuration is used.
+
+**Configuration Options:**
+- Hardware capabilities: `HAS_BUILTIN_LED`
+- Pin mappings: `LED_PIN`, `LED_ACTIVE_HIGH`
+- WiFi settings: `WIFI_MAX_ATTEMPTS`
+
+See `src/app/board_config.h` for currently available options. Additional configuration options can be added as needed for your project.
+
 ### Serial Port
 
 Scripts auto-detect `/dev/ttyUSB0` or `/dev/ttyACM0`. Manually specify if needed:
@@ -208,10 +248,6 @@ Scripts auto-detect `/dev/ttyUSB0` or `/dev/ttyACM0`. Manually specify if needed
 ./upload.sh esp32 /dev/ttyUSB1
 ./monitor.sh /dev/ttyACM0 115200
 ```
-
-### Baud Rate
-
-Default: 115200 (configured in `app.ino` and `monitor.sh`)
 
 ## 🖥️ WSL2 Development
 
@@ -243,20 +279,6 @@ Libraries are managed via `arduino-libraries.txt` for consistency across local a
 ./library.sh add PubSubClient     # Add and install
 ./library.sh list                 # Show configured libraries
 ./library.sh installed            # Show installed libraries
-```
-
-### Adding a Library
-
-```bash
-# Search for the library
-./library.sh search "sensor"
-
-# Add it to your project (installs + updates config)
-./library.sh add "Adafruit BME280 Library"
-
-# Commit the configuration
-git add arduino-libraries.txt
-git commit -m "Add BME280 sensor library"
 ```
 
 Libraries in `arduino-libraries.txt` are automatically installed by `setup.sh` and in GitHub Actions.

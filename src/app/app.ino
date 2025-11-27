@@ -1,4 +1,5 @@
 #include "../version.h"
+#include "board_config.h"
 #include "config_manager.h"
 #include "web_portal.h"
 #include "log_manager.h"
@@ -11,7 +12,6 @@ DeviceConfig device_config;
 bool config_loaded = false;
 
 // WiFi retry settings
-const int WIFI_MAX_ATTEMPTS = 3;
 const unsigned long WIFI_BACKOFF_BASE = 3000; // 3 seconds base (DHCP typically needs 2-3s)
 
 // Heartbeat interval
@@ -58,7 +58,20 @@ void setup()
   Logger.logLinef("CPU: %d MHz", ESP.getCpuFreqMHz());
   Logger.logLinef("Flash: %d MB", ESP.getFlashChipSize() / (1024 * 1024));
   Logger.logLinef("MAC: %s", WiFi.macAddress().c_str());
+  #if HAS_BUILTIN_LED
+  Logger.logLinef("LED: GPIO%d (active %s)", LED_PIN, LED_ACTIVE_HIGH ? "HIGH" : "LOW");
+  #endif
+  // Example: Call board-specific function if available
+  // #ifdef HAS_CUSTOM_IDENTIFIER
+  // Logger.logLinef("Board: %s", board_get_custom_identifier());
+  // #endif
   Logger.logEnd();
+  
+  // Initialize board-specific hardware
+  #if HAS_BUILTIN_LED
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LED_ACTIVE_HIGH ? LOW : HIGH); // LED off initially
+  #endif
   
   // Initialize configuration manager
   config_manager_init();
