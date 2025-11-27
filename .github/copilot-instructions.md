@@ -8,6 +8,10 @@ ESP32 Arduino development template using `arduino-cli` for headless builds. Desi
 
 - **Build System**: Custom bash scripts wrapping `arduino-cli` (installed locally to `./bin/`)
 - **Sketch Location**: Main Arduino file at `src/app/app.ino`
+- **Board Configuration**: Flexible system with optional board-specific overrides
+  - `src/app/board_config.h` - Default configuration for all boards
+  - `src/boards/[board-name]/board_config.h` - Optional board-specific overrides (if directory exists)
+  - Build system automatically detects and applies overrides when present
 - **Web Portal**: Async web server with captive portal support
   - `web_portal.cpp/h` - Server and REST API implementation
   - `web_assets.cpp/h` - Embedded HTML/CSS/JS (from `src/app/web/`)
@@ -120,6 +124,9 @@ See `docs/wsl-development.md` for complete USB/IP setup guide.
 
 ### Source
 - `src/app/app.ino` - Main sketch file (standard Arduino structure)
+- `src/app/board_config.h` - Default board configuration (LED pins, WiFi settings)
+- `src/boards/[board-name]/board_config.h` - Optional board-specific overrides
+- `src/boards/[board-name]/board_config.cpp` - Optional board-specific implementations
 - `src/app/web_portal.cpp/h` - Async web server and REST API endpoints
 - `src/app/web_assets.cpp/h` - Embedded HTML/CSS/JS from `web/` directory
 - `src/app/config_manager.cpp/h` - NVS-based configuration storage
@@ -212,7 +219,8 @@ After every significant change, the agent must:
 
 - New script added → Update `README.md` script table and `docs/scripts.md`
 - Library management changed → Update `docs/library-management.md`
-- Build workflow modified → Update `README.md` CI/CD section
+- Build workflow modified → Update `README.md` CI/CD section and `docs/build-and-release-process.md`
+- Board configuration system changed → Update `README.md` board configuration section and `docs/build-and-release-process.md`
 - Release workflow modified → Update `docs/build-and-release-process.md` and `README.md` release section
 - New requirement added → Update `README.md` prerequisites
 - REST API endpoint added/changed → Update `docs/web-portal.md` and `README.md` API table

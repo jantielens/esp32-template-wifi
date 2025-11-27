@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.10] - 2025-11-27
+
+### Added
+- **Board-Specific Configuration System**: Flexible optional override system for multi-board support
+  - Default configuration in `src/app/board_config.h` used by all boards
+  - Optional board-specific overrides in `src/boards/[board-name]/board_config.h`
+  - Board-specific implementations in `src/boards/[board-name]/board_config.cpp`
+  - Build system automatically detects and includes board overrides when present
+  - Example: ESP32-C3 Super Mini with LED on GPIO8 (vs GPIO2 default)
+  - Supports board-specific functions via feature flags (e.g., `HAS_CUSTOM_IDENTIFIER`)
+  - Zero runtime overhead - all configuration resolved at compile time
+
+### Changed
+- **Project Structure**: Moved board overrides to `src/boards/` for better organization
+- **Documentation**: Updated all docs to reflect board configuration system
+
+---
+
 ## [0.0.9] - 2025-11-27
 
 ### Removed
