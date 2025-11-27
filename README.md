@@ -178,13 +178,11 @@ See [docs/scripts.md](docs/scripts.md) for detailed documentation.
 
 ### Target Boards
 
-The project supports multiple ESP32 board variants configured in `config.sh`:
+The project is currently configured for the **JC3636W518** (ESP32-S3 round display w/ ST77916 + CST816S):
 
 ```bash
-# Default configuration includes:
 declare -A FQBN_TARGETS=(
-    ["esp32:esp32:esp32"]="esp32"                                        # ESP32 Dev Module
-    ["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"]="esp32c3"  # ESP32-C3 Super Mini
+  ["esp32:esp32:esp32s3:CDCOnBoot=cdc"]="jc3636w518"
 )
 ```
 
@@ -199,13 +197,11 @@ declare -A FQBN_TARGETS=(
 # Build all boards
 ./build.sh
 
-# Build specific board
-./build.sh esp32
-./build.sh esp32c3
+# Build (single board configured)
+./build.sh           # builds jc3636w518
 
-# Upload to specific board
-./upload.sh esp32
-./upload.sh esp32c3 /dev/ttyACM0  # With explicit port
+# Upload (auto-detects /dev/ttyACM0 or /dev/ttyUSB0)
+./upload.sh          # or ./upload.sh /dev/ttyACM0
 ```
 
 ### Board-Specific Configuration

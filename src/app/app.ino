@@ -1,8 +1,19 @@
 #include "../version.h"
+
+#if defined(BOARD_JC3636W518)
+#include "../boards/jc3636w518/board_config.h"
+#else
 #include "board_config.h"
+#endif
 #include "config_manager.h"
 #include "web_portal.h"
 #include "log_manager.h"
+#if defined(HAS_DISPLAY) && HAS_DISPLAY
+#include "display_driver.h"
+#include <lvgl.h>
+// Compile board display driver directly to ensure linkage in Arduino build
+#include "display_driver.cpp"
+#endif
 #include <WiFi.h>
 #include <ESPmDNS.h>
 #include <lwip/netif.h>
@@ -10,6 +21,36 @@
 // Configuration
 DeviceConfig device_config;
 bool config_loaded = false;
+
+#if defined(HAS_DISPLAY) && HAS_DISPLAY
+bool display_ready = false;
+
+static void hello_btn_event_cb(lv_event_t *e) {
+  lv_obj_t *btn_label_inner = (lv_obj_t *)lv_event_get_user_data(e);
+  if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
+    lv_label_set_text(btn_label_inner, "i'm alive");
+  }
+}
+
+static void init_hello_round_world_screen() {
+  // Title label
+  lv_obj_t *title = lv_label_create(lv_scr_act());
+  lv_label_set_text(title, "hello round world");
+  lv_obj_align(title, LV_ALIGN_CENTER, 0, -40);
+
+  // Button
+  lv_obj_t *btn = lv_btn_create(lv_scr_act());
+  lv_obj_align(btn, LV_ALIGN_CENTER, 0, 20);
+
+  // Button caption
+  lv_obj_t *btn_label = lv_label_create(btn);
+  lv_label_set_text(btn_label, "click me");
+  lv_obj_center(btn_label);
+
+  // Callback: update caption on click
+  lv_obj_add_event_cb(btn, hello_btn_event_cb, LV_EVENT_CLICKED, btn_label);
+}
+#endif
 
 // WiFi retry settings
 const unsigned long WIFI_BACKOFF_BASE = 3000; // 3 seconds base (DHCP typically needs 2-3s)
@@ -66,6 +107,13 @@ void setup()
   // Logger.logLinef("Board: %s", board_get_custom_identifier());
   // #endif
   Logger.logEnd();
+  
+#if defined(HAS_DISPLAY) && HAS_DISPLAY
+  Logger.logMessage("Display", "Initializing JC3636W518 round display");
+  board_display_init();
+  init_hello_round_world_screen();
+  display_ready = true;
+#endif
   
   // Initialize board-specific hardware
   #if HAS_BUILTIN_LED
@@ -125,6 +173,12 @@ void loop()
 {
   // Handle web portal (DNS for captive portal)
   web_portal_handle();
+
+#if defined(HAS_DISPLAY) && HAS_DISPLAY
+  if (display_ready) {
+    board_display_loop();
+  }
+#endif
   
   unsigned long currentMillis = millis();
   
@@ -154,7 +208,7 @@ void loop()
     lastHeartbeat = currentMillis;
   }
   
-  delay(10);
+  delay(5);
 }
 
 // Connect to WiFi with exponential backoff

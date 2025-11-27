@@ -46,8 +46,11 @@ PROJECT_DISPLAY_NAME="ESP32 Template WiFi"
 #   ["esp32:esp32:dfrobot_firebeetle2_esp32c6:CDCOnBoot=cdc"]="esp32c6" # C6 with USB CDC enabled
 #   ["esp32:esp32:esp32c6:CDCOnBoot=cdc"]="esp32c6supermini"            # C6 with USB CDC enabled (generic Super Mini variant)
 declare -A FQBN_TARGETS=(
-    ["esp32:esp32:esp32"]="esp32"
-    ["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"]="esp32c3"
+    #["esp32:esp32:esp32"]="esp32"
+    #["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"]="esp32c3"
+    # ESP32-S3 round display board (JC3636W518)
+    # CDCOnBoot enables USB serial (appears as /dev/ttyACM*). Adjust if needed.
+    ["esp32:esp32:esp32s3:CDCOnBoot=cdc"]="jc3636w518"
 )
 
 # Default board (used when only one board is configured)
@@ -94,6 +97,31 @@ find_serial_port() {
         return 0
     else
         return 1
+    fi
+}
+
+# Optional: board-specific build properties (e.g., PSRAM, flash size, partition scheme)
+# Define as variables named BOARD_BUILD_PROPS_<board>[_<profile>] containing CLI flags.
+# Example:
+#   BOARD_BUILD_PROPS_jc3636w518="--build-property PSRAM=opi --build-property FlashSize=16M --build-property FlashMode=opi --build-property PartitionScheme=fatflash"
+#   BOARD_BUILD_PROPS_jc3636w518_opi16m="..."  # profile-specific override
+
+# Default build props for JC3636W518 (safe defaults; no PSRAM assumption)
+: "${BOARD_BUILD_PROPS_jc3636w518:=}"
+
+# Profile: opi16m (16MB flash + OPI PSRAM)
+: "${BOARD_BUILD_PROPS_jc3636w518_opi16m:=--build-property PSRAM=opi --build-property FlashSize=16M --build-property FlashMode=opi --build-property PartitionScheme=fatflash}"
+
+get_build_props_for_board() {
+    local board="$1";
+    local profile="${2:-}"
+    local base_var="BOARD_BUILD_PROPS_${board}"
+    local profile_var="BOARD_BUILD_PROPS_${board}_${profile}"
+
+    if [[ -n "$profile" && -n "${!profile_var:-}" ]]; then
+        echo "${!profile_var}"
+    else
+        echo "${!base_var:-}"
     fi
 }
 

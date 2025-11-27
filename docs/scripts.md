@@ -17,7 +17,15 @@ This project includes several bash scripts to streamline ESP32 development workf
 
 **Usage:** Automatically sourced by other scripts. Do not run directly.
 
-**Multi-Board Configuration:**
+**Board Configuration (current default):**
+
+```bash
+declare -A FQBN_TARGETS=(
+    ["esp32:esp32:esp32s3:CDCOnBoot=cdc"]="jc3636w518"  # ESP32-S3 round display (JC3636W518)
+)
+```
+
+**Multi-Board Configuration (example):**
 ```bash
 declare -A FQBN_TARGETS=(
     ["esp32:esp32:esp32"]="esp32"                                        # Custom name

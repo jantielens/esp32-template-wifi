@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **JC3636W518 (ESP32-S3 Round Display) support** with LVGL "Hello Round World" demo
+  - Board target: `esp32:esp32:esp32s3:CDCOnBoot=cdc` → `jc3636w518`
+  - Display driver: ST77916 QSPI + CST816S touch, backlight PWM
+  - LVGL config (`src/app/lv_conf.h`) and pinned libraries (`lvgl@8.3.11`, `ESP32_Display_Panel@0.1.4`, `ESP32_IO_Expander@0.0.2`)
+  - UI integration in `app.ino` with periodic LVGL tick handling
+
+### Changed
+- `build.sh` now defines board macros and includes board-specific headers for overrides
+- `arduino-libraries.txt` includes display/LVGL dependencies
+
 ---
 
 ## [0.0.10] - 2025-11-27
