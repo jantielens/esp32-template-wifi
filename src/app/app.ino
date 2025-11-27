@@ -29,10 +29,6 @@ void onWiFiConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
 
 void onWiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info) {
   Logger.logMessagef("WiFi", "Got IP: %s", WiFi.localIP().toString().c_str());
-  
-  // Restart mDNS after reconnection
-  MDNS.end();
-  start_mdns();
 }
 
 void onWiFiDisconnected(WiFiEvent_t event, WiFiEventInfo_t info) {
@@ -106,7 +102,8 @@ void loop()
   unsigned long currentMillis = millis();
   
   // WiFi watchdog - monitor connection and reconnect if needed
-  if (config_loaded && currentMillis - lastWiFiCheck >= WIFI_CHECK_INTERVAL) {
+  // Only run if we're not in AP mode (AP mode is the fallback, should stay active)
+  if (config_loaded && !web_portal_is_ap_mode() && currentMillis - lastWiFiCheck >= WIFI_CHECK_INTERVAL) {
     if (WiFi.status() != WL_CONNECTED && strlen(device_config.wifi_ssid) > 0) {
       Logger.logMessage("WiFi Watchdog", "Connection lost - attempting reconnect");
       if (connect_wifi()) {
