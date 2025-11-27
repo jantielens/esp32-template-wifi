@@ -4,9 +4,6 @@
 # This file contains common configuration and helper functions used by all scripts
 # Source this file at the beginning of each script
 
-# Get script directory (works when sourced)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
 # ============================================================================
 # PROJECT BRANDING CONFIGURATION
 # ============================================================================
@@ -33,18 +30,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_NAME="esp32-template-wifi"
 PROJECT_DISPLAY_NAME="ESP32 Template WiFi"
 
-# Color definitions for terminal output
-BLUE='\033[0;34m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-CYAN='\033[0;36m'
-NC='\033[0m' # No Color
-
-# Project paths
-SKETCH_PATH="$SCRIPT_DIR/src/app/app.ino"
-BUILD_PATH="$SCRIPT_DIR/build"
-
 # Board configuration (FQBN - Fully Qualified Board Name)
 # Define target boards as an associative array: [FQBN]="board-name"
 # - Provide custom board name for clean directory naming
@@ -67,6 +52,21 @@ declare -A FQBN_TARGETS=(
 
 # Default board (used when only one board is configured)
 DEFAULT_BOARD=""
+
+# Get script directory (works when sourced)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Color definitions for terminal output
+BLUE='\033[0;34m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# Project paths
+SKETCH_PATH="$SCRIPT_DIR/src/app/app.ino"
+BUILD_PATH="$SCRIPT_DIR/build"
 
 # Find arduino-cli executable
 # Checks for local installation first, then falls back to system-wide
