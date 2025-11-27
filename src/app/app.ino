@@ -11,8 +11,8 @@ DeviceConfig device_config;
 bool config_loaded = false;
 
 // WiFi retry settings
-const int WIFI_MAX_ATTEMPTS = 5;
-const unsigned long WIFI_BACKOFF_BASE = 5000; // 5 seconds base
+const int WIFI_MAX_ATTEMPTS = 3;
+const unsigned long WIFI_BACKOFF_BASE = 3000; // 3 seconds base (DHCP typically needs 2-3s)
 
 // Heartbeat interval
 const unsigned long HEARTBEAT_INTERVAL = 60000; // 60 seconds
@@ -82,8 +82,22 @@ void setup()
     if (connect_wifi()) {
       start_mdns();
     } else {
-      Logger.logMessage("Main", "WiFi failed - fallback to AP");
-      web_portal_start_ap();
+      // Hard reset retry - WiFi hardware may be in bad state
+      Logger.logMessage("Main", "WiFi failed - attempting hard reset");
+      Logger.logBegin("WiFi Hard Reset");
+      WiFi.mode(WIFI_OFF);
+      delay(1000);  // Longer delay to fully reset hardware
+      WiFi.mode(WIFI_STA);
+      delay(500);
+      Logger.logEnd("Reset complete");
+      
+      // One more attempt after hard reset
+      if (connect_wifi()) {
+        start_mdns();
+      } else {
+        Logger.logMessage("Main", "WiFi failed after reset - fallback to AP");
+        web_portal_start_ap();
+      }
     }
   }
   
