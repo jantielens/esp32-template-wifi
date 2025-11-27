@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.9] - 2025-11-27
+
+### Removed
+- **Streaming Logs Feature**: Removed unstable web portal log streaming
+  - Removed LogBuffer, `/api/logs` endpoint, and web log viewer
+  - Simplified LogManager to serial-only output
+  - Preserved all formatting features (nesting, indentation, timing)
+
+### Changed
+- **WiFi Connection**: Faster and more reliable connection handling
+  - Reduced retry attempts: 5→3, optimized timeout: 5s→3s per attempt
+  - Added hard reset retry before AP fallback (WiFi power cycle)
+  - Total connection time: ~37.5s (was 75s)
+  - Updated logMessage/logMessagef to single-line format
+
+### Fixed
+- Duplicate mDNS startup causing "Service already exists" error
+- WiFi watchdog disrupting AP mode fallback
+- ESP32-C6 FQBN configuration
+- AP mode now stays active when WiFi connection fails
+
+---
+
 ## [0.0.8] - 2025-11-26
 
 ### Fixed

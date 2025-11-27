@@ -2,7 +2,7 @@
  * Log Manager Implementation
  * 
  * Indentation-based logger with nested blocks and automatic timing.
- * Routes output to both Serial and optional LogBuffer for web viewing.
+ * Routes output to Serial only.
  */
 
 #include "log_manager.h"
@@ -16,18 +16,12 @@ uint8_t LogManager::nestLevel = 0;
 LogManager Logger;
 
 // Constructor
-LogManager::LogManager() : logBuffer(nullptr) {
-    lineBuffer.reserve(MAX_LINE);
+LogManager::LogManager() {
 }
 
 // Initialize (sets baud rate for Serial)
 void LogManager::begin(unsigned long baud) {
     Serial.begin(baud);
-}
-
-// Set log buffer for web viewing
-void LogManager::setLogBuffer(LogBuffer *buffer) {
-    logBuffer = buffer;
 }
 
 // Get indentation string based on nesting level
@@ -105,15 +99,21 @@ void LogManager::logEnd(const char* message) {
     println("ms)");
 }
 
-// Convenience methods for single-line messages
+// Single-line logging with timing
 void LogManager::logMessage(const char* module, const char* msg) {
-    logBegin(module);
-    logLine(msg);
-    logEnd();
+    unsigned long start = millis();
+    print(indent());
+    print("[");
+    print(module);
+    print("] ");
+    print(msg);
+    print(" (");
+    print(millis() - start);
+    println("ms)");
 }
 
 void LogManager::logMessagef(const char* module, const char* format, ...) {
-    logBegin(module);
+    unsigned long start = millis();
     
     char buffer[128];
     va_list args;
@@ -121,39 +121,36 @@ void LogManager::logMessagef(const char* module, const char* format, ...) {
     vsnprintf(buffer, sizeof(buffer), format, args);
     va_end(args);
     
-    logLine(buffer);
-    logEnd();
+    print(indent());
+    print("[");
+    print(module);
+    print("] ");
+    print(buffer);
+    print(" (");
+    print(millis() - start);
+    println("ms)");
+}
+
+// Aliases for logMessage (for backward compatibility)
+void LogManager::logQuick(const char* module, const char* msg) {
+    logMessage(module, msg);
+}
+
+void LogManager::logQuickf(const char* module, const char* format, ...) {
+    va_list args;
+    va_start(args, format);
+    char buffer[128];
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+    logMessage(module, buffer);
 }
 
 // Write single byte (required by Print class)
 size_t LogManager::write(uint8_t c) {
-    // Always write to hardware Serial first
-    size_t written = Serial.write(c);
-    
-    // Accumulate in line buffer for web logs
-    if (c == '\n') {
-        // Complete line - add to log buffer
-        if (lineBuffer.length() > 0 && logBuffer) {
-            logBuffer->add(lineBuffer.c_str(), lineBuffer.length());
-            lineBuffer.clear();
-        }
-    } else if (c == '\r') {
-        // Ignore carriage return
-    } else {
-        // Accumulate character
-        if (lineBuffer.length() < 256) {
-            lineBuffer += (char)c;
-        }
-    }
-    
-    return written;
+    return Serial.write(c);
 }
 
 // Write buffer of bytes (required by Print class)
 size_t LogManager::write(const uint8_t *buffer, size_t size) {
-    size_t written = 0;
-    for (size_t i = 0; i < size; i++) {
-        written += write(buffer[i]);
-    }
-    return written;
+    return Serial.write(buffer, size);
 }

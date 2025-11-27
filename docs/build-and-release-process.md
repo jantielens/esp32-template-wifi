@@ -48,7 +48,6 @@ Used for user-facing text and branding:
 |----------|-------|---------|
 | **Web portal title** | Browser tab title | `"ESP32 Template WiFi Configuration Portal"` |
 | **Web portal header** | Main page heading | `"ESP32 Template WiFi Configuration"` |
-| **Logs page title** | Browser tab title | `"Device Logs - ESP32 Template WiFi"` |
 | **Default device name** | First-time device name | `"ESP32 Template WiFi 1A2B"` |
 | **API response** | `/api/info` endpoint | `{"project_display_name": "ESP32 Template WiFi"}` |
 

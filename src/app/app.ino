@@ -11,8 +11,8 @@ DeviceConfig device_config;
 bool config_loaded = false;
 
 // WiFi retry settings
-const int WIFI_MAX_ATTEMPTS = 5;
-const unsigned long WIFI_BACKOFF_BASE = 5000; // 5 seconds base
+const int WIFI_MAX_ATTEMPTS = 3;
+const unsigned long WIFI_BACKOFF_BASE = 3000; // 3 seconds base (DHCP typically needs 2-3s)
 
 // Heartbeat interval
 const unsigned long HEARTBEAT_INTERVAL = 60000; // 60 seconds
@@ -29,10 +29,6 @@ void onWiFiConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
 
 void onWiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info) {
   Logger.logMessagef("WiFi", "Got IP: %s", WiFi.localIP().toString().c_str());
-  
-  // Restart mDNS after reconnection
-  MDNS.end();
-  start_mdns();
 }
 
 void onWiFiDisconnected(WiFiEvent_t event, WiFiEventInfo_t info) {
@@ -86,8 +82,22 @@ void setup()
     if (connect_wifi()) {
       start_mdns();
     } else {
-      Logger.logMessage("Main", "WiFi failed - fallback to AP");
-      web_portal_start_ap();
+      // Hard reset retry - WiFi hardware may be in bad state
+      Logger.logMessage("Main", "WiFi failed - attempting hard reset");
+      Logger.logBegin("WiFi Hard Reset");
+      WiFi.mode(WIFI_OFF);
+      delay(1000);  // Longer delay to fully reset hardware
+      WiFi.mode(WIFI_STA);
+      delay(500);
+      Logger.logEnd("Reset complete");
+      
+      // One more attempt after hard reset
+      if (connect_wifi()) {
+        start_mdns();
+      } else {
+        Logger.logMessage("Main", "WiFi failed after reset - fallback to AP");
+        web_portal_start_ap();
+      }
     }
   }
   
@@ -106,7 +116,8 @@ void loop()
   unsigned long currentMillis = millis();
   
   // WiFi watchdog - monitor connection and reconnect if needed
-  if (config_loaded && currentMillis - lastWiFiCheck >= WIFI_CHECK_INTERVAL) {
+  // Only run if we're not in AP mode (AP mode is the fallback, should stay active)
+  if (config_loaded && !web_portal_is_ap_mode() && currentMillis - lastWiFiCheck >= WIFI_CHECK_INTERVAL) {
     if (WiFi.status() != WL_CONNECTED && strlen(device_config.wifi_ssid) > 0) {
       Logger.logMessage("WiFi Watchdog", "Connection lost - attempting reconnect");
       if (connect_wifi()) {
@@ -119,11 +130,11 @@ void loop()
   // Check if it's time for heartbeat
   if (currentMillis - lastHeartbeat >= HEARTBEAT_INTERVAL) {
     if (WiFi.status() == WL_CONNECTED) {
-      Logger.logMessagef("Heartbeat", "Up: %ds | Heap: %d | WiFi: %s (%s)", 
+      Logger.logQuickf("Heartbeat", "Up: %ds | Heap: %d | WiFi: %s (%s)", 
         currentMillis / 1000, ESP.getFreeHeap(), 
         WiFi.localIP().toString().c_str(), WiFi.getHostname());
     } else {
-      Logger.logMessagef("Heartbeat", "Up: %ds | Heap: %d | WiFi: Disconnected", 
+      Logger.logQuickf("Heartbeat", "Up: %ds | Heap: %d | WiFi: Disconnected", 
         currentMillis / 1000, ESP.getFreeHeap());
     }
     

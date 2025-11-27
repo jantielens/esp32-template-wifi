@@ -13,7 +13,6 @@
 #include "web_assets.h"
 #include "config_manager.h"
 #include "log_manager.h"
-#include "log_buffer.h"
 #include "../version.h"
 #include <ESPAsyncWebServer.h>
 #include <DNSServer.h>
@@ -30,8 +29,6 @@
 void handleRoot(AsyncWebServerRequest *request);
 void handleCSS(AsyncWebServerRequest *request);
 void handleJS(AsyncWebServerRequest *request);
-void handleLogsHTML(AsyncWebServerRequest *request);
-void handleLogsJS(AsyncWebServerRequest *request);
 void handleGetConfig(AsyncWebServerRequest *request);
 void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total);
 void handleDeleteConfig(AsyncWebServerRequest *request);
@@ -39,16 +36,12 @@ void handleGetVersion(AsyncWebServerRequest *request);
 void handleGetMode(AsyncWebServerRequest *request);
 void handleGetHealth(AsyncWebServerRequest *request);
 void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
-void handleGetLogs(AsyncWebServerRequest *request);
 
 // Web server on port 80 (pointer to avoid constructor issues)
 AsyncWebServer *server = nullptr;
 
 // DNS server for captive portal (port 53)
 DNSServer dnsServer;
-
-// Log buffer for web viewing
-LogBuffer *logBuffer = nullptr;
 
 // AP configuration
 #define DNS_PORT 53
@@ -91,24 +84,6 @@ void handleJS(AsyncWebServerRequest *request) {
     AsyncWebServerResponse *response = request->beginResponse(200, "application/javascript", 
                                                                portal_js_gz, 
                                                                portal_js_gz_len);
-    response->addHeader("Content-Encoding", "gzip");
-    request->send(response);
-}
-
-// Serve logs HTML
-void handleLogsHTML(AsyncWebServerRequest *request) {
-    AsyncWebServerResponse *response = request->beginResponse(200, "text/html", 
-                                                               logs_html_gz, 
-                                                               logs_html_gz_len);
-    response->addHeader("Content-Encoding", "gzip");
-    request->send(response);
-}
-
-// Serve logs JavaScript
-void handleLogsJS(AsyncWebServerRequest *request) {
-    AsyncWebServerResponse *response = request->beginResponse(200, "application/javascript", 
-                                                               logs_js_gz, 
-                                                               logs_js_gz_len);
     response->addHeader("Content-Encoding", "gzip");
     request->send(response);
 }
@@ -413,50 +388,6 @@ void handleGetHealth(AsyncWebServerRequest *request) {
     request->send(200, "application/json", response);
 }
 
-// GET /api/logs - Return buffered log entries
-void handleGetLogs(AsyncWebServerRequest *request) {
-    if (!logBuffer) {
-        request->send(500, "application/json", "{\"error\":\"Log buffer not initialized\"}");
-        return;
-    }
-    
-    // Get all log entries from buffer
-    LogEntry entries[LOG_BUFFER_SIZE];
-    int count = logBuffer->getAll(entries, LOG_BUFFER_SIZE);
-    
-    // Use AsyncResponseStream for lower memory usage
-    AsyncResponseStream *response = request->beginResponseStream("application/json");
-    
-    // Manually build JSON to avoid large stack allocation
-    response->print("{\"count\":");
-    response->print(count);
-    response->print(",\"logs\":[");
-    
-    for (int i = 0; i < count; i++) {
-        if (i > 0) response->print(",");
-        response->print("{\"ts\":");
-        response->print(entries[i].timestamp_ms);
-        response->print(",\"msg\":\"");
-        
-        // Escape special characters in message
-        const char* msg = entries[i].message;
-        for (size_t j = 0; j < entries[i].length; j++) {
-            char c = msg[j];
-            if (c == '"') response->print("\\\"");
-            else if (c == '\\') response->print("\\\\");
-            else if (c == '\n') response->print("\\n");
-            else if (c == '\r') response->print("\\r");
-            else if (c == '\t') response->print("\\t");
-            else response->print(c);
-        }
-        
-        response->print("\"}");
-    }
-    
-    response->print("]}");
-    request->send(response);
-}
-
 // POST /api/reboot - Reboot device without saving
 void handleReboot(AsyncWebServerRequest *request) {
     Logger.logMessage("API", "POST /api/reboot");
@@ -578,9 +509,6 @@ void web_portal_init(DeviceConfig *config) {
     server->on("/", HTTP_GET, handleRoot);
     server->on("/portal.css", HTTP_GET, handleCSS);
     server->on("/portal.js", HTTP_GET, handleJS);
-    server->on("/logs", HTTP_GET, handleLogsHTML);
-    server->on("/logs.html", HTTP_GET, handleLogsHTML);
-    server->on("/logs.js", HTTP_GET, handleLogsJS);
     
     // API endpoints
     server->on("/api/mode", HTTP_GET, handleGetMode);
@@ -602,13 +530,6 @@ void web_portal_init(DeviceConfig *config) {
         [](AsyncWebServerRequest *request) {},
         handleOTAUpload
     );
-    
-    // Initialize log buffer
-    logBuffer = new LogBuffer();
-    Logger.setLogBuffer(logBuffer);
-    
-    // Log polling endpoint (safer than SSE for async contexts)
-    server->on("/api/logs", HTTP_GET, handleGetLogs);
     
     // 404 handler
     server->onNotFound([](AsyncWebServerRequest *request) {

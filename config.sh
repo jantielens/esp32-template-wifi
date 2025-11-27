@@ -56,9 +56,10 @@ BUILD_PATH="$SCRIPT_DIR/build"
 # - To check if a board needs CDC: `arduino-cli board details <FQBN> | grep CDCOnBoot`
 #
 # Examples:
-#   ["esp32:esp32:esp32"]="esp32"                                        # Classic ESP32 - hardware UART
+#   ["esp32:esp32:esp32"]="esp32"                                       # Classic ESP32 - hardware UART
 #   ["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"]="esp32c3"   # C3 with USB CDC enabled
 #   ["esp32:esp32:dfrobot_firebeetle2_esp32c6:CDCOnBoot=cdc"]="esp32c6" # C6 with USB CDC enabled
+#   ["esp32:esp32:esp32c6:CDCOnBoot=cdc"]="esp32c6supermini"            # C6 with USB CDC enabled (generic Super Mini variant)
 declare -A FQBN_TARGETS=(
     ["esp32:esp32:esp32"]="esp32"
     ["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"]="esp32c3"
