@@ -22,8 +22,8 @@
 
 1. **Setup** (`app.ino`)
    ```cpp
-   ui_events_init();
-   UI.begin(ScreenId::Hello);
+  ui_events_init();
+  UI.begin(ScreenId::Splash); // Splash → SystemStats when WiFi ready (non-AP)
    ```
 2. **Loop** (`app.ino`)
    ```cpp
@@ -32,8 +32,10 @@
    ```
 3. **Navigate**
    ```cpp
-   UI.navigate(ScreenId::Config, LV_SCR_LOAD_ANIM_MOVE_LEFT, 300, 0);
+  UI.navigate(ScreenId::SystemStats, LV_SCR_LOAD_ANIM_MOVE_LEFT, 300, 0);
    ```
+
+> Default flow: `Splash` → `SystemStats` after minimum dwell. `Hello` remains available for demos/tests but is no longer the post-splash default.
 
 ---
 

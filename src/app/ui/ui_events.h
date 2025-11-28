@@ -8,6 +8,7 @@
 // Keep this lean; expand cautiously to avoid flash bloat.
 enum class UiEventType : uint8_t {
   DemoCaption = 0,
+  BootStatus,
   // Future: Mqtt, Timer, Wifi, Custom
 };
 

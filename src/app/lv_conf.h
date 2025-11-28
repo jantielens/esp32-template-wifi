@@ -50,6 +50,10 @@
 #define LV_DISP_DEF_REFR_PERIOD 15      /*[ms]*/
 #define LV_INDEV_DEF_READ_PERIOD 30     /*[ms]*/
 
+/* Gesture configuration */
+#define LV_INDEV_DEF_GESTURE_LIMIT      50      /* Minimum pixels to detect gesture */
+#define LV_INDEV_DEF_GESTURE_MIN_VELOCITY 3     /* Minimum velocity for swipe */
+
 #define LV_TICK_CUSTOM 1
 #if LV_TICK_CUSTOM
     #define LV_TICK_CUSTOM_INCLUDE "Arduino.h"

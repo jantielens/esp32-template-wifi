@@ -221,6 +221,7 @@ static void my_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t
   const int offsety1 = area->y1;
   const int offsety2 = area->y2;
   lcd_local->drawBitmap(offsetx1, offsety1, offsetx2 - offsetx1 + 1, offsety2 - offsety1 + 1, (const uint8_t *)color_p);
+  lv_disp_flush_ready(disp);
 }
 
 IRAM_ATTR bool onRefreshFinishCallback(void *user_data)
@@ -317,7 +318,31 @@ void board_display_init()
 
   // LVGL draw buffer
   size_t lv_cache_rows = 64; // adjust to balance RAM usage
-  disp_draw_buf = (lv_color_t *)heap_caps_malloc(lv_cache_rows * SCREEN_RES_HOR * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+
+  auto alloc_draw_buf = [&](size_t rows, uint32_t caps) -> lv_color_t* {
+    return (lv_color_t*)heap_caps_malloc(rows * SCREEN_RES_HOR * sizeof(lv_color_t), caps);
+  };
+
+  // Prefer PSRAM to preserve internal RAM; fallback to smaller buffers
+  disp_draw_buf = alloc_draw_buf(lv_cache_rows, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+  if (!disp_draw_buf) {
+    lv_cache_rows = 32;
+    disp_draw_buf = alloc_draw_buf(lv_cache_rows, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+  }
+  if (!disp_draw_buf) {
+    // Try internal RAM with smaller buffer
+    lv_cache_rows = 32;
+    disp_draw_buf = alloc_draw_buf(lv_cache_rows, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+  }
+  if (!disp_draw_buf) {
+    lv_cache_rows = 16;
+    disp_draw_buf = alloc_draw_buf(lv_cache_rows, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+  }
+  if (!disp_draw_buf) {
+    Serial.println("[Display] LVGL draw buffer alloc failed");
+    return;
+  }
+
   lv_init();
   lv_disp_draw_buf_init(&draw_buf, disp_draw_buf, NULL, SCREEN_RES_HOR * lv_cache_rows);
 
@@ -329,10 +354,17 @@ void board_display_init()
   disp_drv.user_data = (void *)lcd;
   lv_disp_t *disp = lv_disp_drv_register(&disp_drv);
 
-  if (lcd->getBus()->getType() != ESP_PANEL_BUS_TYPE_RGB)
-  {
-    lcd->attachRefreshFinishCallback(onRefreshFinishCallback, (void *)disp->driver);
-  }
+  // Clear display to black to avoid showing stale content from previous run
+  lv_obj_t *blank = lv_obj_create(nullptr);
+  lv_obj_set_size(blank, SCREEN_RES_HOR, SCREEN_RES_VER);
+  lv_obj_set_style_bg_color(blank, lv_color_black(), 0);
+  lv_obj_set_style_bg_opa(blank, LV_OPA_COVER, 0);
+  lv_obj_set_style_border_width(blank, 0, 0);
+  lv_obj_set_style_pad_all(blank, 0, 0);
+  lv_scr_load(blank);
+  lv_timer_handler();
+
+  // No async callback needed; flush_ready is called directly in my_disp_flush
   indev_touchpad = indev_init(touch);
 }
 

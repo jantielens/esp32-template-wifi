@@ -46,11 +46,12 @@ PROJECT_DISPLAY_NAME="ESP32 Template WiFi"
 #   ["esp32:esp32:dfrobot_firebeetle2_esp32c6:CDCOnBoot=cdc"]="esp32c6" # C6 with USB CDC enabled
 #   ["esp32:esp32:esp32c6:CDCOnBoot=cdc"]="esp32c6supermini"            # C6 with USB CDC enabled (generic Super Mini variant)
 declare -A FQBN_TARGETS=(
-    #["esp32:esp32:esp32"]="esp32"
-    #["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"]="esp32c3"
+    #"esp32:esp32:esp32"="esp32"
+    #"esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"="esp32c3"
     # ESP32-S3 round display board (JC3636W518)
     # CDCOnBoot enables USB serial (appears as /dev/ttyACM*). Adjust if needed.
-    ["esp32:esp32:esp32s3:CDCOnBoot=cdc"]="jc3636w518"
+    # Include official menu options to ensure correct partition size and PSRAM/flash settings.
+    ["esp32:esp32:esp32s3:CDCOnBoot=cdc,PartitionScheme=huge_app,PSRAM=opi,FlashSize=16M,FlashMode=qio120"]="jc3636w518"
 )
 
 # Default board (used when only one board is configured)
@@ -106,10 +107,13 @@ find_serial_port() {
 #   BOARD_BUILD_PROPS_jc3636w518="--build-property PSRAM=opi --build-property FlashSize=16M --build-property FlashMode=opi --build-property PartitionScheme=fatflash"
 #   BOARD_BUILD_PROPS_jc3636w518_opi16m="..."  # profile-specific override
 
-# Default build props for JC3636W518 (safe defaults; no PSRAM assumption)
-: "${BOARD_BUILD_PROPS_jc3636w518:=}"
+# Default build props for JC3636W518 (official settings)
+# - PSRAM: OPI PSRAM
+# - Flash: 16MB, QIO 120MHz
+# - Partition: Huge APP (3MB No OTA / 1MB SPIFFS)
+: "${BOARD_BUILD_PROPS_jc3636w518:=--build-property PSRAM=opi --build-property FlashSize=16M --build-property FlashMode=qio120 --build-property PartitionScheme=huge_app}"
 
-# Profile: opi16m (16MB flash + OPI PSRAM)
+# Profile: opi16m (keeping for compatibility; uses OPI flash mode and fatflash)
 : "${BOARD_BUILD_PROPS_jc3636w518_opi16m:=--build-property PSRAM=opi --build-property FlashSize=16M --build-property FlashMode=opi --build-property PartitionScheme=fatflash}"
 
 get_build_props_for_board() {

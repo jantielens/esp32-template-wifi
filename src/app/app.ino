@@ -17,7 +17,9 @@
 #include "display_driver.cpp"
 // Force-include UI implementation so Arduino CLI compiles it with the sketch
 #include "ui/ui_events.cpp"
+#include "ui/screens/splash_screen.cpp"
 #include "ui/screens/hello_screen.cpp"
+#include "ui/screens/system_stats_screen.cpp"
 #include "ui/screen_manager.cpp"
 #endif
 #include <WiFi.h>
@@ -32,6 +34,12 @@ bool config_loaded = false;
 
 #if defined(HAS_DISPLAY) && HAS_DISPLAY
 bool display_ready = false;
+constexpr unsigned long MIN_SPLASH_MS = 2000; // ensure splash visible for at least 2s
+constexpr unsigned long MIN_STATUS_DWELL_MS = 1000; // show final status at least 1s
+unsigned long splash_start_ms = 0;
+unsigned long wifi_connected_at = 0;
+bool wifi_connected = false;
+unsigned long last_boot_status_ms = 0;
 #endif
 
 // WiFi retry settings
@@ -57,6 +65,25 @@ bool enqueue_demo_caption(const char *text) {
   evt.type = UiEventType::DemoCaption;
   strlcpy(evt.msg, text, sizeof(evt.msg));
   return ui_publish(evt);
+}
+
+bool enqueue_boot_status(const char *text) {
+  if (!text) return false;
+  UiEvent evt{};
+  evt.type = UiEventType::BootStatus;
+  strlcpy(evt.msg, text, sizeof(evt.msg));
+  bool ok = ui_publish(evt);
+  last_boot_status_ms = millis();
+  return ok;
+}
+// Small helper to pump LVGL/UI during blocking operations (setup/connect)
+static inline void ui_pump_if_ready() {
+#if defined(HAS_DISPLAY) && HAS_DISPLAY
+  if (display_ready) {
+    board_display_loop();
+    UI.loop();
+  }
+#endif
 }
 #endif
 void onWiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info) {
@@ -103,8 +130,15 @@ void setup()
   Logger.logMessage("Display", "Initializing JC3636W518 round display");
   board_display_init();
   ui_events_init();
-  UI.begin(ScreenId::Hello);
+  UI.begin(ScreenId::Splash);
+  Logger.logMessage("UI", "Splash shown (UI.begin)");
+  enqueue_boot_status("Booting...");
+  // Force immediate LVGL flush so splash shows right away
+  lv_obj_invalidate(lv_scr_act());
+  lv_timer_handler();
+  ui_pump_if_ready();
   display_ready = true;
+  splash_start_ms = millis();
 #endif
   
   // Initialize board-specific hardware
@@ -129,9 +163,17 @@ void setup()
   // Start WiFi BEFORE initializing web server (critical for ESP32-C3)
   if (!config_loaded) {
     Logger.logMessage("Main", "No config - starting AP mode");
+#if defined(HAS_DISPLAY) && HAS_DISPLAY
+    enqueue_boot_status("No config - AP mode");
+  ui_pump_if_ready();
+#endif
     web_portal_start_ap();
   } else {
     Logger.logMessage("Main", "Config loaded - connecting to WiFi");
+#if defined(HAS_DISPLAY) && HAS_DISPLAY
+    enqueue_boot_status("Connecting to WiFi...");
+  ui_pump_if_ready();
+#endif
     if (connect_wifi()) {
       start_mdns();
     } else {
@@ -149,6 +191,9 @@ void setup()
         start_mdns();
       } else {
         Logger.logMessage("Main", "WiFi failed after reset - fallback to AP");
+#if defined(HAS_DISPLAY) && HAS_DISPLAY
+        enqueue_boot_status("WiFi failed - AP mode");
+#endif
         web_portal_start_ap();
       }
     }
@@ -170,6 +215,17 @@ void loop()
   if (display_ready) {
     board_display_loop();
     UI.loop();
+
+    // If connected and not in AP mode, navigate off splash after minimum duration
+    if (UI.currentId() == ScreenId::Splash && wifi_connected && !web_portal_is_ap_mode()) {
+      unsigned long now = millis();
+      unsigned long elapsed = now - splash_start_ms;
+      unsigned long since_status = now - last_boot_status_ms;
+      if (elapsed >= MIN_SPLASH_MS && since_status >= MIN_STATUS_DWELL_MS) {
+        Logger.logMessagef("UI", "Navigating Splash->SystemStats (elapsed=%lums, since_status=%lums)", elapsed, since_status);
+        UI.navigate(ScreenId::SystemStats, LV_SCR_LOAD_ANIM_NONE, 0, 0);
+      }
+    }
   }
 #endif
   
@@ -300,6 +356,11 @@ bool connect_wifi() {
     unsigned long start = millis();
     
     Logger.logLinef("Attempt %d/%d (timeout %ds)", attempt + 1, WIFI_MAX_ATTEMPTS, backoff / 1000);
+#if defined(HAS_DISPLAY) && HAS_DISPLAY
+    char status_msg[64];
+    snprintf(status_msg, sizeof(status_msg), "Connecting WiFi %d/%d", attempt + 1, WIFI_MAX_ATTEMPTS);
+    enqueue_boot_status(status_msg);
+#endif
     
     while (millis() - start < backoff) {
       wl_status_t status = WiFi.status();
@@ -313,9 +374,18 @@ bool connect_wifi() {
         Logger.logLinef("  http://%s", WiFi.localIP().toString().c_str());
         Logger.logLinef("  http://%s.local", WiFi.getHostname());
         Logger.logEnd("Connected");
+
+#if defined(HAS_DISPLAY) && HAS_DISPLAY
+        char status_msg[64];
+        snprintf(status_msg, sizeof(status_msg), "Connected: %s", WiFi.localIP().toString().c_str());
+          enqueue_boot_status(status_msg);
+          wifi_connected = true;
+          wifi_connected_at = millis();
+#endif
         
         return true;
       }
+      ui_pump_if_ready();
       delay(100);
     }
     
@@ -333,6 +403,9 @@ bool connect_wifi() {
   }
   
   Logger.logEnd("All attempts failed");
+#if defined(HAS_DISPLAY) && HAS_DISPLAY
+  enqueue_boot_status("WiFi failed");
+#endif
   return false;
 }
 
