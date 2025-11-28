@@ -80,6 +80,7 @@ esp32-template-wifi/
 ├── docs/                          # Documentation
 │   ├── scripts.md                 # Script usage guide
 │   ├── web-portal.md              # Web portal guide
+│   ├── ui-screens.md              # LVGL multi-screen pattern
 │   ├── wsl-development.md         # WSL/USB setup
 │   └── library-management.md      # Library management
 ├── src/
@@ -87,6 +88,12 @@ esp32-template-wifi/
 │   │   ├── app.ino                # Main sketch file
 │   │   ├── board_config.h         # Default board configuration
 │   │   ├── config_manager.cpp/h   # NVS config storage
+│   │   ├── ui/                    # LVGL UI scaffolding
+│   │   │   ├── ui_events.{h,cpp}  # FreeRTOS-backed event queue
+│   │   │   ├── base_screen.h      # Screen interface
+│   │   │   ├── screen_manager.{h,cpp} # Navigation & dispatch
+│   │   │   └── screens/           # Screen implementations
+│   │   │       └── hello_screen.{h,cpp}
 │   │   ├── web_portal.cpp/h       # Web server & API
 │   │   ├── web_assets.cpp/h       # Embedded HTML/CSS/JS
 │   │   └── web/

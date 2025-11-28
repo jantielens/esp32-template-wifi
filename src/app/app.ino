@@ -10,9 +10,15 @@
 #include "log_manager.h"
 #if defined(HAS_DISPLAY) && HAS_DISPLAY
 #include "display_driver.h"
+#include "ui/screen_manager.h"
+#include "ui/ui_events.h"
 #include <lvgl.h>
 // Compile board display driver directly to ensure linkage in Arduino build
 #include "display_driver.cpp"
+// Force-include UI implementation so Arduino CLI compiles it with the sketch
+#include "ui/ui_events.cpp"
+#include "ui/screens/hello_screen.cpp"
+#include "ui/screen_manager.cpp"
 #endif
 #include <WiFi.h>
 #include <ESPmDNS.h>
@@ -26,35 +32,6 @@ bool config_loaded = false;
 
 #if defined(HAS_DISPLAY) && HAS_DISPLAY
 bool display_ready = false;
-static QueueHandle_t demo_caption_queue = nullptr;
-struct DemoCaption { char text[64]; };
-
-static void hello_btn_event_cb(lv_event_t *e) {
-  lv_obj_t *btn_label_inner = (lv_obj_t *)lv_event_get_user_data(e);
-  if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
-    lv_label_set_text(btn_label_inner, "i'm alive");
-  }
-}
-
-static void init_hello_round_world_screen() {
-  // Title label
-  lv_obj_t *title = lv_label_create(lv_scr_act());
-  lv_label_set_text(title, "hello round world");
-  lv_obj_align(title, LV_ALIGN_CENTER, 0, -40);
-
-  // Button
-  lv_obj_t *btn = lv_btn_create(lv_scr_act());
-  lv_obj_align(btn, LV_ALIGN_CENTER, 0, 20);
-
-  // Button caption
-  lv_obj_t *btn_label = lv_label_create(btn);
-  lv_label_set_text(btn_label, "click me");
-  lv_obj_center(btn_label);
-  display_register_demo_button_label(btn_label);
-
-  // Callback: update caption on click
-  lv_obj_add_event_cb(btn, hello_btn_event_cb, LV_EVENT_CLICKED, btn_label);
-}
 #endif
 
 // WiFi retry settings
@@ -75,10 +52,11 @@ void onWiFiConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
 
 #if defined(HAS_DISPLAY) && HAS_DISPLAY
 bool enqueue_demo_caption(const char *text) {
-  if (!demo_caption_queue || !text) return false;
-  DemoCaption msg;
-  strlcpy(msg.text, text, sizeof(msg.text));
-  return xQueueSend(demo_caption_queue, &msg, 0) == pdTRUE;
+  if (!text) return false;
+  UiEvent evt{};
+  evt.type = UiEventType::DemoCaption;
+  strlcpy(evt.msg, text, sizeof(evt.msg));
+  return ui_publish(evt);
 }
 #endif
 void onWiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info) {
@@ -123,9 +101,9 @@ void setup()
   
 #if defined(HAS_DISPLAY) && HAS_DISPLAY
   Logger.logMessage("Display", "Initializing JC3636W518 round display");
-  demo_caption_queue = xQueueCreate(3, sizeof(DemoCaption));
   board_display_init();
-  init_hello_round_world_screen();
+  ui_events_init();
+  UI.begin(ScreenId::Hello);
   display_ready = true;
 #endif
   
@@ -191,12 +169,7 @@ void loop()
 #if defined(HAS_DISPLAY) && HAS_DISPLAY
   if (display_ready) {
     board_display_loop();
-
-    // Handle pending demo captions (from web endpoint)
-    DemoCaption msg;
-    while (demo_caption_queue && xQueueReceive(demo_caption_queue, &msg, 0) == pdTRUE) {
-      display_set_demo_caption(msg.text);
-    }
+    UI.loop();
   }
 #endif
   
