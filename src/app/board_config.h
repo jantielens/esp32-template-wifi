@@ -48,3 +48,16 @@
 // #endif
 
 #endif // BOARD_CONFIG_H
+
+// ============================================================================
+// Board-specific overrides
+// ============================================================================
+// build.sh defines BOARD_HAS_OVERRIDE when a board override directory exists
+// and adds that directory to the include path. Using include_next allows this
+// generic header to pull in the board-specific board_config.h without touching
+// application code.
+
+#ifdef BOARD_HAS_OVERRIDE
+#include_next "board_config.h"
+#endif
+
