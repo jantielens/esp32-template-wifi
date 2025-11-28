@@ -103,6 +103,20 @@
                     <button type="button" id="reset-btn" class="btn btn-danger">Factory Reset</button>
                 </div>
             </section>
+
+            <!-- Demo Section -->
+            <section class="section demo-section" id="demo-section">
+                <h2>🧪 Demo</h2>
+                <div class="form-group demo-group">
+                    <label for="demo_caption">Button Caption</label>
+                    <div class="demo-row">
+                        <input type="text" id="demo_caption" name="demo_caption" maxlength="63" placeholder="Enter caption for display button">
+                        <button type="button" id="demo_send_btn" class="btn btn-accent">Send to Display</button>
+                    </div>
+                    <small>Updates the caption of the on-device demo button immediately (not saved to config).</small>
+                </div>
+                <div id="demo-status" class="demo-status" style="display:none;"></div>
+            </section>
         </form>
 
         <section class="section ota-section">

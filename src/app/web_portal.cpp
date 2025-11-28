@@ -36,6 +36,7 @@ void handleGetVersion(AsyncWebServerRequest *request);
 void handleGetMode(AsyncWebServerRequest *request);
 void handleGetHealth(AsyncWebServerRequest *request);
 void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
+void handlePostDemoCaption(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total);
 
 // Web server on port 80 (pointer to avoid constructor issues)
 AsyncWebServer *server = nullptr;
@@ -202,6 +203,34 @@ void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len,
         Logger.logMessage("Portal", "Config save failed");
         request->send(500, "application/json", "{\"success\":false,\"message\":\"Failed to save\"}");
     }
+}
+
+// POST /api/demo/caption - Update demo button caption (not persisted)
+void handlePostDemoCaption(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+    // Basic JSON parse
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, data, len);
+    if (error) {
+        request->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid JSON\"}");
+        return;
+    }
+    const char *caption = doc["caption"] | "";
+    if (!caption || strlen(caption) == 0) {
+        request->send(400, "application/json", "{\"success\":false,\"message\":\"Caption required\"}");
+        return;
+    }
+    if (strlen(caption) > 63) {
+        request->send(400, "application/json", "{\"success\":false,\"message\":\"Caption too long (max 63)\"}");
+        return;
+    }
+
+    extern bool enqueue_demo_caption(const char *text);
+    if (!enqueue_demo_caption(caption)) {
+        request->send(500, "application/json", "{\"success\":false,\"message\":\"Queue full\"}");
+        return;
+    }
+
+    request->send(200, "application/json", "{\"success\":true\"}");
 }
 
 // DELETE /api/config - Reset configuration
@@ -514,11 +543,12 @@ void web_portal_init(DeviceConfig *config) {
     server->on("/api/mode", HTTP_GET, handleGetMode);
     server->on("/api/config", HTTP_GET, handleGetConfig);
     
-    server->on("/api/config", HTTP_POST, 
+        server->on("/api/config", HTTP_POST, 
         [](AsyncWebServerRequest *request) {},
         NULL,
         handlePostConfig
     );
+        server->on("/api/demo/caption", HTTP_POST, [](AsyncWebServerRequest *request){}, NULL, handlePostDemoCaption);
     
     server->on("/api/config", HTTP_DELETE, handleDeleteConfig);
     server->on("/api/info", HTTP_GET, handleGetVersion);
@@ -575,6 +605,9 @@ void web_portal_start_ap() {
     
     WiFi.softAPsetHostname(apName.c_str());
     
+    // Mark AP mode active so watchdog/DNS handling knows we're in captive portal
+    ap_mode_active = true;
+
     Logger.logLinef("IP: %s", WiFi.softAPIP().toString().c_str());
     Logger.logEnd("Captive portal active");
 }

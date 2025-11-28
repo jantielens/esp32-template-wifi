@@ -17,6 +17,8 @@
 #include <WiFi.h>
 #include <ESPmDNS.h>
 #include <lwip/netif.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
 
 // Configuration
 DeviceConfig device_config;
@@ -24,6 +26,8 @@ bool config_loaded = false;
 
 #if defined(HAS_DISPLAY) && HAS_DISPLAY
 bool display_ready = false;
+static QueueHandle_t demo_caption_queue = nullptr;
+struct DemoCaption { char text[64]; };
 
 static void hello_btn_event_cb(lv_event_t *e) {
   lv_obj_t *btn_label_inner = (lv_obj_t *)lv_event_get_user_data(e);
@@ -46,6 +50,7 @@ static void init_hello_round_world_screen() {
   lv_obj_t *btn_label = lv_label_create(btn);
   lv_label_set_text(btn_label, "click me");
   lv_obj_center(btn_label);
+  display_register_demo_button_label(btn_label);
 
   // Callback: update caption on click
   lv_obj_add_event_cb(btn, hello_btn_event_cb, LV_EVENT_CLICKED, btn_label);
@@ -68,6 +73,14 @@ void onWiFiConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
   Logger.logMessage("WiFi", "Connected to AP - waiting for IP");
 }
 
+#if defined(HAS_DISPLAY) && HAS_DISPLAY
+bool enqueue_demo_caption(const char *text) {
+  if (!demo_caption_queue || !text) return false;
+  DemoCaption msg;
+  strlcpy(msg.text, text, sizeof(msg.text));
+  return xQueueSend(demo_caption_queue, &msg, 0) == pdTRUE;
+}
+#endif
 void onWiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info) {
   Logger.logMessagef("WiFi", "Got IP: %s", WiFi.localIP().toString().c_str());
 }
@@ -110,6 +123,7 @@ void setup()
   
 #if defined(HAS_DISPLAY) && HAS_DISPLAY
   Logger.logMessage("Display", "Initializing JC3636W518 round display");
+  demo_caption_queue = xQueueCreate(3, sizeof(DemoCaption));
   board_display_init();
   init_hello_round_world_screen();
   display_ready = true;
@@ -177,6 +191,12 @@ void loop()
 #if defined(HAS_DISPLAY) && HAS_DISPLAY
   if (display_ready) {
     board_display_loop();
+
+    // Handle pending demo captions (from web endpoint)
+    DemoCaption msg;
+    while (demo_caption_queue && xQueueReceive(demo_caption_queue, &msg, 0) == pdTRUE) {
+      display_set_demo_caption(msg.text);
+    }
   }
 #endif
   

@@ -307,6 +307,47 @@ small {
     background: #cc7700;
 }
 
+.btn-accent {
+    background: linear-gradient(135deg, #36cfc9, #1890ff);
+    color: #fff;
+}
+
+.btn-accent:hover:not(:disabled) {
+    filter: brightness(0.95);
+}
+
+.demo-section {
+    border: 2px dashed rgba(102, 126, 234, 0.3);
+    background: rgba(102, 126, 234, 0.06);
+}
+
+.demo-group .demo-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.demo-group input[type="text"] {
+    flex: 1 1 200px;
+}
+
+.demo-status {
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+.demo-status.success {
+    background: rgba(72, 201, 176, 0.2);
+    color: #2b8d7c;
+}
+
+.demo-status.error {
+    background: rgba(255, 99, 71, 0.2);
+    color: #c0392b;
+}
+
 /* Footer */
 footer {
     text-align: center;

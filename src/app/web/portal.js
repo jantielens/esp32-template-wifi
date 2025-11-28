@@ -10,6 +10,7 @@ const API_INFO = '/api/info';
 const API_MODE = '/api/mode';
 const API_UPDATE = '/api/update';
 const API_VERSION = '/api/info'; // Used for connection polling
+const API_DEMO_CAPTION = '/api/demo/caption';
 
 let selectedFile = null;
 let portalMode = 'full'; // 'core' or 'full'
@@ -698,6 +699,12 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('firmware-file').addEventListener('change', handleFileSelect);
     document.getElementById('upload-btn').addEventListener('click', uploadFirmware);
     document.getElementById('device_name').addEventListener('input', updateSanitizedName);
+
+    // Demo section
+    const demoBtn = document.getElementById('demo_send_btn');
+    if (demoBtn) {
+        demoBtn.addEventListener('click', sendDemoCaption);
+    }
     
     // Load initial data
     loadMode();
@@ -707,6 +714,46 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize health widget
     initHealthWidget();
 });
+
+async function sendDemoCaption() {
+    const input = document.getElementById('demo_caption');
+    const status = document.getElementById('demo-status');
+    const text = (input.value || '').trim();
+
+    const showDemoStatus = (msg, type) => {
+        status.textContent = msg;
+        status.className = `demo-status ${type}`;
+        status.style.display = 'block';
+        setTimeout(() => {
+            status.style.display = 'none';
+        }, 4000);
+    };
+
+    if (!text) {
+        showDemoStatus('Please enter a caption.', 'error');
+        return;
+    }
+    if (text.length > 63) {
+        showDemoStatus('Caption too long (max 63 chars).', 'error');
+        return;
+    }
+
+    try {
+        const resp = await fetch(API_DEMO_CAPTION, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ caption: text })
+        });
+        if (!resp.ok) {
+            const msg = await resp.text();
+            showDemoStatus(`Error: ${msg || resp.status}`, 'error');
+            return;
+        }
+        showDemoStatus('Caption sent to display.', 'success');
+    } catch (err) {
+        showDemoStatus(`Network error: ${err}`, 'error');
+    }
+}
 
 // ===== HEALTH WIDGET =====
 

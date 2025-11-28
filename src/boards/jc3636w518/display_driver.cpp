@@ -16,6 +16,7 @@ static lv_indev_t *indev_touchpad = nullptr;
 static ESP_PanelBacklight *backlight = nullptr;
 static ESP_PanelLcd *lcd = nullptr;
 static ESP_PanelTouch *touch = nullptr;
+static lv_obj_t *demo_btn_label = nullptr;
 
 #if TOUCH_PIN_NUM_INT >= 0
 IRAM_ATTR bool onTouchInterruptCallback(void *user_data)
@@ -340,4 +341,16 @@ void board_display_loop()
   lv_timer_handler();
   // Use a small delay to yield to other tasks
   vTaskDelay(pdMS_TO_TICKS(5));
+}
+
+void display_register_demo_button_label(lv_obj_t *label)
+{
+  demo_btn_label = label;
+}
+
+void display_set_demo_caption(const char *text)
+{
+  if (demo_btn_label && text) {
+    lv_label_set_text(demo_btn_label, text);
+  }
 }
