@@ -574,7 +574,10 @@ void web_portal_start_ap() {
     dnsServer.start(DNS_PORT, "*", CAPTIVE_PORTAL_IP);
     
     WiFi.softAPsetHostname(apName.c_str());
-    
+
+    // Mark AP mode active so watchdog/DNS handling knows we're in captive portal
+    ap_mode_active = true;
+
     Logger.logLinef("IP: %s", WiFi.softAPIP().toString().c_str());
     Logger.logEnd("Captive portal active");
 }
