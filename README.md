@@ -57,6 +57,7 @@ This updates web portal titles, device names, AP SSID, and release artifacts. Se
 ```bash
 ./build.sh              # Compile firmware for all boards
 ./build.sh esp32        # Compile for specific board
+BOARD_PROFILE=psram ./build.sh esp32  # Optional build profile (if defined in config.sh)
 ./upload.sh esp32       # Upload to ESP32 (board name required if multiple boards)
 ./monitor.sh            # View serial output
 
@@ -193,6 +194,12 @@ declare -A FQBN_TARGETS=(
 1. Edit `config.sh` and add/modify entries in `FQBN_TARGETS`
 2. Provide custom board name or leave empty to auto-extract from FQBN
 3. Build outputs go to `build/<board-name>/` directory
+
+**Board Override Macros & Includes:**
+- If `src/boards/<board>/` exists, `build.sh` adds it to the include path and defines:
+  - `BOARD_<BOARDNAME>` (uppercased, e.g., `BOARD_ESP32C3`)
+  - `BOARD_HAS_OVERRIDE` (allows `src/app/board_config.h` to `#include_next` the board override)
+- No changes needed in `app.ino`; overrides are pulled automatically.
 
 **Examples:**
 ```bash

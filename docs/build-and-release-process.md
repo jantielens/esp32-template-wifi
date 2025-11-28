@@ -118,7 +118,23 @@ EOF
 **Build Detection**: The build script automatically:
 1. Checks if `src/boards/[board-name]/` directory exists
 2. If yes, adds it to the compiler include path (overrides take precedence)
-3. If no, uses default configuration from `src/app/board_config.h`
+3. Defines `BOARD_<BOARDNAME>` (uppercased, e.g., `BOARD_ESP32C3`) and `BOARD_HAS_OVERRIDE`
+4. `src/app/board_config.h` uses `#include_next` to pull in the board override when `BOARD_HAS_OVERRIDE` is defined
+5. If no override exists, uses default configuration from `src/app/board_config.h`
+
+### Build Profiles (Optional)
+
+`build.sh` honors an optional `BOARD_PROFILE` (or `PROFILE`) environment variable. If `config.sh` defines `get_build_props_for_board <board> <profile>`, the build script will pass the returned extra `--build-property` flags to `arduino-cli`.
+
+**Usage Examples:**
+```bash
+BOARD_PROFILE=psram ./build.sh esp32
+PROFILE=16m ./build.sh esp32c3
+```
+
+**Notes:**
+- If `get_build_props_for_board` is **not** defined, the build still proceeds (the call is guarded).
+- Use profiles to toggle flash/PSRAM options or other board-specific build properties.
 
 **Benefits**:
 - Zero code duplication when boards are identical

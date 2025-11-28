@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.12] - 2025-11-28
+
+### Fixed
+- `build.sh` now injects board override include paths/macros and supports optional build profiles without requiring `get_build_props_for_board`.
+- `src/app/board_config.h` automatically pulls board-specific overrides when `BOARD_HAS_OVERRIDE` is defined, with no app code changes.
+
+---
+
 ## [0.0.11] - 2025-11-28
 
 ### Fixed

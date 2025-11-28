@@ -58,6 +58,7 @@ declare -A FQBN_TARGETS=(
 ./build.sh              # Build all configured boards
 ./build.sh esp32        # Build only ESP32 Dev Module
 ./build.sh esp32c3      # Build only ESP32-C3 Super Mini
+BOARD_PROFILE=psram ./build.sh esp32  # Optional build profile (if defined in config.sh)
 ```
 
 **What it does:**
@@ -65,6 +66,9 @@ declare -A FQBN_TARGETS=(
 - Compiles `src/app/app.ino` for specified board(s)
 - Creates board-specific directories: `./build/esp32/`, `./build/esp32c3/`, etc.
 - Generates `.bin`, `.bootloader.bin`, `.merged.bin`, and `.partitions.bin` files per board
+- If `src/boards/<board>/` exists, adds it to include path and defines:
+    - `BOARD_<BOARDNAME>` (e.g., `BOARD_ESP32C3`)
+    - `BOARD_HAS_OVERRIDE` (enables `#include_next` in `board_config.h`)
 
 **Build Output Structure:**
 ```
