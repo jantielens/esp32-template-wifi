@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- `um.sh`/single-board workflows now accept an explicit board argument without misinterpreting it as a serial port (prevents uploads to a non-existent port named after the board)
+
+---
+
 ## [0.0.10] - 2025-11-27
 
 ### Added

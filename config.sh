@@ -138,7 +138,12 @@ get_fqbn_for_board() {
 # Parse board and port arguments for scripts that need them
 # Usage: parse_board_and_port_args "$@"
 # Sets global variables: BOARD, PORT, FQBN
-# Exits with error if board name is required but not provided
+# Behavior:
+#   - Multiple boards: 1st arg = board (required), 2nd arg = port (optional)
+#   - Single board: accepts either
+#       * 1st arg = PORT (legacy behavior)
+#       * or 1st arg = BOARD, 2nd arg = PORT (friendly/explicit form)
+#   - Exits with error if board name is required but not provided
 parse_board_and_port_args() {
     local board_count="${#FQBN_TARGETS[@]}"
     
@@ -155,9 +160,21 @@ parse_board_and_port_args() {
         BOARD="$1"
         PORT="$2"
     else
-        # Single board: first arg is optional port
-        BOARD=$(get_board_name "${!FQBN_TARGETS[@]}")
-        PORT="$1"
+        # Single board: allow either explicit BOARD (arg1) or PORT (arg1)
+        local arg1="$1"
+        local arg2="$2"
+        local default_board
+        default_board=$(get_board_name "${!FQBN_TARGETS[@]}")
+
+        if [[ -n "$arg1" ]] && get_fqbn_for_board "$arg1" >/dev/null 2>&1; then
+            # Explicit board name provided even though only one board exists
+            BOARD="$arg1"
+            PORT="$arg2"
+        else
+            # Legacy behavior: arg1 is treated as port (or empty)
+            BOARD="$default_board"
+            PORT="$arg1"
+        fi
     fi
     
     # Get FQBN for the board
