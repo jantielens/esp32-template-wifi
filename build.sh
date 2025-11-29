@@ -12,6 +12,13 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/config.sh"
 
+# Convert icons before building
+if [ -d "$SCRIPT_DIR/ui-assets/icons" ]; then
+  echo "Converting icons..."
+  "$SCRIPT_DIR/tools/convert-icons.sh"
+  echo ""
+fi
+
 # Get arduino-cli path
 ARDUINO_CLI=$(find_arduino_cli)
 

@@ -8,6 +8,7 @@ enum class ScreenId : uint8_t {
   Splash = 0,
   Hello,
   SystemStats,
+  Teams,
   // Add new screens here
 };
 

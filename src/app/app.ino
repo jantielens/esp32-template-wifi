@@ -20,6 +20,7 @@
 #include "ui/screens/splash_screen.cpp"
 #include "ui/screens/hello_screen.cpp"
 #include "ui/screens/system_stats_screen.cpp"
+#include "ui/screens/teams_screen.cpp"
 #include "ui/screen_manager.cpp"
 #endif
 #include <WiFi.h>

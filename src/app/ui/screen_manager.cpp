@@ -3,12 +3,14 @@
 #include "screens/splash_screen.h"
 #include "screens/hello_screen.h"
 #include "screens/system_stats_screen.h"
+#include "screens/teams_screen.h"
 #include "../log_manager.h"
 
 // Define swipeable screen sequence (Splash is not swipeable)
 static const ScreenId SWIPEABLE_SCREENS[] = {
   ScreenId::SystemStats,
   ScreenId::Hello,
+  ScreenId::Teams,
   // Add more screens here as needed
 };
 static const size_t SWIPEABLE_SCREEN_COUNT = sizeof(SWIPEABLE_SCREENS) / sizeof(SWIPEABLE_SCREENS[0]);
@@ -27,6 +29,10 @@ static BaseScreen* get_screen(ScreenId id) {
       static SystemStatsScreen screen;
       return &screen;
     }
+    case ScreenId::Teams: {
+      static TeamsScreen screen;
+      return &screen;
+    }
     default:
       return nullptr;
   }
@@ -37,6 +43,7 @@ static const char* screen_id_name(ScreenId id) {
     case ScreenId::Splash: return "Splash";
     case ScreenId::Hello: return "Hello";
     case ScreenId::SystemStats: return "SystemStats";
+    case ScreenId::Teams: return "Teams";
     default: return "Unknown";
   }
 }
