@@ -8,6 +8,7 @@
 #include "config_manager.h"
 #include "web_portal.h"
 #include "log_manager.h"
+#include "BleKeyboard.h"
 #if defined(HAS_DISPLAY) && HAS_DISPLAY
 #include "display_driver.h"
 #include "ui/screen_manager.h"
@@ -32,6 +33,9 @@
 // Configuration
 DeviceConfig device_config;
 bool config_loaded = false;
+
+// BLE Keyboard (global instance)
+BleKeyboard bleKeyboard("ESP32 Teams Remote", "Espressif", 100);
 
 #if defined(HAS_DISPLAY) && HAS_DISPLAY
 bool display_ready = false;
@@ -202,6 +206,11 @@ void setup()
   
   // Initialize web portal AFTER WiFi is started
   web_portal_init(&device_config);
+  
+  // Initialize BLE Keyboard
+  Logger.logMessage("BLE", "Initializing Bluetooth HID Keyboard");
+  bleKeyboard.begin();
+  Logger.logMessage("BLE", "Keyboard ready - waiting for connection");
   
   lastHeartbeat = millis();
   Logger.logMessage("Main", "Setup complete");

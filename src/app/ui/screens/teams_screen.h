@@ -10,6 +10,9 @@ class TeamsScreen : public BaseScreen {
 
  private:
   void build();
+  static void button_event_cb(lv_event_t* e);
+  void handleButtonPress(lv_obj_t* btn);
+  
   lv_obj_t* root_ = nullptr;
   
   // Button references (for future event handling)

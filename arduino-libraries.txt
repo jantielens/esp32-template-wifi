@@ -26,3 +26,7 @@ Async TCP@3.4.9
 lvgl@8.3.11
 ESP32_Display_Panel@0.1.4
 ESP32_IO_Expander@0.0.2
+
+# Bluetooth HID (NimBLE)
+NimBLE-Arduino@2.3.6
+# Note: BleKeyboard.h/cpp from wakwak-koba/ESP32-NimBLE-Keyboard is integrated in src/app/

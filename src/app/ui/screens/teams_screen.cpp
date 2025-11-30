@@ -1,5 +1,6 @@
 #include "teams_screen.h"
 #include "../icons.h"
+#include "../../BleKeyboard.h"
 #include <lvgl.h>
 
 lv_obj_t* TeamsScreen::root() {
@@ -28,6 +29,7 @@ void TeamsScreen::build() {
   lv_obj_t* img_mute = lv_img_create(btn_mute_);
   lv_img_set_src(img_mute, &icon_mic_64dp_ffffff_fill0_wght400_grad0_opsz48);
   lv_obj_center(img_mute);
+  lv_obj_add_event_cb(btn_mute_, button_event_cb, LV_EVENT_CLICKED, this);
 
   // ===== TOP: Volume Up (12 o'clock) =====
   btn_vol_up_ = lv_btn_create(root_);
@@ -40,6 +42,7 @@ void TeamsScreen::build() {
   lv_obj_t* img_vol_up = lv_img_create(btn_vol_up_);
   lv_img_set_src(img_vol_up, &icon_volume_up_48dp_ffffff_fill0_wght400_grad0_opsz48);
   lv_obj_center(img_vol_up);
+  lv_obj_add_event_cb(btn_vol_up_, button_event_cb, LV_EVENT_CLICKED, this);
 
   // ===== RIGHT: Camera On/Off (3 o'clock) =====
   btn_camera_ = lv_btn_create(root_);
@@ -52,6 +55,7 @@ void TeamsScreen::build() {
   lv_obj_t* img_camera = lv_img_create(btn_camera_);
   lv_img_set_src(img_camera, &icon_camera_video_48dp_ffffff_fill0_wght400_grad0_opsz48);
   lv_obj_center(img_camera);
+  lv_obj_add_event_cb(btn_camera_, button_event_cb, LV_EVENT_CLICKED, this);
 
   // ===== BOTTOM: Volume Down (6 o'clock) =====
   btn_vol_down_ = lv_btn_create(root_);
@@ -64,6 +68,7 @@ void TeamsScreen::build() {
   lv_obj_t* img_vol_down = lv_img_create(btn_vol_down_);
   lv_img_set_src(img_vol_down, &icon_volume_down_48dp_ffffff_fill0_wght400_grad0_opsz48);
   lv_obj_center(img_vol_down);
+  lv_obj_add_event_cb(btn_vol_down_, button_event_cb, LV_EVENT_CLICKED, this);
 
   // ===== LEFT: End Call (9 o'clock) =====
   btn_end_call_ = lv_btn_create(root_);
@@ -78,6 +83,65 @@ void TeamsScreen::build() {
   lv_obj_center(img_end_call);
   // Force no anti-aliasing to prevent rendering artifacts
   lv_obj_set_style_img_opa(img_end_call, LV_OPA_COVER, 0);
+  lv_obj_add_event_cb(btn_end_call_, button_event_cb, LV_EVENT_CLICKED, this);
+}
+
+void TeamsScreen::button_event_cb(lv_event_t* e) {
+  TeamsScreen* screen = static_cast<TeamsScreen*>(lv_event_get_user_data(e));
+  lv_obj_t* btn = lv_event_get_target(e);
+  screen->handleButtonPress(btn);
+}
+
+void TeamsScreen::handleButtonPress(lv_obj_t* btn) {
+  extern BleKeyboard bleKeyboard;
+  
+  if (!bleKeyboard.isConnected()) {
+    Serial.println("[BLE Keyboard] Not connected - please pair device");
+    return;
+  }
+  
+  if (btn == btn_mute_) {
+    // Microsoft Teams: Ctrl+Shift+M to toggle mute
+    Serial.println("[Teams] Mute button pressed - sending Ctrl+Shift+M");
+    bleKeyboard.press(KEY_LEFT_CTRL);
+    bleKeyboard.press(KEY_LEFT_SHIFT);
+    bleKeyboard.press('m');
+    delay(100);
+    bleKeyboard.releaseAll();
+    Serial.println("[BLE Keyboard] Sent Ctrl+Shift+M");
+    
+  } else if (btn == btn_camera_) {
+    // Microsoft Teams: Ctrl+Shift+O to toggle video
+    Serial.println("[Teams] Camera button pressed - sending Ctrl+Shift+O");
+    bleKeyboard.press(KEY_LEFT_CTRL);
+    bleKeyboard.press(KEY_LEFT_SHIFT);
+    bleKeyboard.press('o');
+    delay(100);
+    bleKeyboard.releaseAll();
+    Serial.println("[BLE Keyboard] Sent Ctrl+Shift+O");
+    
+  } else if (btn == btn_end_call_) {
+    // Microsoft Teams: Ctrl+Shift+H to hang up
+    Serial.println("[Teams] End call button pressed - sending Ctrl+Shift+H");
+    bleKeyboard.press(KEY_LEFT_CTRL);
+    bleKeyboard.press(KEY_LEFT_SHIFT);
+    bleKeyboard.press('h');
+    delay(100);
+    bleKeyboard.releaseAll();
+    Serial.println("[BLE Keyboard] Sent Ctrl+Shift+H");
+    
+  } else if (btn == btn_vol_up_) {
+    // Volume Up media key
+    Serial.println("[Teams] Volume up button pressed");
+    bleKeyboard.write(KEY_MEDIA_VOLUME_UP);
+    Serial.println("[BLE Keyboard] Sent Volume Up");
+    
+  } else if (btn == btn_vol_down_) {
+    // Volume Down media key
+    Serial.println("[Teams] Volume down button pressed");
+    bleKeyboard.write(KEY_MEDIA_VOLUME_DOWN);
+    Serial.println("[BLE Keyboard] Sent Volume Down");
+  }
 }
 
 void TeamsScreen::handle(const UiEvent &evt) {
