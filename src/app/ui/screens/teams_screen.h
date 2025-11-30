@@ -21,6 +21,8 @@ class TeamsScreen : public BaseScreen {
   lv_obj_t* btn_end_call_ = nullptr;
   lv_obj_t* btn_vol_up_ = nullptr;
   lv_obj_t* btn_vol_down_ = nullptr;
+  lv_obj_t* btn_share_screen_ = nullptr;
+  lv_obj_t* btn_raise_hand_ = nullptr;
 };
 
 #endif // TEAMS_SCREEN_H

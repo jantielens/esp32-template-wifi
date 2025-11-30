@@ -8,6 +8,8 @@
 const uint8_t HID_KEY_M = 0x10;  // M key
 const uint8_t HID_KEY_O = 0x12;  // O key
 const uint8_t HID_KEY_H = 0x0B;  // H key
+const uint8_t HID_KEY_E = 0x08;  // E key
+const uint8_t HID_KEY_K = 0x0E;  // K key
 
 lv_obj_t* TeamsScreen::root() {
   if (!root_) build();
@@ -23,6 +25,7 @@ void TeamsScreen::build() {
   const int CENTER_X = 180;
   const int CENTER_Y = 180;
   const int RADIUS = 140;  // Distance from center to outer buttons (maximized for 360px display)
+  const int RADIUS_DIAG = (int)(RADIUS * 0.7071f + 0.5f); // ~R / sqrt(2)
 
   // ===== CENTER BUTTON: Mute/Unmute (LARGE) =====
   btn_mute_ = lv_btn_create(root_);
@@ -50,6 +53,19 @@ void TeamsScreen::build() {
   lv_obj_center(img_vol_up);
   lv_obj_add_event_cb(btn_vol_up_, button_event_cb, LV_EVENT_CLICKED, this);
 
+  // ===== UPPER-RIGHT: Raise Hand (between 12 and 3 o'clock) =====
+  btn_raise_hand_ = lv_btn_create(root_);
+  lv_obj_set_size(btn_raise_hand_, 80, 80);
+  lv_obj_align(btn_raise_hand_, LV_ALIGN_CENTER, RADIUS_DIAG, -RADIUS_DIAG);
+  lv_obj_set_style_bg_color(btn_raise_hand_, lv_color_hex(0x303030), 0);
+  lv_obj_set_style_radius(btn_raise_hand_, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_shadow_width(btn_raise_hand_, 0, 0);
+
+  lv_obj_t* img_raise = lv_img_create(btn_raise_hand_);
+  lv_img_set_src(img_raise, &icon_person_raised_hand_48dp_ffffff_fill0_wght400_grad0_opsz48);
+  lv_obj_center(img_raise);
+  lv_obj_add_event_cb(btn_raise_hand_, button_event_cb, LV_EVENT_CLICKED, this);
+
   // ===== RIGHT: Camera On/Off (3 o'clock) =====
   btn_camera_ = lv_btn_create(root_);
   lv_obj_set_size(btn_camera_, 80, 80);
@@ -62,6 +78,19 @@ void TeamsScreen::build() {
   lv_img_set_src(img_camera, &icon_camera_video_48dp_ffffff_fill0_wght400_grad0_opsz48);
   lv_obj_center(img_camera);
   lv_obj_add_event_cb(btn_camera_, button_event_cb, LV_EVENT_CLICKED, this);
+
+  // ===== UPPER-LEFT: Share Screen (between 12 and 9 o'clock) =====
+  btn_share_screen_ = lv_btn_create(root_);
+  lv_obj_set_size(btn_share_screen_, 80, 80);
+  lv_obj_align(btn_share_screen_, LV_ALIGN_CENTER, -RADIUS_DIAG, -RADIUS_DIAG);
+  lv_obj_set_style_bg_color(btn_share_screen_, lv_color_hex(0x303030), 0);
+  lv_obj_set_style_radius(btn_share_screen_, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_shadow_width(btn_share_screen_, 0, 0);
+
+  lv_obj_t* img_share = lv_img_create(btn_share_screen_);
+  lv_img_set_src(img_share, &icon_present_to_all_48dp_ffffff_fill0_wght400_grad0_opsz48);
+  lv_obj_center(img_share);
+  lv_obj_add_event_cb(btn_share_screen_, button_event_cb, LV_EVENT_CLICKED, this);
 
   // ===== BOTTOM: Volume Down (6 o'clock) =====
   btn_vol_down_ = lv_btn_create(root_);
@@ -159,6 +188,26 @@ void TeamsScreen::handleButtonPress(lv_obj_t* btn) {
     Serial.println("[Teams] Volume down button pressed");
     bleKeyboard.write(KEY_MEDIA_VOLUME_DOWN);
     Serial.println("[BLE Keyboard] Sent Volume Down");
+
+  } else if (btn == btn_raise_hand_) {
+    // Microsoft Teams: Ctrl+Shift+K to raise/lower hand
+    Serial.println("[Teams] Raise hand button pressed - sending Ctrl+Shift+K (scan code)");
+    bleKeyboard.press(KEY_LEFT_CTRL);
+    bleKeyboard.press(KEY_LEFT_SHIFT);
+    bleKeyboard.press(HID_KEY_K + 136);  // K key position
+    delay(100);
+    bleKeyboard.releaseAll();
+    Serial.println("[BLE Keyboard] Sent Ctrl+Shift+K");
+
+  } else if (btn == btn_share_screen_) {
+    // Microsoft Teams: Ctrl+Shift+E to share screen
+    Serial.println("[Teams] Share screen button pressed - sending Ctrl+Shift+E (scan code)");
+    bleKeyboard.press(KEY_LEFT_CTRL);
+    bleKeyboard.press(KEY_LEFT_SHIFT);
+    bleKeyboard.press(HID_KEY_E + 136);  // E key position
+    delay(100);
+    bleKeyboard.releaseAll();
+    Serial.println("[BLE Keyboard] Sent Ctrl+Shift+E");
   }
 }
 
