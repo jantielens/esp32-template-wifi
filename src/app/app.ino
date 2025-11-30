@@ -13,6 +13,8 @@
 #include "display_driver.h"
 #include "ui/screen_manager.h"
 #include "ui/ui_events.h"
+#include "display_power.h"
+#include "ui/screensaver.h"
 #include <lvgl.h>
 // Compile board display driver directly to ensure linkage in Arduino build
 #include "display_driver.cpp"
@@ -23,6 +25,7 @@
 #include "ui/screens/system_stats_screen.cpp"
 #include "ui/screens/teams_screen.cpp"
 #include "ui/screen_manager.cpp"
+#include "ui/screensaver.cpp"
 #endif
 #include <WiFi.h>
 #include <ESPmDNS.h>
@@ -225,6 +228,7 @@ void loop()
   if (display_ready) {
     board_display_loop();
     UI.loop();
+    screensaver_update();
 
     // If connected and not in AP mode, navigate off splash after minimum duration
     if (UI.currentId() == ScreenId::Splash && wifi_connected && !web_portal_is_ap_mode()) {

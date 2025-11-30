@@ -29,6 +29,7 @@
    ```cpp
    board_display_loop(); // runs lv_timer_handler()
    UI.loop();            // drains UiEvent queue, calls current->handle()
+  screensaver_update(); // 120s idle -> backlight off; touch to wake
    ```
 3. **Navigate**
    ```cpp
@@ -36,6 +37,13 @@
    ```
 
 > Default flow: `Splash` → `SystemStats` after minimum dwell. `Hello` remains available for demos/tests but is no longer the post-splash default.
+
+## 📴 Screensaver
+
+- **Timeout:** 120 s of LVGL inactivity (`lv_disp_get_inactive_time`).
+- **Action:** Turns off display backlight (JC3636W518 board).
+- **Wake:** First touch wakes the screen (gesture is swallowed); subsequent touches behave normally.
+- **Boards:** No-op on boards without a display.
 
 ---
 

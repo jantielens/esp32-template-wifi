@@ -4,6 +4,7 @@
 #include <esp_heap_caps.h>
 #include <ESP_IOExpander.h>
 #include <ESP_Panel_Library.h>
+#include "../../app/ui/screensaver.h"
 
 #define SCREEN_RES_HOR 360
 #define SCREEN_RES_VER 360
@@ -17,6 +18,10 @@ static ESP_PanelBacklight *backlight = nullptr;
 static ESP_PanelLcd *lcd = nullptr;
 static ESP_PanelTouch *touch = nullptr;
 static lv_obj_t *demo_btn_label = nullptr;
+static uint8_t backlight_brightness = 100;
+static bool backlight_is_on = false;
+
+static inline uint8_t clamp_percent(uint8_t p) { return p > 100 ? 100 : p; }
 
 #if TOUCH_PIN_NUM_INT >= 0
 IRAM_ATTR bool onTouchInterruptCallback(void *user_data)
@@ -233,18 +238,36 @@ IRAM_ATTR bool onRefreshFinishCallback(void *user_data)
 
 static void touchpad_read(lv_indev_drv_t *indev_drv, lv_indev_data_t *data)
 {
+  static uint8_t wake_touch_count = 0;
+  static uint32_t last_touch_ms = 0;
+
   ESP_PanelTouch *tp = (ESP_PanelTouch *)indev_drv->user_data;
   ESP_PanelTouchPoint point;
 
   int read_touch_result = tp->readPoints(&point, 1);
-  if (read_touch_result > 0)
-  {
+  bool pressed = read_touch_result > 0;
+
+  if (screensaver_is_active()) {
+    // Debounce wake: require two consecutive pressed reads, ignore immediately after activation
+    if (pressed && !screensaver_recently_activated(500)) {
+      wake_touch_count++;
+      last_touch_ms = millis();
+      if (wake_touch_count >= 2) {
+        screensaver_wake();
+        wake_touch_count = 0;
+      }
+    } else if (!pressed && millis() - last_touch_ms > 300) {
+      wake_touch_count = 0;
+    }
+    data->state = LV_INDEV_STATE_RELEASED;
+    return;
+  }
+
+  if (pressed) {
     data->point.x = point.x;
     data->point.y = point.y;
     data->state = LV_INDEV_STATE_PRESSED;
-  }
-  else
-  {
+  } else {
     data->state = LV_INDEV_STATE_RELEASED;
   }
 }
@@ -286,6 +309,8 @@ void board_display_init()
   backlight = new ESP_PanelBacklight(ledc_timer, ledc_channel);
   backlight->begin();
   backlight->off();
+  backlight_is_on = false;
+  backlight_brightness = 100;
 
   // Touch bus (I2C)
   ESP_PanelBus_I2C *touch_bus = new ESP_PanelBus_I2C(TOUCH_PIN_NUM_I2C_SCL, TOUCH_PIN_NUM_I2C_SDA, ESP_LCD_TOUCH_IO_I2C_CST816S_CONFIG());
@@ -315,6 +340,7 @@ void board_display_init()
 
   // Backlight on
   backlight->setBrightness(100);
+  backlight_is_on = true;
 
   // LVGL draw buffer
   size_t lv_cache_rows = 64; // adjust to balance RAM usage
@@ -385,4 +411,55 @@ void display_set_demo_caption(const char *text)
   if (demo_btn_label && text) {
     lv_label_set_text(demo_btn_label, text);
   }
+}
+
+// Backlight/power helpers
+void display_backlight_off()
+{
+  if (!backlight) return;
+  backlight->off();
+  backlight_is_on = false;
+}
+
+void display_backlight_set_brightness(uint8_t percent)
+{
+  if (!backlight) return;
+  uint8_t p = clamp_percent(percent);
+  backlight_brightness = p;
+  if (p == 0) {
+    backlight->off();
+    backlight_is_on = false;
+  } else {
+    backlight->setBrightness(p);
+    backlight_is_on = true;
+  }
+}
+
+void display_backlight_on(uint8_t brightness_percent)
+{
+  if (!backlight) return;
+  uint8_t p = brightness_percent == 0 ? backlight_brightness : brightness_percent;
+  display_backlight_set_brightness(p);
+}
+
+uint8_t display_backlight_get_brightness()
+{
+  return backlight_brightness;
+}
+
+bool display_backlight_is_on()
+{
+  return backlight_is_on;
+}
+
+void display_panel_off()
+{
+  if (!lcd) return;
+  lcd->displayOff();
+}
+
+void display_panel_on()
+{
+  if (!lcd) return;
+  lcd->displayOn();
 }
