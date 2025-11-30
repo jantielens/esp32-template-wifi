@@ -3,6 +3,12 @@
 #include "../../BleKeyboard.h"
 #include <lvgl.h>
 
+// HID Keyboard scan codes (layout-independent physical key positions)
+// These represent the actual key positions, not characters
+const uint8_t HID_KEY_M = 0x10;  // M key
+const uint8_t HID_KEY_O = 0x12;  // O key
+const uint8_t HID_KEY_H = 0x0B;  // H key
+
 lv_obj_t* TeamsScreen::root() {
   if (!root_) build();
   return root_;
@@ -102,30 +108,42 @@ void TeamsScreen::handleButtonPress(lv_obj_t* btn) {
   
   if (btn == btn_mute_) {
     // Microsoft Teams: Ctrl+Shift+M to toggle mute
-    Serial.println("[Teams] Mute button pressed - sending Ctrl+Shift+M");
-    bleKeyboard.press(KEY_LEFT_CTRL);
-    bleKeyboard.press(KEY_LEFT_SHIFT);
-    bleKeyboard.press('m');
-    delay(100);
-    bleKeyboard.releaseAll();
-    Serial.println("[BLE Keyboard] Sent Ctrl+Shift+M");
+    // Layout-agnostic fix: send both US 'M' (usage 0x10) and AZERTY 'M' (usage 0x33)
+    // so Belgian/French AZERTY hosts receive the correct physical key.
+
+    auto sendCtrlShift = [&](uint8_t usage) {
+      KeyReport report = {};
+      report.modifiers = 0x01 /*LCtrl*/ | 0x02 /*LShift*/;
+      report.keys[0] = usage;
+      bleKeyboard.sendReport(&report);
+      delay(60);
+      KeyReport release = {};
+      bleKeyboard.sendReport(&release);
+      delay(40);
+    };
+
+    Serial.println("[Teams] Mute button pressed - sending Ctrl+Shift+M (layout-agnostic)");
+    sendCtrlShift(0x10); // US QWERTY 'M'
+    sendCtrlShift(0x33); // BE/FR AZERTY 'M' (semicolon key)
     
   } else if (btn == btn_camera_) {
     // Microsoft Teams: Ctrl+Shift+O to toggle video
-    Serial.println("[Teams] Camera button pressed - sending Ctrl+Shift+O");
+    // Use HID scan code directly (0x12 = O key position, layout-independent)
+    Serial.println("[Teams] Camera button pressed - sending Ctrl+Shift+O (scan code)");
     bleKeyboard.press(KEY_LEFT_CTRL);
     bleKeyboard.press(KEY_LEFT_SHIFT);
-    bleKeyboard.press('o');
+    bleKeyboard.press(HID_KEY_O + 136);  // Add 136 to send as non-printing key
     delay(100);
     bleKeyboard.releaseAll();
     Serial.println("[BLE Keyboard] Sent Ctrl+Shift+O");
     
   } else if (btn == btn_end_call_) {
     // Microsoft Teams: Ctrl+Shift+H to hang up
-    Serial.println("[Teams] End call button pressed - sending Ctrl+Shift+H");
+    // Use HID scan code directly (0x0B = H key position, layout-independent)
+    Serial.println("[Teams] End call button pressed - sending Ctrl+Shift+H (scan code)");
     bleKeyboard.press(KEY_LEFT_CTRL);
     bleKeyboard.press(KEY_LEFT_SHIFT);
-    bleKeyboard.press('h');
+    bleKeyboard.press(HID_KEY_H + 136);  // Add 136 to send as non-printing key
     delay(100);
     bleKeyboard.releaseAll();
     Serial.println("[BLE Keyboard] Sent Ctrl+Shift+H");
