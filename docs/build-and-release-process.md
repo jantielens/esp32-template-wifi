@@ -118,7 +118,51 @@ EOF
 **Build Detection**: The build script automatically:
 1. Checks if `src/boards/[board-name]/` directory exists
 2. If yes, adds it to the compiler include path (overrides take precedence)
-3. If no, uses default configuration from `src/app/board_config.h`
+3. Defines `BOARD_<BOARDNAME>` (uppercased, e.g., `BOARD_ESP32C3`) and `BOARD_HAS_OVERRIDE`
+4. `src/app/board_config.h` uses `#include_next` to pull in the board override when `BOARD_HAS_OVERRIDE` is defined
+5. If no override exists, uses default configuration from `src/app/board_config.h`
+
+### Build Profiles (Optional)
+
+`build.sh` honors an optional `BOARD_PROFILE` (or `PROFILE`) environment variable. If `config.sh` defines `get_build_props_for_board <board> <profile>`, the build script will pass the returned extra `--build-property` flags to `arduino-cli`.
+
+**Function Contract:**
+- `get_build_props_for_board` must output **one argument per line** (newline-delimited)
+- Each line is a complete argument (e.g., `--build-property` on one line, then its value on the next)
+- Values can contain spaces and quotes - they will be preserved correctly
+
+**Usage Examples:**
+```bash
+BOARD_PROFILE=psram ./build.sh esp32
+PROFILE=16m ./build.sh esp32c3
+```
+
+**Example Implementation:**
+```bash
+# Add to config.sh to define custom build properties
+get_build_props_for_board() {
+    local board="$1"
+    local profile="$2"
+    
+    case "$board:$profile" in
+        esp32:psram)
+            echo "--build-property"
+            echo "build.extra_flags=-DBOARD_HAS_PSRAM -DCONFIG_SPIRAM_SUPPORT=1"
+            echo "--build-property"
+            echo "compiler.cpp.extra_flags=-mfix-esp32-psram-cache-issue"
+            ;;
+        esp32c3:16m)
+            echo "--build-property"
+            echo "build.flash_size=16MB"
+            ;;
+    esac
+}
+```
+
+**Notes:**
+- If `get_build_props_for_board` is **not** defined, the build still proceeds (the call is guarded).
+- Use profiles to toggle flash/PSRAM options or other board-specific build properties.
+- Each argument must be on its own line (newline-separated, not space-separated).
 
 **Benefits**:
 - Zero code duplication when boards are identical

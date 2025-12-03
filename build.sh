@@ -17,6 +17,8 @@ ARDUINO_CLI=$(find_arduino_cli)
 
 # Parse command line arguments
 TARGET_BOARD="$1"
+# Optional board profile for build properties (e.g., PSRAM/flash options)
+PROFILE="${BOARD_PROFILE:-${PROFILE:-}}"
 
 # Build a single board
 build_board() {
@@ -31,31 +33,36 @@ build_board() {
     echo "Output:    $board_build_path"
     
     # Check for board-specific configuration overrides
+    EXTRA_FLAGS=()
     if [[ -d "$board_override_dir" ]]; then
         echo -e "${YELLOW}Config:    Using board-specific overrides from src/boards/$board_name/${NC}"
-        EXTRA_FLAGS="--build-property compiler.cpp.extra_flags=-I\"$board_override_dir\""
+        # Force include path and board macro define; include file via board_config.h #include_next directive
+        board_macro="BOARD_${board_name^^}"
+        EXTRA_FLAGS+=(--build-property "compiler.cpp.extra_flags=-I$board_override_dir -D$board_macro -DBOARD_HAS_OVERRIDE=1")
     else
         echo "Config:    Using default configuration"
-        EXTRA_FLAGS=""
     fi
     echo ""
     
     # Create board-specific build directory
     mkdir -p "$board_build_path"
     
-    # Compile the sketch with optional board-specific includes
-    if [[ -n "$EXTRA_FLAGS" ]]; then
-        "$ARDUINO_CLI" compile \
-            --fqbn "$fqbn" \
-            $EXTRA_FLAGS \
-            --output-dir "$board_build_path" \
-            "$SKETCH_PATH"
-    else
-        "$ARDUINO_CLI" compile \
-            --fqbn "$fqbn" \
-            --output-dir "$board_build_path" \
-            "$SKETCH_PATH"
+    # Board-specific build properties (from config.sh), optional profile
+    BUILD_PROPS_ARR=()
+    if declare -f get_build_props_for_board >/dev/null; then
+        mapfile -t BUILD_PROPS_ARR < <(get_build_props_for_board "$board_name" "$PROFILE")
+        if [[ ${#BUILD_PROPS_ARR[@]} -gt 0 ]]; then
+            echo "Build props: ${BUILD_PROPS_ARR[*]}"
+        fi
     fi
+
+    # Compile the sketch with optional board-specific includes and build props
+    "$ARDUINO_CLI" compile \
+        --fqbn "$fqbn" \
+        "${EXTRA_FLAGS[@]}" \
+        "${BUILD_PROPS_ARR[@]}" \
+        --output-dir "$board_build_path" \
+        "$SKETCH_PATH"
     
     echo ""
     echo -e "${GREEN}✓ Build complete for $board_name${NC}"
