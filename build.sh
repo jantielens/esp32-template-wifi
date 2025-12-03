@@ -48,15 +48,12 @@ build_board() {
     mkdir -p "$board_build_path"
     
     # Board-specific build properties (from config.sh), optional profile
-    BUILD_PROPS_STR=""
-    if declare -f get_build_props_for_board >/dev/null; then
-        BUILD_PROPS_STR=$(get_build_props_for_board "$board_name" "$PROFILE")
-    fi
     BUILD_PROPS_ARR=()
-    if [[ -n "$BUILD_PROPS_STR" ]]; then
-        # Split string into array preserving quoted segments
-        read -r -a BUILD_PROPS_ARR <<< "$BUILD_PROPS_STR"
-        echo "Build props: $BUILD_PROPS_STR"
+    if declare -f get_build_props_for_board >/dev/null; then
+        mapfile -t BUILD_PROPS_ARR < <(get_build_props_for_board "$board_name" "$PROFILE")
+        if [[ ${#BUILD_PROPS_ARR[@]} -gt 0 ]]; then
+            echo "Build props: ${BUILD_PROPS_ARR[*]}"
+        fi
     fi
 
     # Compile the sketch with optional board-specific includes and build props
