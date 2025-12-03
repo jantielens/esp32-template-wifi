@@ -9,6 +9,7 @@ enum class ScreenId : uint8_t {
   Hello,
   SystemStats,
   Teams,
+  Camera,
   // Add new screens here
 };
 
@@ -24,6 +25,9 @@ class ScreenManager {
   // Navigate to next/previous screen in swipeable sequence
   void navigateNext();
   void navigatePrevious();
+
+  // Display camera image from URL (for Home Assistant integration)
+  void showCameraImageFromUrl(const char* url);
 
   ScreenId currentId() const { return current_id_; }
 

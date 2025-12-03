@@ -38,6 +38,8 @@ void handleGetMode(AsyncWebServerRequest *request);
 void handleGetHealth(AsyncWebServerRequest *request);
 void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
 void handlePostDemoCaption(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total);
+void handlePostDisplayCamera(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total);
+void handlePostDisplayCamera(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total);
 #if defined(HAS_DISPLAY) && HAS_DISPLAY
 extern bool enqueue_boot_status(const char *text);
 #endif
@@ -229,7 +231,41 @@ void handlePostDemoCaption(AsyncWebServerRequest *request, uint8_t *data, size_t
         return;
     }
 
-    request->send(200, "application/json", "{\"success\":true\"}");
+    request->send(200, "application/json", "{\"success\":true}");
+}
+
+// POST /api/display-camera - Display camera image from URL
+void handlePostDisplayCamera(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+#if defined(HAS_DISPLAY) && HAS_DISPLAY
+    // Parse JSON payload: {"url": "http://..."}
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, data, len);
+    if (error) {
+        request->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid JSON\"}");
+        return;
+    }
+    
+    const char *url = doc["url"];
+    if (!url || strlen(url) == 0) {
+        request->send(400, "application/json", "{\"success\":false,\"message\":\"URL required\"}");
+        return;
+    }
+    
+    if (strlen(url) > 512) {
+        request->send(400, "application/json", "{\"success\":false,\"message\":\"URL too long (max 512)\"}");
+        return;
+    }
+    
+    Logger.logMessagef("Portal", "Camera display request: %s", url);
+    
+    // Trigger camera screen display via screen manager
+    extern ScreenManager UI;
+    UI.showCameraImageFromUrl(url);
+    
+    request->send(200, "application/json", "{\"success\":true}");
+#else
+    request->send(501, "application/json", "{\"success\":false,\"message\":\"Display not available\"}");
+#endif
 }
 
 // DELETE /api/config - Reset configuration
@@ -435,6 +471,7 @@ void web_portal_init(DeviceConfig *config) {
         handlePostConfig
     );
         server->on("/api/demo/caption", HTTP_POST, [](AsyncWebServerRequest *request){}, NULL, handlePostDemoCaption);
+        server->on("/api/display-camera", HTTP_POST, [](AsyncWebServerRequest *request){}, NULL, handlePostDisplayCamera);
     
     server->on("/api/config", HTTP_DELETE, handleDeleteConfig);
     server->on("/api/info", HTTP_GET, handleGetVersion);

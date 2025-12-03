@@ -17,6 +17,7 @@
 ArduinoJson@7.2.1
 ESP Async WebServer@3.9.0
 Async TCP@3.4.9
+PubSubClient@2.8
 
 # Note: NetBIOS library is included in ESP32 core (no separate install needed)
 

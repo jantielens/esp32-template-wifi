@@ -8,6 +8,7 @@
 #include "config_manager.h"
 #include "web_portal.h"
 #include "log_manager.h"
+#include "mqtt_client.h"
 #include "BleKeyboard.h"
 #if defined(HAS_DISPLAY) && HAS_DISPLAY
 #include "display_driver.h"
@@ -24,6 +25,7 @@
 #include "ui/screens/hello_screen.cpp"
 #include "ui/screens/system_stats_screen.cpp"
 #include "ui/screens/teams_screen.cpp"
+#include "ui/screens/camera_screen.cpp"
 #include "ui/screen_manager.cpp"
 #include "ui/screensaver.cpp"
 #endif
@@ -108,6 +110,38 @@ void onWiFiDisconnected(WiFiEvent_t event, WiFiEventInfo_t info) {
   // 201 = NO_AP_FOUND, 202 = AUTH_FAIL, 205 = HANDSHAKE_TIMEOUT
 }
 
+// MQTT message callback - receives camera image URLs
+void on_mqtt_message(const char* topic, const char* payload, size_t length) {
+  Logger.logBegin("MQTT Camera");
+  Logger.logLinef("Topic: %s", topic);
+  Logger.logLinef("Payload: %.*s", (int)length, payload);
+  
+  // Parse JSON payload: {"url": "http://..."}
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, payload, length);
+  
+  if (error) {
+    Logger.logLinef("JSON parse error: %s", error.c_str());
+    Logger.logEnd();
+    return;
+  }
+  
+  const char* url = doc["url"];
+  if (!url) {
+    Logger.logLine("No 'url' field in JSON");
+    Logger.logEnd();
+    return;
+  }
+  
+  Logger.logLinef("Image URL: %s", url);
+  Logger.logEnd();
+  
+  #if defined(HAS_DISPLAY) && HAS_DISPLAY
+  // Trigger camera screen display
+  UI.showCameraImageFromUrl(url);
+  #endif
+}
+
 void setup()
 {
   // Initialize log manager (wraps Serial for web streaming)
@@ -184,6 +218,12 @@ void setup()
 #endif
     if (connect_wifi()) {
       start_mdns();
+      
+      // Initialize MQTT if enabled
+      if (mqtt_client_init(&device_config)) {
+        mqtt_client_set_callback(on_mqtt_message);
+        mqtt_client_connect();
+      }
     } else {
       // Hard reset retry - WiFi hardware may be in bad state
       Logger.logMessage("Main", "WiFi failed - attempting hard reset");
@@ -197,6 +237,12 @@ void setup()
       // One more attempt after hard reset
       if (connect_wifi()) {
         start_mdns();
+        
+        // Initialize MQTT if enabled
+        if (mqtt_client_init(&device_config)) {
+          mqtt_client_set_callback(on_mqtt_message);
+          mqtt_client_connect();
+        }
       } else {
         Logger.logMessage("Main", "WiFi failed after reset - fallback to AP");
 #if defined(HAS_DISPLAY) && HAS_DISPLAY
@@ -223,6 +269,9 @@ void loop()
 {
   // Handle web portal (DNS for captive portal)
   web_portal_handle();
+  
+  // Handle MQTT messages and reconnection
+  mqtt_client_loop();
 
 #if defined(HAS_DISPLAY) && HAS_DISPLAY
   if (display_ready) {
@@ -252,6 +301,12 @@ void loop()
       Logger.logMessage("WiFi Watchdog", "Connection lost - attempting reconnect");
       if (connect_wifi()) {
         start_mdns();
+        
+        // Reinitialize MQTT after WiFi recovery
+        if (mqtt_client_init(&device_config)) {
+          mqtt_client_set_callback(on_mqtt_message);
+          mqtt_client_connect();
+        }
       }
     }
     lastWiFiCheck = currentMillis;

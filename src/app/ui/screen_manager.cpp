@@ -4,6 +4,7 @@
 #include "screens/hello_screen.h"
 #include "screens/system_stats_screen.h"
 #include "screens/teams_screen.h"
+#include "screens/camera_screen.h"
 #include "../log_manager.h"
 
 // Define swipeable screen sequence (Splash is not swipeable)
@@ -33,6 +34,10 @@ static BaseScreen* get_screen(ScreenId id) {
       static TeamsScreen screen;
       return &screen;
     }
+    case ScreenId::Camera: {
+      static CameraScreen screen;
+      return &screen;
+    }
     default:
       return nullptr;
   }
@@ -44,6 +49,7 @@ static const char* screen_id_name(ScreenId id) {
     case ScreenId::Hello: return "Hello";
     case ScreenId::SystemStats: return "SystemStats";
     case ScreenId::Teams: return "Teams";
+    case ScreenId::Camera: return "Camera";
     default: return "Unknown";
   }
 }
@@ -139,6 +145,23 @@ void ScreenManager::navigatePrevious() {
       return;
     }
   }
+}
+
+void ScreenManager::showCameraImageFromUrl(const char* url) {
+  Logger.logMessagef("UI", "Show camera image: %s", url);
+  
+  // Get camera screen instance
+  CameraScreen* camera_screen = static_cast<CameraScreen*>(get_screen(ScreenId::Camera));
+  if (!camera_screen) {
+    Logger.logMessage("UI", "Failed to get camera screen");
+    return;
+  }
+  
+  // Navigate to camera screen first
+  navigate(ScreenId::Camera, LV_SCR_LOAD_ANIM_FADE_IN, 300, 0);
+  
+  // Start image download (async)
+  camera_screen->loadImageFromUrl(url);
 }
 
 void ScreenManager::loop() {

@@ -23,6 +23,12 @@
 #define KEY_DNS1           "dns1"
 #define KEY_DNS2           "dns2"
 #define KEY_DUMMY          "dummy"
+#define KEY_MQTT_HOST      "mqtt_host"
+#define KEY_MQTT_PORT      "mqtt_port"
+#define KEY_MQTT_USER      "mqtt_user"
+#define KEY_MQTT_PASS      "mqtt_pass"
+#define KEY_MQTT_TOPIC     "mqtt_topic"
+#define KEY_MQTT_ENABLED   "mqtt_enabled"
 #define KEY_MAGIC          "magic"
 
 static Preferences preferences;
@@ -115,6 +121,17 @@ bool config_manager_load(DeviceConfig *config) {
     // Load dummy setting
     preferences.getString(KEY_DUMMY, config->dummy_setting, CONFIG_DUMMY_MAX_LEN);
     
+    // Load MQTT settings
+    preferences.getString(KEY_MQTT_HOST, config->mqtt_host, CONFIG_MQTT_HOST_MAX_LEN);
+    config->mqtt_port = preferences.getUShort(KEY_MQTT_PORT, 1883);
+    preferences.getString(KEY_MQTT_USER, config->mqtt_username, CONFIG_MQTT_USER_MAX_LEN);
+    preferences.getString(KEY_MQTT_PASS, config->mqtt_password, CONFIG_MQTT_PASS_MAX_LEN);
+    preferences.getString(KEY_MQTT_TOPIC, config->mqtt_topic, CONFIG_MQTT_TOPIC_MAX_LEN);
+    if (strlen(config->mqtt_topic) == 0) {
+        strlcpy(config->mqtt_topic, "homeassistant/camera/person_detected", CONFIG_MQTT_TOPIC_MAX_LEN);
+    }
+    config->mqtt_enabled = preferences.getBool(KEY_MQTT_ENABLED, false);
+    
     config->magic = magic;
     
     preferences.end();
@@ -162,6 +179,14 @@ bool config_manager_save(const DeviceConfig *config) {
     
     // Save dummy setting
     preferences.putString(KEY_DUMMY, config->dummy_setting);
+    
+    // Save MQTT settings
+    preferences.putString(KEY_MQTT_HOST, config->mqtt_host);
+    preferences.putUShort(KEY_MQTT_PORT, config->mqtt_port);
+    preferences.putString(KEY_MQTT_USER, config->mqtt_username);
+    preferences.putString(KEY_MQTT_PASS, config->mqtt_password);
+    preferences.putString(KEY_MQTT_TOPIC, config->mqtt_topic);
+    preferences.putBool(KEY_MQTT_ENABLED, config->mqtt_enabled);
     
     // Save magic number last (indicates valid config)
     preferences.putUInt(KEY_MAGIC, CONFIG_MAGIC);
@@ -220,5 +245,14 @@ void config_manager_print(const DeviceConfig *config) {
         Logger.logLinef("DNS: %s, %s", config->dns1, strlen(config->dns2) > 0 ? config->dns2 : "(none)");
     } else {
         Logger.logLine("IP: DHCP");
+    }
+    
+    // MQTT settings
+    if (config->mqtt_enabled) {
+        Logger.logLinef("MQTT: %s:%d", config->mqtt_host, config->mqtt_port);
+        Logger.logLinef("MQTT Topic: %s", config->mqtt_topic);
+        Logger.logLinef("MQTT User: %s", strlen(config->mqtt_username) > 0 ? config->mqtt_username : "(none)");
+    } else {
+        Logger.logLine("MQTT: Disabled");
     }
 }
