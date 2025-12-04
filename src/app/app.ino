@@ -20,6 +20,7 @@
 // Compile board display driver directly to ensure linkage in Arduino build
 #include "display_driver.cpp"
 // Force-include UI implementation so Arduino CLI compiles it with the sketch
+#include "ui/base_screen.cpp"
 #include "ui/ui_events.cpp"
 #include "ui/screens/splash_screen.cpp"
 #include "ui/screens/hello_screen.cpp"

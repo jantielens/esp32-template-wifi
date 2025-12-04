@@ -2,9 +2,11 @@
 #include <lvgl.h>
 #include <string.h>
 
-static void hello_btn_event_cb(lv_event_t *e) {
-  lv_obj_t *btn_label_inner = (lv_obj_t *)lv_event_get_user_data(e);
-  if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
+void HelloScreen::hello_btn_event_cb(lv_event_t *e) {
+  // Use BaseScreen's touch tracking helper (no need to pass tracker!)
+  if (processTouchEvent(e)) {
+    // Touch didn't move much - process as valid button click
+    lv_obj_t *btn_label_inner = (lv_obj_t *)lv_event_get_user_data(e);
     lv_label_set_text(btn_label_inner, "i'm alive");
   }
 }
@@ -33,8 +35,8 @@ void HelloScreen::build() {
   lv_label_set_text(btn_label_, "click me");
   lv_obj_center(btn_label_);
 
-  // Callback: update caption on click
-  lv_obj_add_event_cb(btn, hello_btn_event_cb, LV_EVENT_CLICKED, btn_label_);
+  // Callback: update caption on click (with touch tracking to avoid swipe activation)
+  addButtonEventCallbacks(btn, hello_btn_event_cb, btn_label_);
 }
 
 void HelloScreen::handle(const UiEvent &evt) {

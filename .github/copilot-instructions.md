@@ -69,6 +69,42 @@ All scripts use absolute paths via `SCRIPT_DIR` resolution - they work from any 
 - Include startup diagnostics (chip model, revision, CPU freq, flash size) using `ESP.*` functions
 - Implement heartbeat pattern with `millis()` for long-running loops (5s interval)
 
+### UI/LVGL Conventions
+
+**Touch & Gesture Handling**:
+- Gesture detection thresholds: 80 pixels minimum movement, velocity 5 (`lv_conf.h`)
+- Button click threshold: 30 pixels - movements beyond this are considered swipes
+- All screens share global touch tracking via `BaseScreen` class
+
+**Swipe-Resistant Buttons**:
+For screens with buttons that should ignore swipe gestures:
+
+```cpp
+// 1. Use addButtonEventCallbacks() for button setup
+void MyScreen::build() {
+  lv_obj_t* btn = lv_btn_create(root_);
+  // ... style button ...
+  addButtonEventCallbacks(btn, button_event_cb, this);
+}
+
+// 2. Call processTouchEvent() in callback - returns true only for valid taps
+void MyScreen::button_event_cb(lv_event_t* e) {
+  MyScreen* screen = static_cast<MyScreen*>(lv_event_get_user_data(e));
+  if (processTouchEvent(e)) {  // Filters out swipes automatically
+    lv_obj_t* btn = lv_event_get_target(e);
+    screen->handleButtonPress(btn);
+  }
+}
+```
+
+No need to declare `TouchTracker` or manage it - `BaseScreen` handles everything.
+
+**How it works**:
+- Tracks touch movement during PRESSED/PRESSING/RELEASED events
+- Sets `was_swipe` flag if movement ≥ 30 pixels
+- CLICKED event only executes button action if `was_swipe == false`
+- Prevents accidental button activation when starting swipe on a button
+
 ### Web Portal Conventions
 
 **Portal Modes**:

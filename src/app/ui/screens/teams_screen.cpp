@@ -1,6 +1,7 @@
 #include "teams_screen.h"
 #include "../icons.h"
 #include "../../BleKeyboard.h"
+#include "../../log_manager.h"
 #include <lvgl.h>
 
 // HID Keyboard scan codes (layout-independent physical key positions)
@@ -38,7 +39,7 @@ void TeamsScreen::build() {
   lv_obj_t* img_mute = lv_img_create(btn_mute_);
   lv_img_set_src(img_mute, &icon_mic_64dp_ffffff_fill0_wght400_grad0_opsz48);
   lv_obj_center(img_mute);
-  lv_obj_add_event_cb(btn_mute_, button_event_cb, LV_EVENT_CLICKED, this);
+  addButtonEventCallbacks(btn_mute_, button_event_cb, this);
 
   // ===== TOP: Volume Up (12 o'clock) =====
   btn_vol_up_ = lv_btn_create(root_);
@@ -51,7 +52,7 @@ void TeamsScreen::build() {
   lv_obj_t* img_vol_up = lv_img_create(btn_vol_up_);
   lv_img_set_src(img_vol_up, &icon_volume_up_48dp_ffffff_fill0_wght400_grad0_opsz48);
   lv_obj_center(img_vol_up);
-  lv_obj_add_event_cb(btn_vol_up_, button_event_cb, LV_EVENT_CLICKED, this);
+  addButtonEventCallbacks(btn_vol_up_, button_event_cb, this);
 
   // ===== UPPER-RIGHT: Raise Hand (between 12 and 3 o'clock) =====
   btn_raise_hand_ = lv_btn_create(root_);
@@ -64,7 +65,7 @@ void TeamsScreen::build() {
   lv_obj_t* img_raise = lv_img_create(btn_raise_hand_);
   lv_img_set_src(img_raise, &icon_person_raised_hand_48dp_ffffff_fill0_wght400_grad0_opsz48);
   lv_obj_center(img_raise);
-  lv_obj_add_event_cb(btn_raise_hand_, button_event_cb, LV_EVENT_CLICKED, this);
+  addButtonEventCallbacks(btn_raise_hand_, button_event_cb, this);
 
   // ===== RIGHT: Camera On/Off (3 o'clock) =====
   btn_camera_ = lv_btn_create(root_);
@@ -77,7 +78,7 @@ void TeamsScreen::build() {
   lv_obj_t* img_camera = lv_img_create(btn_camera_);
   lv_img_set_src(img_camera, &icon_camera_video_48dp_ffffff_fill0_wght400_grad0_opsz48);
   lv_obj_center(img_camera);
-  lv_obj_add_event_cb(btn_camera_, button_event_cb, LV_EVENT_CLICKED, this);
+  addButtonEventCallbacks(btn_camera_, button_event_cb, this);
 
   // ===== UPPER-LEFT: Share Screen (between 12 and 9 o'clock) =====
   btn_share_screen_ = lv_btn_create(root_);
@@ -90,7 +91,7 @@ void TeamsScreen::build() {
   lv_obj_t* img_share = lv_img_create(btn_share_screen_);
   lv_img_set_src(img_share, &icon_present_to_all_48dp_ffffff_fill0_wght400_grad0_opsz48);
   lv_obj_center(img_share);
-  lv_obj_add_event_cb(btn_share_screen_, button_event_cb, LV_EVENT_CLICKED, this);
+  addButtonEventCallbacks(btn_share_screen_, button_event_cb, this);
 
   // ===== BOTTOM: Volume Down (6 o'clock) =====
   btn_vol_down_ = lv_btn_create(root_);
@@ -103,7 +104,7 @@ void TeamsScreen::build() {
   lv_obj_t* img_vol_down = lv_img_create(btn_vol_down_);
   lv_img_set_src(img_vol_down, &icon_volume_down_48dp_ffffff_fill0_wght400_grad0_opsz48);
   lv_obj_center(img_vol_down);
-  lv_obj_add_event_cb(btn_vol_down_, button_event_cb, LV_EVENT_CLICKED, this);
+  addButtonEventCallbacks(btn_vol_down_, button_event_cb, this);
 
   // ===== LEFT: End Call (9 o'clock) =====
   btn_end_call_ = lv_btn_create(root_);
@@ -118,13 +119,18 @@ void TeamsScreen::build() {
   lv_obj_center(img_end_call);
   // Force no anti-aliasing to prevent rendering artifacts
   lv_obj_set_style_img_opa(img_end_call, LV_OPA_COVER, 0);
-  lv_obj_add_event_cb(btn_end_call_, button_event_cb, LV_EVENT_CLICKED, this);
+  addButtonEventCallbacks(btn_end_call_, button_event_cb, this);
 }
 
 void TeamsScreen::button_event_cb(lv_event_t* e) {
   TeamsScreen* screen = static_cast<TeamsScreen*>(lv_event_get_user_data(e));
-  lv_obj_t* btn = lv_event_get_target(e);
-  screen->handleButtonPress(btn);
+  
+  // Use BaseScreen's touch tracking helper (no need to pass tracker!)
+  if (processTouchEvent(e)) {
+    // Touch didn't move much - process as valid button click
+    lv_obj_t* btn = lv_event_get_target(e);
+    screen->handleButtonPress(btn);
+  }
 }
 
 void TeamsScreen::handleButtonPress(lv_obj_t* btn) {

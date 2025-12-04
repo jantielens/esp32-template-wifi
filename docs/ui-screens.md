@@ -70,12 +70,71 @@ void HelloScreen::handle(const UiEvent &evt) {
 
 ---
 
+## 🎯 Swipe-Resistant Buttons
+
+Buttons automatically filter out swipe gestures to prevent accidental activation during navigation.
+
+### Quick Pattern (2 steps)
+
+**1. Use `addButtonEventCallbacks()` when creating buttons:**
+```cpp
+void MyScreen::build() {
+  lv_obj_t* my_button = lv_btn_create(root_);
+  // ... configure button appearance ...
+  
+  // This adds all needed events (PRESSED, PRESSING, RELEASED, CLICKED)
+  addButtonEventCallbacks(my_button, button_event_cb, this);
+}
+```
+
+**2. Call `processTouchEvent()` in your callback:**
+```cpp
+static void button_event_cb(lv_event_t* e) {
+  MyScreen* screen = static_cast<MyScreen*>(lv_event_get_user_data(e));
+  
+  // Returns true only if touch moved < 30 pixels (valid tap)
+  if (processTouchEvent(e)) {
+    lv_obj_t* btn = lv_event_get_target(e);
+    screen->handleButtonPress(btn);
+  }
+}
+```
+
+### How It Works
+
+```
+User touches button → PRESSED event
+  ↓ tracks start position
+User drags finger → PRESSING events (continuous)
+  ↓ updates current position
+  ↓ if distance ≥ 30px → marks as swipe
+User lifts finger → RELEASED event
+  ↓ final distance check
+  ↓ CLICKED event fires (LVGL default)
+  ↓ processTouchEvent() returns false if was_swipe
+  ↓ button action ignored ✓
+```
+
+**Touch tracker managed globally by `BaseScreen`** - no need to declare or initialize in child screens.
+
+**Configuration** (`src/app/lv_conf.h` and `src/app/ui/base_screen.h`):
+- Gesture detection: 80 pixels minimum, velocity 5 (for screen swipe navigation)
+- Button threshold: 30 pixels (for distinguishing taps from swipes)
+
+**Screens using this pattern:**
+- `TeamsScreen` - all 7 control buttons protected
+- `HelloScreen` - demo button protected
+
+---
+
 ## 🧩 Adding a Screen
 
 1. **Enum** – add ID to `ScreenId` (`screen_manager.h`).
 2. **Class** – create `screens/<name>_screen.{h,cpp}` inheriting `BaseScreen`.
 3. **Map** – register in `get_screen(...)` (`screen_manager.cpp`).
 4. **Include** – add `#include "ui/screens/<name>_screen.cpp"` to `app.ino`.
+
+> **Note**: `base_screen.cpp` is also included in `app.ino` to ensure the global `TouchTracker` is properly linked.
 
 **Screen skeleton:**
 ```cpp
@@ -88,6 +147,9 @@ class ConfigScreen : public BaseScreen {
   void handle(const UiEvent &evt) override;
  private:
   void build();
+  static void button_event_cb(lv_event_t* e);  // If screen has buttons
+  void handleButtonPress(lv_obj_t* btn);       // If screen has buttons
+  
   lv_obj_t* root_ = nullptr;
   lv_timer_t* timer_ = nullptr;
 };
@@ -95,17 +157,38 @@ class ConfigScreen : public BaseScreen {
 ```cpp
 // screens/config_screen.cpp
 lv_obj_t* ConfigScreen::root() { if (!root_) build(); return root_; }
+
 void ConfigScreen::build() {
   root_ = lv_obj_create(nullptr);
-  // ... construct UI ...
+  
+  // For screens with buttons - use swipe-resistant pattern:
+  lv_obj_t* btn = lv_btn_create(root_);
+  lv_obj_t* label = lv_label_create(btn);
+  lv_label_set_text(label, "Click Me");
+  addButtonEventCallbacks(btn, button_event_cb, this);  // Protected from swipes
 }
+
+void ConfigScreen::button_event_cb(lv_event_t* e) {
+  ConfigScreen* screen = static_cast<ConfigScreen*>(lv_event_get_user_data(e));
+  if (processTouchEvent(e)) {  // Only true for taps, not swipes
+    lv_obj_t* btn = lv_event_get_target(e);
+    screen->handleButtonPress(btn);
+  }
+}
+
+void ConfigScreen::handleButtonPress(lv_obj_t* btn) {
+  // Button action logic here
+}
+
 void ConfigScreen::onEnter() {
   // example: periodic refresh
   timer_ = lv_timer_create([](lv_timer_t *t){ auto self = (ConfigScreen*)t->user_data; /* refresh */; }, 5000, this);
 }
+
 void ConfigScreen::onExit() {
   if (timer_) { lv_timer_del(timer_); timer_ = nullptr; }
 }
+
 void ConfigScreen::handle(const UiEvent &evt) {
   // react to events
 }

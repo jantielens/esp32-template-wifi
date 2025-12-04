@@ -10,6 +10,8 @@ class HelloScreen : public BaseScreen {
 
  private:
   void build();
+  static void hello_btn_event_cb(lv_event_t *e);
+  
   lv_obj_t* root_ = nullptr;
   lv_obj_t* btn_label_ = nullptr;
 };
