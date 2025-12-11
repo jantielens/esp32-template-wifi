@@ -1,35 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{PROJECT_DISPLAY_NAME}} Configuration Portal</title>
-    <link rel="stylesheet" href="/portal.css">
-</head>
+{{HEADER}}
 <body>
     <div class="container">
-        <header>
-            <h1>{{PROJECT_DISPLAY_NAME}} Configuration</h1>
-            <div class="version-badges">
-                <span id="firmware-version" class="version-badge">Firmware v0.0.0</span>
-                <span id="chip-info" class="version-badge">Loading...</span>
-                <span id="cpu-cores" class="version-badge">Loading...</span>
-                <span id="cpu-freq" class="version-badge">Loading...</span>
-                <span id="flash-size" class="version-badge">Loading...</span>
-                <span id="psram-status" class="version-badge">Loading...</span>
-            </div>
-        </header>
-
-        <div id="status-message" class="message" style="display:none;"></div>
-
-        <div id="form-loading-overlay" class="form-loading-overlay">
-            <div class="spinner" style="width: 50px; height: 50px;"></div>
-            <p style="margin-top: 15px; color: #667eea; font-weight: 600;">Loading configuration...</p>
-        </div>
+        {{NAV}}
 
         <form id="config-form">
-            <!-- Core Settings Section (always visible) -->
-            <section class="section core-section">
+            <!-- WiFi and Device Settings (2-column on desktop) -->
+            <div class="grid-2col">
+            <!-- WiFi Settings Section -->
+            <section class="section">
                 <h2>📶 WiFi Settings</h2>
                 <div class="form-group">
                     <label for="wifi_ssid">WiFi SSID</label>
@@ -43,7 +23,8 @@
                 </div>
             </section>
 
-            <section class="section core-section">
+            <!-- Device Settings Section -->
+            <section class="section">
                 <h2>🔧 Device Settings</h2>
                 <div class="form-group">
                     <label for="device_name">Device Name</label>
@@ -56,8 +37,10 @@
                     <small>Auto-generated from device name for network discovery</small>
                 </div>
             </section>
+            </div>
 
-            <section class="section core-section">
+            <!-- Network Configuration Section (full-width) -->
+            <section class="section">
                 <h2>🌐 Network Configuration (Optional)</h2>
                 <div class="form-group">
                     <label for="fixed_ip">Fixed IP Address</label>
@@ -86,34 +69,8 @@
                 </div>
             </section>
 
-            <!-- Additional Settings Section (hidden in core mode) -->
-            <section class="section full-section" id="additional-settings" style="display:none;">
-                <h2>⚙️ Additional Settings</h2>
-                <div class="form-group">
-                    <label for="dummy_setting">Dummy Setting</label>
-                    <input type="text" id="dummy_setting" name="dummy_setting" maxlength="63">
-                    <small>Example setting for demonstration</small>
-                </div>
-            </section>
-
-            <section class="section">
-                <div class="button-group">
-                    <button type="submit" class="btn btn-primary">Save and Reboot</button>
-                    <button type="button" id="reboot-btn" class="btn btn-secondary">Reboot (without saving)</button>
-                    <button type="button" id="reset-btn" class="btn btn-danger">Factory Reset</button>
-                </div>
-            </section>
+            {{FOOTER}}
         </form>
-
-        <section class="section ota-section">
-            <h2>📦 Firmware Update (OTA)</h2>
-            <div class="form-group">
-                <label for="firmware-file">Upload Firmware (.bin)</label>
-                <input type="file" id="firmware-file" accept=".bin" class="file-input">
-                <small>Upload app.ino.bin from build directory</small>
-            </div>
-            <button type="button" id="upload-btn" class="btn btn-warning" disabled>Upload Firmware</button>
-        </section>
 
         <footer>
             <p id="build-info" class="small">Loading build info...</p>

@@ -111,18 +111,45 @@ Recommended apps for finding devices:
 
 ## User Interface
 
+### Multi-Page Architecture
+
+The web portal is organized into three separate pages for better organization and user experience:
+
+| Page | URL | Description | Available In |
+|------|-----|-------------|--------------|
+| **Home** | `/` or `/home.html` | Additional/custom settings and welcome message | Full Mode only |
+| **Network** | `/network.html` | WiFi, device, and network configuration | Both modes |
+| **Firmware** | `/firmware.html` | OTA updates and factory reset | Full Mode only |
+
+**Navigation:**
+- Tabbed navigation at top of page
+- Active page highlighted in white
+- In AP mode (Core Mode), only Network tab is visible
+
+**Responsive Design:**
+- Mobile (<768px): All sections stack vertically
+- Desktop (≥768px): Related sections displayed side-by-side in 2-column grid
+  - Home page: Hello World + Sample Settings
+  - Network page: WiFi Settings + Device Settings (side-by-side), Network Config (full-width)
+- Container max-width: 900px
+
 ### Header Badges
 
-The portal displays 6 real-time device capability badges:
+The portal displays 6 real-time device capability badges with optimized loading states:
 
-| Badge | Color | Example | Description |
-|-------|-------|---------|-------------|
-| Firmware | Purple | `Firmware v0.0.1` | Firmware version |
-| Chip | Orange | `ESP32-C3 rev 4` | Chip model and revision |
-| Cores | Green | `1 Core` / `2 Cores` | Number of CPU cores |
-| Frequency | Yellow | `160 MHz` | CPU frequency |
-| Flash | Cyan | `4 MB Flash` | Flash memory size |
-| PSRAM | Teal | `No PSRAM` / `2 MB PSRAM` | PSRAM status |
+| Badge | Color | Placeholder | Example | Description |
+|-------|-------|-------------|---------|-------------|
+| Firmware | Purple | `Firmware v-.-.-` | `Firmware v0.0.1` | Firmware version |
+| Chip | Orange | `--- rev -` | `ESP32-C3 rev 4` | Chip model and revision |
+| Cores | Green | `- Core` | `1 Core` / `2 Cores` | Number of CPU cores |
+| Frequency | Yellow | `--- MHz` | `160 MHz` | CPU frequency |
+| Flash | Cyan | `-- MB Flash` | `4 MB Flash` | Flash memory size |
+| PSRAM | Teal | `No PSRAM` | `No PSRAM` / `2 MB PSRAM` | PSRAM status |
+
+**Loading Optimization:**
+- Badges show format placeholders on initial load (e.g., `--- MHz` instead of `Loading...`)
+- Fixed widths prevent layout shift when data loads
+- Minimal visual changes when actual data arrives
 
 ### Health Monitoring Widget
 
@@ -149,13 +176,73 @@ Floating status widget with compact and expanded views:
 - Compact: 10 seconds
 - Expanded: 5 seconds
 
-### Configuration Sections
+### Configuration Pages
 
-- **📶 WiFi Settings**: SSID, password, fixed IP configuration
-- **🔧 Device Settings**: Device name (used for mDNS hostname)
-- **🌐 Network Settings**: Fixed IP, subnet, gateway, DNS servers
-- **⚙️ Additional Settings**: Custom application settings
-- **📦 Firmware Update**: OTA binary upload (Full Mode only)
+#### Home Page (`/` or `/home.html`)
+
+**Available In:** Full Mode only (redirects to Network page in AP mode)
+
+**Sections:**
+- **👋 Hello World**: Welcome message with customization tip
+- **⚙️ Sample Settings**: Example configuration field (dummy_setting)
+
+**Layout:** Two sections side-by-side on desktop (≥768px), stacked on mobile
+
+**Purpose:** Demonstrates how to add custom application-specific settings
+
+#### Network Page (`/network.html`)
+
+**Available In:** Both Core Mode and Full Mode
+
+**Sections:**
+- **📶 WiFi Settings**: SSID, password
+  - SSID required (max 31 characters)
+  - Password optional (max 63 characters, leave empty for open networks)
+- **🔧 Device Settings**: Device name, mDNS hostname
+  - Device name required (max 31 characters, can include spaces)
+  - mDNS name auto-generated and displayed (sanitized, lowercase, hyphens)
+- **🌐 Network Configuration (Optional)**: Static IP settings
+  - Fixed IP Address (optional, leave empty for DHCP)
+  - Subnet Mask (required if fixed IP set)
+  - Gateway (required if fixed IP set)
+  - DNS Server 1 (optional, defaults to gateway)
+  - DNS Server 2 (optional)
+
+**Layout:** 
+- WiFi + Device Settings side-by-side on desktop
+- Network Configuration full-width on all screens
+
+#### Firmware Page (`/firmware.html`)
+
+**Available In:** Full Mode only (redirects to Network page in AP mode)
+
+**Sections:**
+- **📦 Firmware Update (OTA)**: Upload .bin firmware file
+  - Select .bin file from build directory
+  - Upload progress bar
+  - Automatic reboot and reconnection
+- **🔄 Factory Reset**: Reset all configuration to defaults
+  - Confirmation required
+  - Device reboots in AP mode after reset
+
+### Configuration Form Behavior
+
+**Partial Updates:**
+The portal implements intelligent partial configuration updates:
+- Each page only sends fields present on that page
+- Backend only updates fields included in the request
+- Prevents accidental clearing of settings from other pages
+- Example: Saving on Home page doesn't affect Network page settings
+
+**Validation:**
+- Required fields checked before submission
+- Fixed IP validation (subnet/gateway required if IP set)
+- Visual feedback for errors
+
+**Save Options:**
+- **Save and Reboot**: Saves configuration and reboots device (applies WiFi changes)
+- **Save**: Saves configuration without rebooting (settings applied on next reboot)
+- **Reboot**: Reboots device without saving
 
 ## Automatic Reconnection After Reboot
 
@@ -453,9 +540,14 @@ Upload new firmware binary for over-the-air update.
 - `log_manager.cpp/h` - Print-compatible logging with nested blocks (serial output only)
 
 **Frontend (HTML/CSS/JS):**
-- `web/portal.html` - Semantic HTML structure
-- `web/portal.css` - Minimalist card-based design with gradients
-- `web/portal.js` - Vanilla JavaScript (no frameworks)
+- `web/_header.html` - Shared HTML head template (DRY)
+- `web/_nav.html` - Shared navigation and loading overlay template (DRY)
+- `web/_footer.html` - Shared form buttons template (DRY)
+- `web/home.html` - Home page (custom settings)
+- `web/network.html` - Network configuration page
+- `web/firmware.html` - Firmware update and factory reset page
+- `web/portal.css` - Minimalist card-based design with gradients and responsive grid
+- `web/portal.js` - Vanilla JavaScript with multi-page support (no frameworks)
 
 **Asset Compression:**
 - All web assets are automatically minified and gzip compressed during build
@@ -515,9 +607,17 @@ DNS server redirects all requests to device IP in AP mode:
 ### Modifying the Web Interface
 
 1. Edit files in `src/app/web/`:
-   - `portal.html` - Structure
-   - `portal.css` - Styling
-   - `portal.js` - Client logic
+   - Template fragments (shared):
+     - `_header.html` - HTML head section
+     - `_nav.html` - Navigation tabs and loading overlay
+     - `_footer.html` - Form buttons
+   - Page files:
+     - `home.html` - Home page structure
+     - `network.html` - Network configuration
+     - `firmware.html` - Firmware update and reset
+   - Styling and logic:
+     - `portal.css` - Styles and responsive grid
+     - `portal.js` - Client logic with multi-page support
 
 2. Rebuild to embed assets:
    ```bash
@@ -525,6 +625,7 @@ DNS server redirects all requests to device IP in AP mode:
    ```
    
    This automatically:
+   - Replaces `{{HEADER}}`, `{{NAV}}`, `{{FOOTER}}` placeholders in HTML pages
    - Minifies HTML (removes comments, collapses whitespace)
    - Minifies CSS using `csscompressor`
    - Minifies JavaScript using `rjsmin`
@@ -534,9 +635,11 @@ DNS server redirects all requests to device IP in AP mode:
    The build script shows compression statistics:
    ```
    Asset Summary (Original → Minified → Gzipped):
-     HTML portal.html: 11695 → 8261 → 2399 bytes (-80% total)
-     CSS  portal.css:  14348 → 10539 → 2864 bytes (-81% total)
-     JS   portal.js:   32032 → 19700 → 4931 bytes (-85% total)
+     HTML home.html:     5234 → 3891 → 1256 bytes (-76% total)
+     HTML network.html:  8912 → 6543 → 1987 bytes (-78% total)
+     HTML firmware.html: 4231 → 3124 → 1098 bytes (-74% total)
+     CSS  portal.css:   14348 → 10539 → 2864 bytes (-81% total)
+     JS   portal.js:    32032 → 19700 → 4931 bytes (-85% total)
    ```
 
 3. Upload and test:
