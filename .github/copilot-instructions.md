@@ -193,6 +193,101 @@ See `docs/wsl-development.md` for complete USB/IP setup guide.
 ./library.sh list                # Show configured libraries
 ```
 
+## Adding New Configuration Settings
+
+When adding new configuration settings (e.g., MQTT, custom features), follow this complete checklist. For more details on the web portal architecture and REST API, see `docs/web-portal.md`.
+
+### 1. Backend: Configuration Storage
+
+**Update `config_manager.h`:**
+- Add `#define` constants for maximum field lengths (e.g., `CONFIG_MQTT_BROKER_MAX_LEN`)
+- Add new fields to the `DeviceConfig` struct
+- For strings: Use `char field_name[CONFIG_XXX_MAX_LEN]`
+- For numbers: Use appropriate types (`uint16_t`, `int`, `float`, etc.)
+
+**Update `config_manager.cpp`:**
+- Add `#define` keys for NVS storage (e.g., `KEY_MQTT_BROKER "mqtt_broker"`)
+- Update `config_manager_load()` to load new fields from NVS
+  - Use `preferences.getString()` for strings
+  - Use `preferences.getUShort()`, `preferences.getInt()`, etc. for numbers
+  - Provide sensible defaults (second parameter)
+- Update `config_manager_save()` to save new fields to NVS
+  - Use `preferences.putString()` for strings
+  - Use `preferences.putUShort()`, `preferences.putInt()`, etc. for numbers
+- Update `config_manager_print()` to log new settings for debugging
+
+### 2. Backend: Web API
+
+**Update `web_portal.cpp`:**
+- In `handleGetConfig()`: Add new fields to JSON response
+  - Use `doc["field_name"] = config->field_name`
+  - For passwords: Return empty string (`doc["password_field"] = ""`)
+- In `handlePostConfig()`: Handle new fields from JSON request
+  - Use `if (doc.containsKey("field_name"))` for partial updates
+  - Use `doc["field_name"] | default_value` syntax for safe extraction
+  - Handle passwords specially (only update if non-empty)
+
+### 3. Frontend: HTML Form
+
+**Update appropriate HTML page (e.g., `network.html`, `home.html`):**
+- Add form section with descriptive heading
+- Add input fields with proper attributes:
+  - `id` and `name` must match the backend field name exactly
+  - `type` (text, number, password, etc.)
+  - `maxlength` should match the backend max length constant
+  - `placeholder` with helpful examples
+  - `required` attribute if field is mandatory
+- Add `<small>` helper text under each field
+- Use `.grid-2col` class for side-by-side layout on desktop
+
+### 4. Frontend: JavaScript
+
+**Update `portal.js`:**
+- In `buildConfigFromForm()` function:
+  - Add new field names to the `fields` array (around line 484-486)
+  - Fields are automatically read from form inputs by the existing code
+- In `loadConfig()` function:
+  - Add `setValueIfExists('field_name', config.field_name)` calls
+  - For passwords: Set placeholder text if saved, leave value empty
+  - For numbers: Use `setValueIfExists()` with numeric values
+- Optionally add validation in `validateConfig()` if needed
+
+### 5. Usage in Application Code
+
+**Initialize with loaded config:**
+```cpp
+// In setup() or after config_manager_load()
+if (strlen(device_config.mqtt_broker) > 0) {
+    // Use the configuration
+    some_manager_init(&device_config);
+}
+```
+
+**Access configuration:**
+```cpp
+// Configuration is available in device_config global
+Serial.printf("Broker: %s:%d\n", device_config.mqtt_broker, device_config.mqtt_port);
+```
+
+### Example: Adding MQTT Settings
+
+Complete example of adding MQTT configuration (as implemented in this project):
+
+1. **config_manager.h**: Added 6 MQTT fields (broker, port, username, password, topic_solar, topic_grid)
+2. **config_manager.cpp**: Added 6 NVS keys and load/save/print logic
+3. **web_portal.cpp**: Added MQTT fields to GET/POST `/api/config` handlers
+4. **network.html**: Added MQTT Settings section with 6 input fields in 2-column grid
+5. **portal.js**: Added 6 MQTT fields to `fields` array and loadConfig function
+6. **Build**: Ran `./build.sh` to regenerate web assets
+
+### Common Mistakes to Avoid
+
+❌ **Forgetting to update portal.js fields array** → Settings won't be saved
+❌ **Mismatched field names** between HTML `id`, JS, and backend → Data won't transfer
+❌ **Not rebuilding after HTML/JS changes** → Old code still embedded in firmware
+❌ **Missing default values in load function** → Uninitialized data
+❌ **Not using `doc.containsKey()`** in POST handler → Can't do partial updates
+
 ## Common Pitfalls
 
 - **Permission denied on /dev/ttyUSB0**: User not in dialout group or WSL not restarted
