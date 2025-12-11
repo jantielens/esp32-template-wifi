@@ -468,6 +468,59 @@ async function loadConfig() {
 }
 
 /**
+ * Extract form fields that exist on the current page
+ * @param {FormData} formData - Form data to extract from
+ * @returns {Object} Configuration object with only fields present on page
+ */
+function extractFormFields(formData) {
+    // Helper to get value only if field exists
+    const getFieldValue = (name) => {
+        const element = document.querySelector(`[name="${name}"]`);
+        return element ? formData.get(name) : null;
+    };
+    
+    // Build config from only the fields that exist on this page
+    const config = {};
+    const fields = ['wifi_ssid', 'wifi_password', 'device_name', 'fixed_ip', 
+                    'subnet_mask', 'gateway', 'dns1', 'dns2', 'dummy_setting'];
+    
+    fields.forEach(field => {
+        const value = getFieldValue(field);
+        if (value !== null) config[field] = value;
+    });
+    
+    return config;
+}
+
+/**
+ * Validate configuration fields
+ * @param {Object} config - Configuration object to validate
+ * @returns {Object} { valid: boolean, message: string }
+ */
+function validateConfig(config) {
+    // Validate required fields only if they exist on this page
+    if (config.wifi_ssid !== undefined && (!config.wifi_ssid || config.wifi_ssid.trim() === '')) {
+        return { valid: false, message: 'WiFi SSID is required' };
+    }
+    
+    if (config.device_name !== undefined && (!config.device_name || config.device_name.trim() === '')) {
+        return { valid: false, message: 'Device name is required' };
+    }
+    
+    // Validate fixed IP configuration only if on network page
+    if (config.fixed_ip !== undefined && config.fixed_ip && config.fixed_ip.trim() !== '') {
+        if (!config.subnet_mask || config.subnet_mask.trim() === '') {
+            return { valid: false, message: 'Subnet mask is required when using fixed IP' };
+        }
+        if (!config.gateway || config.gateway.trim() === '') {
+            return { valid: false, message: 'Gateway is required when using fixed IP' };
+        }
+    }
+    
+    return { valid: true };
+}
+
+/**
  * Save configuration to device
  * @param {Event} event - Form submit event
  */
@@ -482,64 +535,13 @@ async function saveConfig(event) {
     }
     
     const formData = new FormData(event.target);
+    const config = extractFormFields(formData);
     
-    // Helper to get value only if field exists
-    const getFieldValue = (name) => {
-        const element = document.querySelector(`[name="${name}"]`);
-        return element ? formData.get(name) : null;
-    };
-    
-    // Build config from only the fields that exist on this page
-    const config = {};
-    
-    const wifiSsid = getFieldValue('wifi_ssid');
-    if (wifiSsid !== null) config.wifi_ssid = wifiSsid;
-    
-    const wifiPassword = getFieldValue('wifi_password');
-    if (wifiPassword !== null) config.wifi_password = wifiPassword;
-    
-    const deviceName = getFieldValue('device_name');
-    if (deviceName !== null) config.device_name = deviceName;
-    
-    const fixedIp = getFieldValue('fixed_ip');
-    if (fixedIp !== null) config.fixed_ip = fixedIp;
-    
-    const subnetMask = getFieldValue('subnet_mask');
-    if (subnetMask !== null) config.subnet_mask = subnetMask;
-    
-    const gateway = getFieldValue('gateway');
-    if (gateway !== null) config.gateway = gateway;
-    
-    const dns1 = getFieldValue('dns1');
-    if (dns1 !== null) config.dns1 = dns1;
-    
-    const dns2 = getFieldValue('dns2');
-    if (dns2 !== null) config.dns2 = dns2;
-    
-    const dummySetting = getFieldValue('dummy_setting');
-    if (dummySetting !== null) config.dummy_setting = dummySetting;
-    
-    // Validate required fields only if they exist on this page
-    if (config.wifi_ssid !== undefined && (!config.wifi_ssid || config.wifi_ssid.trim() === '')) {
-        showMessage('WiFi SSID is required', 'error');
+    // Validate configuration
+    const validation = validateConfig(config);
+    if (!validation.valid) {
+        showMessage(validation.message, 'error');
         return;
-    }
-    
-    if (config.device_name !== undefined && (!config.device_name || config.device_name.trim() === '')) {
-        showMessage('Device name is required', 'error');
-        return;
-    }
-    
-    // Validate fixed IP configuration only if on network page
-    if (config.fixed_ip !== undefined && config.fixed_ip && config.fixed_ip.trim() !== '') {
-        if (!config.subnet_mask || config.subnet_mask.trim() === '') {
-            showMessage('Subnet mask is required when using fixed IP', 'error');
-            return;
-        }
-        if (!config.gateway || config.gateway.trim() === '') {
-            showMessage('Gateway is required when using fixed IP', 'error');
-            return;
-        }
     }
     
     const currentDeviceNameField = document.getElementById('device_name');
@@ -591,64 +593,13 @@ async function saveOnly(event) {
     event.preventDefault();
     
     const formData = new FormData(document.getElementById('config-form'));
+    const config = extractFormFields(formData);
     
-    // Helper to get value only if field exists
-    const getFieldValue = (name) => {
-        const element = document.querySelector(`[name="${name}"]`);
-        return element ? formData.get(name) : null;
-    };
-    
-    // Build config from only the fields that exist on this page
-    const config = {};
-    
-    const wifiSsid = getFieldValue('wifi_ssid');
-    if (wifiSsid !== null) config.wifi_ssid = wifiSsid;
-    
-    const wifiPassword = getFieldValue('wifi_password');
-    if (wifiPassword !== null) config.wifi_password = wifiPassword;
-    
-    const deviceName = getFieldValue('device_name');
-    if (deviceName !== null) config.device_name = deviceName;
-    
-    const fixedIp = getFieldValue('fixed_ip');
-    if (fixedIp !== null) config.fixed_ip = fixedIp;
-    
-    const subnetMask = getFieldValue('subnet_mask');
-    if (subnetMask !== null) config.subnet_mask = subnetMask;
-    
-    const gateway = getFieldValue('gateway');
-    if (gateway !== null) config.gateway = gateway;
-    
-    const dns1 = getFieldValue('dns1');
-    if (dns1 !== null) config.dns1 = dns1;
-    
-    const dns2 = getFieldValue('dns2');
-    if (dns2 !== null) config.dns2 = dns2;
-    
-    const dummySetting = getFieldValue('dummy_setting');
-    if (dummySetting !== null) config.dummy_setting = dummySetting;
-    
-    // Validate required fields only if they exist on this page
-    if (config.wifi_ssid !== undefined && (!config.wifi_ssid || config.wifi_ssid.trim() === '')) {
-        showMessage('WiFi SSID is required', 'error');
+    // Validate configuration
+    const validation = validateConfig(config);
+    if (!validation.valid) {
+        showMessage(validation.message, 'error');
         return;
-    }
-    
-    if (config.device_name !== undefined && (!config.device_name || config.device_name.trim() === '')) {
-        showMessage('Device name is required', 'error');
-        return;
-    }
-    
-    // Validate fixed IP configuration only if on network page
-    if (config.fixed_ip !== undefined && config.fixed_ip && config.fixed_ip.trim() !== '') {
-        if (!config.subnet_mask || config.subnet_mask.trim() === '') {
-            showMessage('Subnet mask is required when using fixed IP', 'error');
-            return;
-        }
-        if (!config.gateway || config.gateway.trim() === '') {
-            showMessage('Gateway is required when using fixed IP', 'error');
-            return;
-        }
     }
     
     try {

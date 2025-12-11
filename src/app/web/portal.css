@@ -68,6 +68,7 @@ h1 {
 
 #firmware-version {
     min-width: 140px;
+    background: rgba(175, 82, 222, 0.9);
 }
 
 #chip-info {
@@ -161,10 +162,6 @@ h1 {
     background: white;
     color: #007aff;
     box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
-}
-
-#firmware-version {
-    background: rgba(175, 82, 222, 0.9);
 }
 
 #chip-info {
@@ -395,8 +392,9 @@ small {
     gap: 8px;
 }
 
+/* Desktop: Space for fixed footer */
 body {
-    padding-bottom: 80px; /* Space for fixed footer (reduced height) */
+    padding-bottom: 80px;
 }
 
 .btn {
@@ -885,7 +883,7 @@ footer {
 @media (min-width: 640px) {
     body {
         padding: 40px 24px;
-        padding-bottom: 40px; /* Space for floating elements */
+        padding-bottom: 40px; /* Mobile: Reduced space for floating elements */
     }
 
     .button-group {
