@@ -22,8 +22,8 @@ The project uses a centralized branding system defined in `config.sh`. These val
 Located at the top of `config.sh`:
 
 ```bash
-PROJECT_NAME="esp32-template-wifi"       # Slug format (no spaces)
-PROJECT_DISPLAY_NAME="ESP32 Template WiFi"   # Human-readable format
+PROJECT_NAME="esp32-template"       # Slug format (no spaces)
+PROJECT_DISPLAY_NAME="ESP32 Template"   # Human-readable format
 ```
 
 ### Usage Map
@@ -35,10 +35,10 @@ Used for technical identifiers and filenames:
 | Location | Usage | Example |
 |----------|-------|---------|
 | **Build artifacts** | Local build output | `build/esp32/app.ino.bin` |
-| **CI/CD artifacts** | GitHub Actions artifact names | `esp32-template-wifi-esp32` |
-| **Release files** | GitHub Release download files | `esp32-template-wifi-esp32-v0.0.5.bin` |
-| **AP SSID** | WiFi Access Point name (uppercase) | `ESP32-TEMPLATE-WIFI-1A2B3C4D` |
-| **API response** | `/api/info` endpoint | `{"project_name": "esp32-template-wifi"}` |
+| **CI/CD artifacts** | GitHub Actions artifact names | `esp32-template-esp32` |
+| **Release files** | GitHub Release download files | `esp32-template-esp32-v0.0.5.bin` |
+| **AP SSID** | WiFi Access Point name (uppercase) | `ESP32-TEMPLATE-1A2B3C4D` |
+| **API response** | `/api/info` endpoint | `{"project_name": "esp32-template"}` |
 
 #### `PROJECT_DISPLAY_NAME` (human-readable)
 
@@ -46,10 +46,10 @@ Used for user-facing text and branding:
 
 | Location | Usage | Example |
 |----------|-------|---------|
-| **Web portal title** | Browser tab title | `"ESP32 Template WiFi Configuration Portal"` |
-| **Web portal header** | Main page heading | `"ESP32 Template WiFi Configuration"` |
-| **Default device name** | First-time device name | `"ESP32 Template WiFi 1A2B"` |
-| **API response** | `/api/info` endpoint | `{"project_display_name": "ESP32 Template WiFi"}` |
+| **Web portal title** | Browser tab title | `"ESP32 Template Configuration Portal"` |
+| **Web portal header** | Main page heading | `"ESP32 Template Configuration"` |
+| **Default device name** | First-time device name | `"ESP32 Template 1A2B"` |
+| **API response** | `/api/info` endpoint | `{"project_display_name": "ESP32 Template"}` |
 
 ### Customizing for Your Project
 
@@ -334,7 +334,7 @@ git push origin v0.0.5
 
 ### Step 4: Verify
 
-Check the release page: `https://github.com/jantielens/esp32-template-wifi/releases/tag/v0.0.5`
+Check the release page: `https://github.com/jantielens/esp32-template/releases/tag/v0.0.5`
 
 Verify:
 - ✅ Release notes match CHANGELOG
@@ -457,7 +457,7 @@ git push origin v1.0.0
 git tag -a v0.0.0-test.1 -m "Testing release workflow"
 git push origin v0.0.0-test.1
 
-# Watch GitHub Actions: https://github.com/jantielens/esp32-template-wifi/actions
+# Watch GitHub Actions: https://github.com/jantielens/esp32-template/actions
 
 # If successful, delete test release and tag
 # Via GitHub UI: Delete the release
@@ -511,7 +511,7 @@ git pull
 
 ```bash
 # Option 1: Delete the release (GitHub UI or API)
-# Go to: https://github.com/jantielens/esp32-template-wifi/releases
+# Go to: https://github.com/jantielens/esp32-template/releases
 # Edit release → Delete release
 
 # Option 2: Mark release as "Pre-release" to hide from latest
@@ -593,7 +593,7 @@ Follow [Semantic Versioning](https://semver.org/):
 
 ### Release Workflow Fails
 
-1. Check GitHub Actions logs: `https://github.com/jantielens/esp32-template-wifi/actions`
+1. Check GitHub Actions logs: `https://github.com/jantielens/esp32-template/actions`
 2. Common issues:
    - **Compilation error**: Fix code and push new tag
    - **Changelog parsing error**: Verify CHANGELOG.md format

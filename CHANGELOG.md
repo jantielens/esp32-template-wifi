@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.0.13] - 2025-12-11
+## [0.0.14] - 2025-12-11
 
 ### Fixed
 - **Board Override System**: Fixed include guard conflicts and circular dependencies (Issue #14)
@@ -34,6 +34,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 - `src/boards/esp32c3/board_config.cpp` - Not compiled by Arduino build system, was misleading
+
+---
+
+## [0.0.13] - 2025-12-11
+
+### Added
+- **Multi-Page Web Portal**: Refactored single-page portal to multi-page architecture
+  - Home page: Custom settings and welcome message (Full Mode only)
+  - Network page: WiFi, device, and network configuration (both modes)
+  - Firmware page: OTA updates and factory reset (Full Mode only)
+- **DRY Template System**: Build-time placeholder replacement for shared components
+  - Shared templates: `_header.html`, `_nav.html`, `_footer.html`
+  - Template fragments excluded from asset generation
+- **Responsive Grid Layout**: 2-column design for desktop (≥768px breakpoint)
+  - 900px max container width for better desktop utilization
+  - Side-by-side sections on network and home pages
+- **Health Monitoring Badge**: Integrated health widget into header as 7th badge
+  - Orange background with green breathing dot, CPU %, and expand icon
+  - Click to expand full health overlay with 11 metrics
+  - Positioned top-right for better visibility
+- **Floating Action Footer**: Redesigned action buttons as fixed bottom bar
+  - Horizontal layout with Save & Reboot, Save, and Reboot buttons
+  - Reduced vertical space usage (80px vs 100px)
+  - Rounded top corners for modern appearance
+- **Initial Setup Notice**: Added helpful message on network page for first-time setup
+
+### Changed
+- **Partial Configuration Updates**: Backend only updates fields present in JSON request
+  - Each page updates only its own fields via `doc.containsKey()`
+  - Prevents accidental clearing of settings from other pages
+- **AP Mode Navigation**: Home/Firmware tabs hidden in Core Mode
+  - Backend redirects to `/network.html` when in AP mode
+  - Only Network page accessible during initial setup
+- **Badge Loading Optimization**: Fixed widths and placeholders prevent layout shift
+  - Format placeholders: `Firmware v-.-.-`, `--- rev -`, etc.
+- **Scrollbar Layout**: Fixed layout shift with `html { overflow-y: scroll; }`
+- **Page Margins**: Reduced body padding from 24px 16px to 12px 8px
+- **Project Branding**: Simplified configuration names and project branding
+- **Mobile Input Handling**: Enhanced keyboard overlap prevention on mobile devices
+
+### Removed
+- **Build Info Footer**: Removed from all pages (info now in header badges)
+- **Duplicate CSS**: Cleaned up redundant styles for health widget
+- **Floating Health Bubble**: Replaced with integrated header badge
+
+### Performance
+- **Web Assets**: 86,626 → 16,566 bytes gzipped (-81% compression)
+- **Flash Usage**: ESP32: 82%, ESP32-C3: 81%, ESP32-C6: 84%
 
 ---
 

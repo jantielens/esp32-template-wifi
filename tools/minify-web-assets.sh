@@ -16,8 +16,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # Accept project name arguments
-PROJECT_NAME="${1:-esp32-template-wifi}"
-PROJECT_DISPLAY_NAME="${2:-ESP32 Template WiFi}"
+PROJECT_NAME="${1:-esp32-template}"
+PROJECT_DISPLAY_NAME="${2:-ESP32 Template}"
 
 # Source and output paths
 WEB_DIR="$PROJECT_ROOT/src/app/web"
@@ -37,10 +37,27 @@ if [ ! -d "$WEB_DIR" ]; then
     exit 1
 fi
 
-# Discover source files
-HTML_FILES=($(find "$WEB_DIR" -maxdepth 1 -name "*.html" -type f | sort))
-CSS_FILES=($(find "$WEB_DIR" -maxdepth 1 -name "*.css" -type f | sort))
-JS_FILES=($(find "$WEB_DIR" -maxdepth 1 -name "*.js" -type f | sort))
+# Discover source files (exclude template fragments starting with _)
+HTML_FILES=($(find "$WEB_DIR" -maxdepth 1 -name "*.html" -not -name "_*.html" -type f | sort))
+CSS_FILES=($(find "$WEB_DIR" -maxdepth 1 -name "*.css" -not -name "_*.css" -type f | sort))
+JS_FILES=($(find "$WEB_DIR" -maxdepth 1 -name "*.js" -not -name "_*.js" -type f | sort))
+
+# Read template fragments for HTML processing
+HEADER_TEMPLATE=""
+NAV_TEMPLATE=""
+FOOTER_TEMPLATE=""
+
+if [ -f "$WEB_DIR/_header.html" ]; then
+    HEADER_TEMPLATE=$(cat "$WEB_DIR/_header.html")
+fi
+
+if [ -f "$WEB_DIR/_nav.html" ]; then
+    NAV_TEMPLATE=$(cat "$WEB_DIR/_nav.html")
+fi
+
+if [ -f "$WEB_DIR/_footer.html" ]; then
+    FOOTER_TEMPLATE=$(cat "$WEB_DIR/_footer.html")
+fi
 
 if [ ${#HTML_FILES[@]} -eq 0 ] && [ ${#CSS_FILES[@]} -eq 0 ] && [ ${#JS_FILES[@]} -eq 0 ]; then
     echo "Error: No HTML, CSS, or JS files found in $WEB_DIR"
@@ -128,11 +145,25 @@ for html_file in "${HTML_FILES[@]}"; do
     # Template substitution and minification
     minified=$(python3 -c "
 import re
+import sys
+
+# Read template fragments from environment or files
+header_template = '''$HEADER_TEMPLATE'''
+nav_template = '''$NAV_TEMPLATE'''
+footer_template = '''$FOOTER_TEMPLATE'''
+
 with open('$html_file', 'r') as f:
     html = f.read()
-    # Template substitution
+    
+    # Replace template placeholders with actual content
+    html = html.replace('{{HEADER}}', header_template)
+    html = html.replace('{{NAV}}', nav_template)
+    html = html.replace('{{FOOTER}}', footer_template)
+    
+    # Project name substitution
     html = html.replace('{{PROJECT_NAME}}', '$PROJECT_NAME')
     html = html.replace('{{PROJECT_DISPLAY_NAME}}', '$PROJECT_DISPLAY_NAME')
+    
     # Remove HTML comments
     html = re.sub(r'<!--.*?-->', '', html, flags=re.DOTALL)
     # Collapse multiple spaces/newlines to single space

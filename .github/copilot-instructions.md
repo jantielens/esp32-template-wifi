@@ -13,14 +13,17 @@ ESP32 Arduino development template using `arduino-cli` for headless builds. Desi
   - `src/boards/[board-name]/board_overrides.h` - Optional board-specific compile-time defines
   - Build system automatically detects and applies overrides when present
   - Application uses `#if HAS_xxx` conditional compilation for board-specific logic
-- **Web Portal**: Async web server with captive portal support
+- **Web Portal**: Multi-page async web server with captive portal support
   - `web_portal.cpp/h` - Server and REST API implementation
   - `web_assets.cpp/h` - Embedded HTML/CSS/JS (from `src/app/web/`)
   - `config_manager.cpp/h` - NVS configuration storage
+  - Multi-page architecture: Home, Network, Firmware
+  - Template system: `_header.html`, `_nav.html`, `_footer.html` for DRY
 - **Output**: Compiled binaries in `./build/<board-name>/` directories
 - **Board Targets**: Multi-board support via `FQBN_TARGETS` array in `config.sh`
   - `esp32:esp32:esp32` → `build/esp32/` (ESP32 Dev Module)
   - `esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc` → `build/esp32c3/` (ESP32-C3 Super Mini)
+  - `esp32:esp32:esp32c6:CDCOnBoot=cdc` → `build/esp32c6/` (ESP32-C6 Dev Module)
 
 ## Critical Developer Workflows
 
@@ -37,6 +40,7 @@ ESP32 Arduino development template using `arduino-cli` for headless builds. Desi
 # Or build specific board
 ./build.sh esp32        # Compile for ESP32 Dev Module
 ./build.sh esp32c3      # Compile for ESP32-C3 Super Mini
+./build.sh esp32c6      # Compile for ESP32-C6 Dev Module
 
 # Upload (board name required when multiple boards configured)
 ./upload.sh esp32       # Auto-detects /dev/ttyUSB0 or /dev/ttyACM0
@@ -72,15 +76,33 @@ All scripts use absolute paths via `SCRIPT_DIR` resolution - they work from any 
 
 ### Web Portal Conventions
 
+**Multi-Page Architecture**:
+- **Home** (`/` or `/home.html`): Custom settings and welcome message (Full Mode only)
+- **Network** (`/network.html`): WiFi, device, and network configuration (both modes)
+- **Firmware** (`/firmware.html`): OTA updates and factory reset (Full Mode only)
+- Template fragments: `_header.html`, `_nav.html`, `_footer.html` used via `{{HEADER}}`, `{{NAV}}`, `{{FOOTER}}` placeholders
+- Build-time template replacement in `tools/minify-web-assets.sh`
+
 **Portal Modes**:
 - **Core Mode**: AP with captive portal (192.168.4.1) - WiFi not configured
+  - Only Network page accessible (Home/Firmware redirect to Network)
+  - Navigation tabs for Home/Firmware hidden via JavaScript
 - **Full Mode**: Connected to WiFi - portal at device IP/hostname
+  - All three pages accessible
+
+**Responsive Design**:
+- Container max-width: 900px
+- 2-column grid on desktop (≥768px) using `.grid-2col` class
+- Sections stack vertically on mobile (<768px)
+- Network page: WiFi + Device Settings side-by-side, Network Config full-width
+- Home page: Hello World + Sample Settings side-by-side
 
 **REST API Design**:
 - All endpoints under `/api/*` namespace
 - Use semantic names: `/api/info` (device info), `/api/health` (real-time stats), `/api/config` (settings)
 - Return JSON responses with proper HTTP status codes
-- POST operations that modify state trigger device reboot for consistency
+- POST `/api/config` triggers device reboot (use `?no_reboot=1` to skip)
+- Partial config updates: Backend only updates fields present in JSON request via `doc.containsKey()`
 
 **Health Monitoring**:
 - `/api/health` provides real-time metrics (CPU, memory, WiFi, temperature, uptime)
@@ -90,15 +112,16 @@ All scripts use absolute paths via `SCRIPT_DIR` resolution - they work from any 
 
 **UI Design**:
 - Minimalist card-based layout with gradient header
-- 6 header badges showing device capabilities:
-  - Firmware version (purple badge)
-  - Chip info (orange badge)
-  - CPU cores (green badge)
-  - CPU frequency (yellow badge)
-  - Flash size (cyan badge)
-  - PSRAM status (teal badge)
+- 6 header badges with fixed widths and format placeholders:
+  - Firmware version (`Firmware v-.-.-` → `Firmware v0.0.1`) - 140px
+  - Chip info (`--- rev -` → `ESP32-C6 rev 2`) - 140px
+  - CPU cores (`- Core` → `1 Core`) - 75px
+  - CPU frequency (`--- MHz` → `160 MHz`) - 85px
+  - Flash size (`-- MB Flash` → `8 MB Flash`) - 110px
+  - PSRAM status (`No PSRAM` → `No PSRAM` or `2 MB PSRAM`) - 105px
 - Floating health widget with compact/expanded views
 - Breathing animation on status updates
+- Tabbed navigation with active page highlighting
 
 ## WSL-Specific Requirements
 
@@ -130,10 +153,22 @@ See `docs/wsl-development.md` for complete USB/IP setup guide.
 - `src/app/web_portal.cpp/h` - Async web server and REST API endpoints
 - `src/app/web_assets.cpp/h` - Embedded HTML/CSS/JS from `web/` directory
 - `src/app/config_manager.cpp/h` - NVS-based configuration storage
-- `src/app/web/portal.html` - Web interface markup
-- `src/app/web/portal.css` - Styles (gradients, animations, responsive)
-- `src/app/web/portal.js` - Client-side logic (API calls, health updates)
+- `src/app/web/_header.html` - Common HTML head template
+- `src/app/web/_nav.html` - Navigation tabs and loading overlay wrapper
+- `src/app/web/_footer.html` - Form buttons template
+- `src/app/web/home.html` - Home page (Hello World + Sample Settings)
+- `src/app/web/network.html` - Network configuration page
+- `src/app/web/firmware.html` - Firmware update and factory reset page
+- `src/app/web/portal.css` - Styles (gradients, animations, responsive grid)
+- `src/app/web/portal.js` - Client-side logic (multi-page support, API calls, health updates)
 - `src/version.h` - Firmware version tracking
+
+### Tools
+- `tools/minify-web-assets.sh` - Minifies and embeds web assets into `web_assets.h`
+  - Replaces `{{HEADER}}`, `{{NAV}}`, `{{FOOTER}}` placeholders in HTML files
+  - Minifies CSS and JavaScript
+  - Gzips all assets for efficient storage
+  - Excludes template fragments (files starting with `_`)
 
 ### Configuration
 - `config.sh` - Project paths, FQBN_TARGETS array, and helper functions

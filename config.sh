@@ -25,10 +25,10 @@
 #   - Default device name: "{PROJECT_DISPLAY_NAME} 1A2B"
 #   - Logs page title: "Device Logs - {PROJECT_DISPLAY_NAME}"
 #   - REST API /api/info response (both values included)
-#   Example: "ESP32 Template WiFi"
+#   Example: "ESP32 Template"
 #
-PROJECT_NAME="esp32-template-wifi"
-PROJECT_DISPLAY_NAME="ESP32 Template WiFi"
+PROJECT_NAME="esp32-template"
+PROJECT_DISPLAY_NAME="ESP32 Template"
 
 # Board configuration (FQBN - Fully Qualified Board Name)
 # Define target boards as an associative array: [FQBN]="board-name"

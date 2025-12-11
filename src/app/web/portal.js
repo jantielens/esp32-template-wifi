@@ -2,6 +2,7 @@
  * Configuration Portal JavaScript
  * Handles configuration form, OTA updates, and device reboots
  * Supports core mode (AP) and full mode (WiFi connected)
+ * Multi-page support: home, network, firmware
  */
 
 // API endpoints
@@ -9,10 +10,69 @@ const API_CONFIG = '/api/config';
 const API_INFO = '/api/info';
 const API_MODE = '/api/mode';
 const API_UPDATE = '/api/update';
+const API_REBOOT = '/api/reboot';
 const API_VERSION = '/api/info'; // Used for connection polling
 
 let selectedFile = null;
 let portalMode = 'full'; // 'core' or 'full'
+let currentPage = 'home'; // Current page: 'home', 'network', or 'firmware'
+
+/**
+ * Scroll input into view when focused (prevents mobile keyboard from covering it)
+ * @param {Event} event - Focus event
+ */
+function handleInputFocus(event) {
+    // Small delay to let the keyboard animation start
+    setTimeout(() => {
+        const input = event.target;
+        const rect = input.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+        
+        // Estimate keyboard height (typically 40-50% of viewport on mobile)
+        const estimatedKeyboardHeight = viewportHeight * 0.45;
+        const availableHeight = viewportHeight - estimatedKeyboardHeight;
+        
+        // Calculate if input would be covered by keyboard
+        const inputBottom = rect.bottom;
+        
+        // Only scroll if the input would be covered by the keyboard
+        if (inputBottom > availableHeight) {
+            // Scroll just enough to show the input with some padding
+            const padding = 20; // 20px padding above input
+            const scrollAmount = inputBottom - availableHeight + padding;
+            
+            window.scrollTo({
+                top: window.scrollY + scrollAmount,
+                behavior: 'smooth'
+            });
+        }
+    }, 300); // Wait for keyboard animation
+}
+
+/**
+ * Detect current page and highlight active navigation tab
+ */
+function initNavigation() {
+    const path = window.location.pathname;
+    
+    if (path === '/' || path === '/home.html') {
+        currentPage = 'home';
+    } else if (path === '/network.html') {
+        currentPage = 'network';
+    } else if (path === '/firmware.html') {
+        currentPage = 'firmware';
+    }
+    
+    // Highlight active tab
+    document.querySelectorAll('.nav-tab').forEach(tab => {
+        const page = tab.getAttribute('data-page');
+        if (page === currentPage) {
+            tab.classList.add('active');
+        } else {
+            tab.classList.remove('active');
+        }
+    });
+}
 
 /**
  * Display a message to the user
@@ -251,8 +311,13 @@ async function startReconnection(options) {
  * Update sanitized device name field
  */
 function updateSanitizedName() {
-    const deviceName = document.getElementById('device_name').value;
+    const deviceNameField = document.getElementById('device_name');
     const sanitizedField = document.getElementById('device_name_sanitized');
+    
+    // Only proceed if both elements exist
+    if (!deviceNameField || !sanitizedField) return;
+    
+    const deviceName = deviceNameField.value;
     
     // Sanitize: lowercase, alphanumeric + hyphens
     let sanitized = deviceName.toLowerCase()
@@ -275,12 +340,39 @@ async function loadMode() {
         const mode = await response.json();
         portalMode = mode.mode || 'full';
         
-        // Show/hide additional settings based on mode
+        // Show/hide additional settings based on mode (only if element exists)
         const additionalSettings = document.getElementById('additional-settings');
+        if (additionalSettings) {
+            if (portalMode === 'core') {
+                additionalSettings.style.display = 'none';
+            } else {
+                additionalSettings.style.display = 'block';
+            }
+        }
+        
+        // Hide Home and Firmware navigation buttons in AP mode (core mode)
         if (portalMode === 'core') {
-            additionalSettings.style.display = 'none';
-        } else {
-            additionalSettings.style.display = 'block';
+            document.querySelectorAll('.nav-tab[data-page="home"], .nav-tab[data-page="firmware"]').forEach(tab => {
+                tab.style.display = 'none';
+            });
+            
+            // Show setup notice on network page
+            const setupNotice = document.getElementById('setup-notice');
+            if (setupNotice) {
+                setupNotice.style.display = 'block';
+            }
+            
+            // Hide unnecessary buttons on network page (only "Save and Reboot" makes sense)
+            const saveOnlyBtn = document.getElementById('save-only-btn');
+            const rebootBtn = document.getElementById('reboot-btn');
+            if (saveOnlyBtn) saveOnlyBtn.style.display = 'none';
+            if (rebootBtn) rebootBtn.style.display = 'none';
+            
+            // Change primary button text to be more intuitive
+            const submitBtn = document.querySelector('#config-form button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.textContent = 'Save & Connect';
+            }
         }
     } catch (error) {
         console.error('Error loading mode:', error);
@@ -306,14 +398,6 @@ async function loadVersion() {
             `${(version.flash_chip_size / 1048576).toFixed(0)} MB Flash`;
         document.getElementById('psram-status').textContent = 
             version.psram_size > 0 ? `${(version.psram_size / 1048576).toFixed(0)} MB PSRAM` : 'No PSRAM';
-        
-        // Update build info in footer
-        if (version.build_date && version.build_time) {
-            // Format: "Built on Nov 25, 2025 at 14:46:48"
-            const dateWithComma = version.build_date.replace(/(\w+ \d+) (\d{4})/, '$1, $2');
-            document.getElementById('build-info').textContent = 
-                `Built on ${dateWithComma} at ${version.build_time}`;
-        }
     } catch (error) {
         document.getElementById('firmware-version').textContent = 'Firmware v?.?.?';
         document.getElementById('chip-info').textContent = 'Chip info unavailable';
@@ -338,35 +422,102 @@ async function loadConfig() {
         const config = await response.json();
         const hasConfig = config.wifi_ssid && config.wifi_ssid !== '';
         
+        // Helper to safely set element value
+        const setValueIfExists = (id, value) => {
+            const element = document.getElementById(id);
+            if (element) element.value = value || '';
+        };
+        
+        const setTextIfExists = (id, text) => {
+            const element = document.getElementById(id);
+            if (element) element.textContent = text;
+        };
+        
         // WiFi settings
-        document.getElementById('wifi_ssid').value = config.wifi_ssid || '';
+        setValueIfExists('wifi_ssid', config.wifi_ssid);
         const wifiPwdField = document.getElementById('wifi_password');
-        wifiPwdField.value = '';
-        wifiPwdField.placeholder = hasConfig ? '(saved - leave blank to keep)' : '';
+        if (wifiPwdField) {
+            wifiPwdField.value = '';
+            wifiPwdField.placeholder = hasConfig ? '(saved - leave blank to keep)' : '';
+        }
         
         // Device settings
-        document.getElementById('device_name').value = config.device_name || '';
-        document.getElementById('device_name_sanitized').textContent = 
-            (config.device_name_sanitized || 'esp32-xxxx') + '.local';
+        setValueIfExists('device_name', config.device_name);
+        setTextIfExists('device_name_sanitized', (config.device_name_sanitized || 'esp32-xxxx') + '.local');
         
         // Fixed IP settings
-        document.getElementById('fixed_ip').value = config.fixed_ip || '';
-        document.getElementById('subnet_mask').value = config.subnet_mask || '';
-        document.getElementById('gateway').value = config.gateway || '';
-        document.getElementById('dns1').value = config.dns1 || '';
-        document.getElementById('dns2').value = config.dns2 || '';
+        setValueIfExists('fixed_ip', config.fixed_ip);
+        setValueIfExists('subnet_mask', config.subnet_mask);
+        setValueIfExists('gateway', config.gateway);
+        setValueIfExists('dns1', config.dns1);
+        setValueIfExists('dns2', config.dns2);
         
         // Dummy setting
-        document.getElementById('dummy_setting').value = config.dummy_setting || '';
+        setValueIfExists('dummy_setting', config.dummy_setting);
         
         // Hide loading overlay (silent load)
-        document.getElementById('form-loading-overlay').style.display = 'none';
+        const overlay = document.getElementById('form-loading-overlay');
+        if (overlay) overlay.style.display = 'none';
     } catch (error) {
         // Hide loading overlay even on error so form is usable
-        document.getElementById('form-loading-overlay').style.display = 'none';
+        const overlay = document.getElementById('form-loading-overlay');
+        if (overlay) overlay.style.display = 'none';
         showMessage('Error loading configuration: ' + error.message, 'error');
         console.error('Load error:', error);
     }
+}
+
+/**
+ * Extract form fields that exist on the current page
+ * @param {FormData} formData - Form data to extract from
+ * @returns {Object} Configuration object with only fields present on page
+ */
+function extractFormFields(formData) {
+    // Helper to get value only if field exists
+    const getFieldValue = (name) => {
+        const element = document.querySelector(`[name="${name}"]`);
+        return element ? formData.get(name) : null;
+    };
+    
+    // Build config from only the fields that exist on this page
+    const config = {};
+    const fields = ['wifi_ssid', 'wifi_password', 'device_name', 'fixed_ip', 
+                    'subnet_mask', 'gateway', 'dns1', 'dns2', 'dummy_setting'];
+    
+    fields.forEach(field => {
+        const value = getFieldValue(field);
+        if (value !== null) config[field] = value;
+    });
+    
+    return config;
+}
+
+/**
+ * Validate configuration fields
+ * @param {Object} config - Configuration object to validate
+ * @returns {Object} { valid: boolean, message: string }
+ */
+function validateConfig(config) {
+    // Validate required fields only if they exist on this page
+    if (config.wifi_ssid !== undefined && (!config.wifi_ssid || config.wifi_ssid.trim() === '')) {
+        return { valid: false, message: 'WiFi SSID is required' };
+    }
+    
+    if (config.device_name !== undefined && (!config.device_name || config.device_name.trim() === '')) {
+        return { valid: false, message: 'Device name is required' };
+    }
+    
+    // Validate fixed IP configuration only if on network page
+    if (config.fixed_ip !== undefined && config.fixed_ip && config.fixed_ip.trim() !== '') {
+        if (!config.subnet_mask || config.subnet_mask.trim() === '') {
+            return { valid: false, message: 'Subnet mask is required when using fixed IP' };
+        }
+        if (!config.gateway || config.gateway.trim() === '') {
+            return { valid: false, message: 'Gateway is required when using fixed IP' };
+        }
+    }
+    
+    return { valid: true };
 }
 
 /**
@@ -384,42 +535,17 @@ async function saveConfig(event) {
     }
     
     const formData = new FormData(event.target);
-    const config = {
-        wifi_ssid: formData.get('wifi_ssid'),
-        wifi_password: formData.get('wifi_password'),
-        device_name: formData.get('device_name'),
-        fixed_ip: formData.get('fixed_ip'),
-        subnet_mask: formData.get('subnet_mask'),
-        gateway: formData.get('gateway'),
-        dns1: formData.get('dns1'),
-        dns2: formData.get('dns2'),
-        dummy_setting: formData.get('dummy_setting')
-    };
+    const config = extractFormFields(formData);
     
-    // Validate required fields
-    if (!config.wifi_ssid || config.wifi_ssid.trim() === '') {
-        showMessage('WiFi SSID is required', 'error');
+    // Validate configuration
+    const validation = validateConfig(config);
+    if (!validation.valid) {
+        showMessage(validation.message, 'error');
         return;
     }
     
-    if (!config.device_name || config.device_name.trim() === '') {
-        showMessage('Device name is required', 'error');
-        return;
-    }
-    
-    // Validate fixed IP configuration
-    if (config.fixed_ip && config.fixed_ip.trim() !== '') {
-        if (!config.subnet_mask || config.subnet_mask.trim() === '') {
-            showMessage('Subnet mask is required when using fixed IP', 'error');
-            return;
-        }
-        if (!config.gateway || config.gateway.trim() === '') {
-            showMessage('Gateway is required when using fixed IP', 'error');
-            return;
-        }
-    }
-    
-    const currentDeviceName = document.getElementById('device_name').value;
+    const currentDeviceNameField = document.getElementById('device_name');
+    const currentDeviceName = currentDeviceNameField ? currentDeviceNameField.value : null;
     
     // Show overlay immediately
     showRebootDialog({
@@ -461,11 +587,62 @@ async function saveConfig(event) {
 }
 
 /**
+ * Save configuration without rebooting
+ */
+async function saveOnly(event) {
+    event.preventDefault();
+    
+    const formData = new FormData(document.getElementById('config-form'));
+    const config = extractFormFields(formData);
+    
+    // Validate configuration
+    const validation = validateConfig(config);
+    if (!validation.valid) {
+        showMessage(validation.message, 'error');
+        return;
+    }
+    
+    try {
+        showMessage('Saving configuration...', 'info');
+        
+        // Add no_reboot parameter to prevent automatic reboot
+        const response = await fetch(API_CONFIG + '?no_reboot=1', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(config)
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to save configuration');
+        }
+        
+        const result = await response.json();
+        if (result.success) {
+            showMessage('Configuration saved successfully!', 'success');
+        } else {
+            showMessage('Failed to save configuration', 'error');
+        }
+    } catch (error) {
+        showMessage('Error saving configuration: ' + error.message, 'error');
+        console.error('Save error:', error);
+    }
+}
+
+/**
  * Reboot device without saving
  */
 async function rebootDevice() {
     if (!confirm('Reboot the device without saving any changes?')) {
         return;
+    }
+    
+    try {
+        // Send reboot request
+        await fetch(API_REBOOT, { method: 'POST' });
+    } catch (error) {
+        // Expected to fail as device reboots
     }
     
     // Show unified dialog
@@ -691,17 +868,63 @@ async function uploadFirmware() {
  * Initialize page on DOM ready
  */
 document.addEventListener('DOMContentLoaded', () => {
-    // Attach event handlers
-    document.getElementById('config-form').addEventListener('submit', saveConfig);
-    document.getElementById('reboot-btn').addEventListener('click', rebootDevice);
-    document.getElementById('reset-btn').addEventListener('click', resetConfig);
-    document.getElementById('firmware-file').addEventListener('change', handleFileSelect);
-    document.getElementById('upload-btn').addEventListener('click', uploadFirmware);
-    document.getElementById('device_name').addEventListener('input', updateSanitizedName);
+    // Initialize navigation highlighting
+    initNavigation();
+    
+    // Attach event handlers (check if elements exist for multi-page support)
+    const configForm = document.getElementById('config-form');
+    if (configForm) {
+        configForm.addEventListener('submit', saveConfig);
+    }
+    
+    const saveOnlyBtn = document.getElementById('save-only-btn');
+    if (saveOnlyBtn) {
+        saveOnlyBtn.addEventListener('click', saveOnly);
+    }
+    
+    const rebootBtn = document.getElementById('reboot-btn');
+    if (rebootBtn) {
+        rebootBtn.addEventListener('click', rebootDevice);
+    }
+    
+    const resetBtn = document.getElementById('reset-btn');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', resetConfig);
+    }
+    
+    const firmwareFile = document.getElementById('firmware-file');
+    if (firmwareFile) {
+        firmwareFile.addEventListener('change', handleFileSelect);
+    }
+    
+    const uploadBtn = document.getElementById('upload-btn');
+    if (uploadBtn) {
+        uploadBtn.addEventListener('click', uploadFirmware);
+    }
+    
+    const deviceName = document.getElementById('device_name');
+    if (deviceName) {
+        deviceName.addEventListener('input', updateSanitizedName);
+    }
+    
+    // Add focus handlers for all inputs to prevent keyboard from covering them
+    const inputs = document.querySelectorAll('input[type="text"], input[type="password"], textarea');
+    inputs.forEach(input => {
+        input.addEventListener('focus', handleInputFocus);
+    });
     
     // Load initial data
     loadMode();
-    loadConfig();
+    
+    // Only load config if config form exists (home and network pages)
+    if (configForm) {
+        loadConfig();
+    } else {
+        // Hide loading overlay on pages without config form (firmware page)
+        const overlay = document.getElementById('form-loading-overlay');
+        if (overlay) overlay.style.display = 'none';
+    }
+    
     loadVersion();
     
     // Initialize health widget
@@ -813,13 +1036,11 @@ function toggleHealthWidget() {
     healthExpanded = !healthExpanded;
     
     if (healthExpanded) {
-        document.getElementById('health-compact').style.display = 'none';
         document.getElementById('health-expanded').style.display = 'block';
         updateHealth(); // Immediate update when opened
         // Update every 5 seconds when expanded
         healthUpdateInterval = setInterval(updateHealth, 5000);
     } else {
-        document.getElementById('health-compact').style.display = 'flex';
         document.getElementById('health-expanded').style.display = 'none';
         if (healthUpdateInterval) {
             clearInterval(healthUpdateInterval);
@@ -830,8 +1051,11 @@ function toggleHealthWidget() {
 
 // Initialize health widget
 function initHealthWidget() {
-    // Click compact view to expand
-    document.getElementById('health-compact').addEventListener('click', toggleHealthWidget);
+    // Click health badge in header to expand
+    const healthBadge = document.getElementById('health-badge');
+    if (healthBadge) {
+        healthBadge.addEventListener('click', toggleHealthWidget);
+    }
     
     // Click close button to collapse
     document.getElementById('health-close').addEventListener('click', toggleHealthWidget);

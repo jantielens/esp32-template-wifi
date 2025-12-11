@@ -91,7 +91,12 @@ esp32-template-wifi/
 │   │   ├── web_portal.cpp/h       # Web server & API
 │   │   ├── web_assets.cpp/h       # Embedded HTML/CSS/JS
 │   │   └── web/
-│   │       ├── portal.html        # Portal interface
+│   │       ├── _header.html       # Shared HTML head template
+│   │       ├── _nav.html          # Shared navigation template
+│   │       ├── _footer.html       # Shared footer template
+│   │       ├── home.html          # Home page
+│   │       ├── network.html       # Network configuration page
+│   │       ├── firmware.html      # Firmware update page
 │   │       ├── portal.css         # Styles
 │   │       └── portal.js          # Client logic
 │   ├── boards/                    # Board-specific overrides (optional)
@@ -115,20 +120,39 @@ esp32-template-wifi/
 
 ## 🌐 Web Configuration Portal
 
-The template includes a full-featured web portal for device configuration and monitoring.
+The template includes a full-featured web portal with multi-page architecture for device configuration and monitoring.
+
+### Portal Pages
+
+| Page | URL | Available In | Purpose |
+|------|-----|--------------|---------|
+| **Home** | `/` or `/home.html` | Full Mode | Custom settings and welcome message |
+| **Network** | `/network.html` | Both modes | WiFi, device, and network configuration |
+| **Firmware** | `/firmware.html` | Full Mode | OTA updates and factory reset |
 
 ### Portal Modes
 
 **Core Mode (AP)**: Runs when WiFi is not configured
 - Device creates Access Point: `ESP32-XXXXXX`
 - Captive portal at: `http://192.168.4.1`
+- Only Network page accessible
 - Configure WiFi credentials and device settings
 
 **Full Mode (WiFi)**: Runs when connected to WiFi
 - Access at device IP or mDNS hostname
-- All configuration options available
+- All three pages accessible
 - Real-time health monitoring
 - OTA firmware updates
+
+### Features
+
+- **Multi-Page Architecture**: Organized into Home, Network, and Firmware pages
+- **Responsive Design**: 2-column grid on desktop (≥768px), single column on mobile
+- **Partial Config Updates**: Each page only updates its own settings
+- **Real-Time Monitoring**: Health badge in header with 11-metric expandable overlay
+- **Optimized Loading**: 7 fixed-width badges with format placeholders prevent layout shift
+- **Automatic Reconnection**: Best-effort automatic redirect after device reboot
+- **Floating Action Footer**: Fixed bottom bar with Save & Reboot, Save, and Reboot buttons
 
 ### Device Discovery
 
@@ -149,11 +173,12 @@ The hostname is automatically set from the device name and includes the last 4 h
 | GET | `/api/info` | Device info (firmware, chip, cores, flash, PSRAM, hostname, MAC) |
 | GET | `/api/health` | Real-time health stats (CPU, memory, WiFi, uptime, hostname) |
 | GET | `/api/config` | Current configuration |
-| POST | `/api/config` | Save configuration (triggers reboot) |
+| POST | `/api/config` | Save configuration (triggers reboot by default) |
+| POST | `/api/config?no_reboot=1` | Save configuration without rebooting |
 | DELETE | `/api/config` | Reset to defaults (triggers reboot) |
 | GET | `/api/mode` | Portal mode (core vs full) |
 | POST | `/api/update` | OTA firmware upload |
-| POST | `/api/reboot` | Reboot device |
+| POST | `/api/reboot` | Reboot device without saving |
 
 See [docs/web-portal.md](docs/web-portal.md) for detailed guide.
 
