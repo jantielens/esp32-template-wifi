@@ -11,6 +11,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.14] - 2025-12-11
+
+### Fixed
+- **Board Override System**: Fixed include guard conflicts and circular dependencies (Issue #14)
+  - Renamed board-specific files from `board_config.h` → `board_overrides.h` to prevent naming conflicts
+  - Implemented two-phase include pattern: board overrides loaded first, then defaults with `#ifndef` guards
+  - Removed `#include_next` directive that caused infinite recursion errors
+  - Removed non-functional `board_config.cpp` files (Arduino build system only compiles sketch directory)
+  - Board overrides now working correctly for compile-time configuration
+
+### Changed
+- **Documentation**: Complete rewrite of board configuration documentation
+  - Added real-world examples: buttons, battery monitors, different display drivers
+  - Clarified that board overrides are for compile-time defines only
+  - Documented conditional compilation pattern with `#if HAS_xxx` in application code
+  - Updated README.md, copilot-instructions.md, and build-and-release-process.md
+- **Board Override Pattern**: System now uses conditional compilation in main app instead of separate implementation files
+  - Cleaner architecture with zero runtime overhead
+  - All board-specific logic uses `#if` guards in `app.ino`
+  - Compiler automatically eliminates unused code per board
+
+### Removed
+- `src/boards/esp32c3/board_config.cpp` - Not compiled by Arduino build system, was misleading
+
+---
+
 ## [0.0.13] - 2025-12-11
 
 ### Added

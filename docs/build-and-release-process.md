@@ -88,39 +88,118 @@ The build system automatically applies project branding during compilation:
 
 ### Board-Specific Configuration
 
-The build system supports optional board-specific configuration overrides:
+The build system supports optional board-specific configuration using compile-time defines and conditional compilation.
 
-**Default Behavior**: All boards use `src/app/board_config.h` with common settings
-- Hardware capabilities (LED, PSRAM, Bluetooth, etc.)
-- Pin mappings (LED_PIN, etc.)
+**How It Works:**
+
+1. **Board Defines Hardware Capabilities**: Create `src/boards/[board-name]/board_overrides.h` with board-specific defines
+2. **Two-Phase Include Pattern**: Main config includes board overrides first, then applies defaults with `#ifndef` guards
+3. **Conditional Compilation in App**: Use `#if HAS_xxx` in application code for board-specific logic
+4. **Zero Runtime Overhead**: Compiler eliminates unused code automatically
+
+**Default Configuration** (`src/app/board_config.h`):
+- Hardware capabilities (LED, buttons, sensors, displays, etc.)
+- Pin mappings (GPIO numbers)
 - WiFi settings (max attempts, retry delays)
 - Power management settings
-- Display configuration (if applicable)
 
-**Board-Specific Overrides** (Optional): Create `src/boards/[board-name]/board_config.h` when a board needs different settings:
+**Board-Specific Overrides** (Optional): Create `src/boards/[board-name]/board_overrides.h`:
 
 ```bash
-# Example: ESP32 Dev Module has a built-in LED on GPIO2
+# Example: ESP32 with built-in LED and button
 mkdir -p src/boards/esp32
-cat > src/boards/esp32/board_config.h << 'EOF'
-#ifndef BOARD_CONFIG_H
-#define BOARD_CONFIG_H
+cat > src/boards/esp32/board_overrides.h << 'EOF'
+#ifndef BOARD_OVERRIDES_ESP32_H
+#define BOARD_OVERRIDES_ESP32_H
 
-#define BOARD_NAME "ESP32 Dev Module"
+// LED configuration
 #define HAS_BUILTIN_LED true
 #define LED_PIN 2
 #define LED_ACTIVE_HIGH true
+
+// Button configuration
+#define HAS_BUTTON true
+#define BUTTON_PIN 0
+#define BUTTON_ACTIVE_LOW true
 
 #endif
 EOF
 ```
 
+**Application Usage** (`src/app/app.ino`):
+
+```cpp
+#include "board_config.h"
+
+void setup() {
+  #if HAS_BUILTIN_LED
+  // Only compiled for boards with LED
+  pinMode(LED_PIN, OUTPUT);
+  #endif
+
+  #if HAS_BUTTON
+  // Only compiled for boards with button
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  #endif
+}
+
+void loop() {
+  #if HAS_BUTTON
+  if (digitalRead(BUTTON_PIN) == (BUTTON_ACTIVE_LOW ? LOW : HIGH)) {
+    // Handle button press - only on boards with buttons
+  }
+  #endif
+}
+```
+
+**Advanced Example - Different Display Drivers:**
+
+```cpp
+// Board A override
+#define HAS_DISPLAY true
+#define DISPLAY_DRIVER_ST7789
+#define DISPLAY_WIDTH 240
+#define DISPLAY_HEIGHT 135
+
+// Board B override
+#define HAS_DISPLAY true
+#define DISPLAY_DRIVER_ILI9341
+#define DISPLAY_WIDTH 320
+#define DISPLAY_HEIGHT 240
+
+// Application code
+#if HAS_DISPLAY
+  #if defined(DISPLAY_DRIVER_ST7789)
+    #include <Adafruit_ST7789.h>
+    Adafruit_ST7789 tft(CS_PIN, DC_PIN);
+  #elif defined(DISPLAY_DRIVER_ILI9341)
+    #include <Adafruit_ILI9341.h>
+    Adafruit_ILI9341 tft(CS_PIN, DC_PIN);
+  #endif
+
+  void displayInit() {
+    #if defined(DISPLAY_DRIVER_ST7789)
+      tft.init(DISPLAY_WIDTH, DISPLAY_HEIGHT);
+    #elif defined(DISPLAY_DRIVER_ILI9341)
+      tft.begin();
+    #endif
+  }
+#endif
+```
+
 **Build Detection**: The build script automatically:
 1. Checks if `src/boards/[board-name]/` directory exists
-2. If yes, adds it to the compiler include path (overrides take precedence)
-3. Defines `BOARD_<BOARDNAME>` (uppercased, e.g., `BOARD_ESP32C3`) and `BOARD_HAS_OVERRIDE`
-4. `src/app/board_config.h` uses `#include_next` to pull in the board override when `BOARD_HAS_OVERRIDE` is defined
-5. If no override exists, uses default configuration from `src/app/board_config.h`
+2. Adds it to the compiler include path with `-I` flag
+3. Defines `BOARD_<BOARDNAME>` (uppercased, e.g., `BOARD_ESP32C3`) and `BOARD_HAS_OVERRIDE=1`
+4. `src/app/board_config.h` includes `board_overrides.h` first (Phase 1)
+5. Default values are defined with `#ifndef` guards so overrides take precedence (Phase 2)
+6. If no override directory exists, uses defaults only
+
+**Benefits:**
+- ✅ Single codebase works for all board variants
+- ✅ Zero runtime overhead (dead code elimination)
+- ✅ Type-safe compile-time checks
+- ✅ Easy to add new boards without modifying application code
 
 ### Build Profiles (Optional)
 
