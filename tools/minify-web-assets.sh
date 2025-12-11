@@ -16,8 +16,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # Accept project name arguments
-PROJECT_NAME="${1:-esp32-template-wifi}"
-PROJECT_DISPLAY_NAME="${2:-ESP32 Template WiFi}"
+PROJECT_NAME="${1:-esp32-template}"
+PROJECT_DISPLAY_NAME="${2:-ESP32 Template}"
 
 # Source and output paths
 WEB_DIR="$PROJECT_ROOT/src/app/web"
