@@ -348,14 +348,6 @@ async function loadVersion() {
             `${(version.flash_chip_size / 1048576).toFixed(0)} MB Flash`;
         document.getElementById('psram-status').textContent = 
             version.psram_size > 0 ? `${(version.psram_size / 1048576).toFixed(0)} MB PSRAM` : 'No PSRAM';
-        
-        // Update build info in footer
-        if (version.build_date && version.build_time) {
-            // Format: "Built on Nov 25, 2025 at 14:46:48"
-            const dateWithComma = version.build_date.replace(/(\w+ \d+) (\d{4})/, '$1, $2');
-            document.getElementById('build-info').textContent = 
-                `Built on ${dateWithComma} at ${version.build_time}`;
-        }
     } catch (error) {
         document.getElementById('firmware-version').textContent = 'Firmware v?.?.?';
         document.getElementById('chip-info').textContent = 'Chip info unavailable';
@@ -1037,13 +1029,11 @@ function toggleHealthWidget() {
     healthExpanded = !healthExpanded;
     
     if (healthExpanded) {
-        document.getElementById('health-compact').style.display = 'none';
         document.getElementById('health-expanded').style.display = 'block';
         updateHealth(); // Immediate update when opened
         // Update every 5 seconds when expanded
         healthUpdateInterval = setInterval(updateHealth, 5000);
     } else {
-        document.getElementById('health-compact').style.display = 'flex';
         document.getElementById('health-expanded').style.display = 'none';
         if (healthUpdateInterval) {
             clearInterval(healthUpdateInterval);
@@ -1054,8 +1044,11 @@ function toggleHealthWidget() {
 
 // Initialize health widget
 function initHealthWidget() {
-    // Click compact view to expand
-    document.getElementById('health-compact').addEventListener('click', toggleHealthWidget);
+    // Click health badge in header to expand
+    const healthBadge = document.getElementById('health-badge');
+    if (healthBadge) {
+        healthBadge.addEventListener('click', toggleHealthWidget);
+    }
     
     // Click close button to collapse
     document.getElementById('health-close').addEventListener('click', toggleHealthWidget);

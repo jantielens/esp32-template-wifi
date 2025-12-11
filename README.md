@@ -150,9 +150,10 @@ The template includes a full-featured web portal with multi-page architecture fo
 - **Multi-Page Architecture**: Organized into Home, Network, and Firmware pages
 - **Responsive Design**: 2-column grid on desktop (≥768px), single column on mobile
 - **Partial Config Updates**: Each page only updates its own settings
-- **Real-Time Monitoring**: Floating health widget with 11 metrics
-- **Optimized Loading**: Fixed badge widths and format placeholders prevent layout shift
+- **Real-Time Monitoring**: Health badge in header with 11-metric expandable overlay
+- **Optimized Loading**: 7 fixed-width badges with format placeholders prevent layout shift
 - **Automatic Reconnection**: Best-effort automatic redirect after device reboot
+- **Floating Action Footer**: Fixed bottom bar with Save & Reboot, Save, and Reboot buttons
 
 ### Device Discovery
 

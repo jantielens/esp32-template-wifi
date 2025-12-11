@@ -135,7 +135,7 @@ The web portal is organized into three separate pages for better organization an
 
 ### Header Badges
 
-The portal displays 6 real-time device capability badges with optimized loading states:
+The portal displays 7 real-time device capability and status badges with optimized loading states:
 
 | Badge | Color | Placeholder | Example | Description |
 |-------|-------|-------------|---------|-------------|
@@ -145,22 +145,32 @@ The portal displays 6 real-time device capability badges with optimized loading 
 | Frequency | Yellow | `--- MHz` | `160 MHz` | CPU frequency |
 | Flash | Cyan | `-- MB Flash` | `4 MB Flash` | Flash memory size |
 | PSRAM | Teal | `No PSRAM` | `No PSRAM` / `2 MB PSRAM` | PSRAM status |
+| Health | Orange (distinct) | `● CPU --` | `● CPU 45% ⋮` | Real-time CPU usage (click to expand) |
 
 **Loading Optimization:**
 - Badges show format placeholders on initial load (e.g., `--- MHz` instead of `Loading...`)
 - Fixed widths prevent layout shift when data loads
 - Minimal visual changes when actual data arrives
 
-### Health Monitoring Widget
+**Health Badge Features:**
+- Green breathing dot (pulses on updates every 10 seconds)
+- Current CPU usage percentage
+- Click badge or `⋮` icon to expand full health overlay
+- Orange background for visibility against blue header
 
-Floating status widget with compact and expanded views:
+### Health Monitoring
 
-**Compact View:**
+Real-time device health monitoring integrated as a header badge with expandable overlay:
+
+**Header Badge (Always Visible):**
 - Green breathing dot (pulses on updates)
 - Current CPU usage percentage
-- Click to expand
+- Orange background for visibility
+- Click to expand full health overlay
+- Updates every 10 seconds
 
-**Expanded View (11 metrics):**
+**Expanded Overlay (11 metrics):**
+- Appears top-right when badge clicked
 - **Uptime**: Device runtime
 - **Reset Reason**: Why device last restarted
 - **CPU Usage**: Percentage based on IDLE task
@@ -171,10 +181,8 @@ Floating status widget with compact and expanded views:
 - **Flash Usage**: Used firmware space
 - **RSSI**: WiFi signal strength (when connected)
 - **IP Address**: Current IP (when connected)
-
-**Update Intervals:**
-- Compact: 10 seconds
-- Expanded: 5 seconds
+- Click `✕` to close
+- Updates every 5 seconds when expanded
 
 ### Configuration Pages
 
@@ -239,10 +247,13 @@ The portal implements intelligent partial configuration updates:
 - Fixed IP validation (subnet/gateway required if IP set)
 - Visual feedback for errors
 
-**Save Options:**
+**Floating Action Footer:**
+All pages include a fixed bottom footer with action buttons:
 - **Save and Reboot**: Saves configuration and reboots device (applies WiFi changes)
 - **Save**: Saves configuration without rebooting (settings applied on next reboot)
-- **Reboot**: Reboots device without saving
+- **Reboot**: Reboots device without saving changes
+- Footer stays attached to bottom, spans full page width (max 900px)
+- Always visible while scrolling
 
 ## Automatic Reconnection After Reboot
 
