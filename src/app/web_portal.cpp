@@ -27,6 +27,9 @@
 
 // Forward declarations
 void handleRoot(AsyncWebServerRequest *request);
+void handleHome(AsyncWebServerRequest *request);
+void handleNetwork(AsyncWebServerRequest *request);
+void handleFirmware(AsyncWebServerRequest *request);
 void handleCSS(AsyncWebServerRequest *request);
 void handleJS(AsyncWebServerRequest *request);
 void handleGetConfig(AsyncWebServerRequest *request);
@@ -35,6 +38,7 @@ void handleDeleteConfig(AsyncWebServerRequest *request);
 void handleGetVersion(AsyncWebServerRequest *request);
 void handleGetMode(AsyncWebServerRequest *request);
 void handleGetHealth(AsyncWebServerRequest *request);
+void handleReboot(AsyncWebServerRequest *request);
 void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
 
 // Web server on port 80 (pointer to avoid constructor issues)
@@ -61,11 +65,54 @@ static unsigned long last_cpu_check = 0;
 
 // ===== WEB SERVER HANDLERS =====
 
-// Serve portal HTML
+// Handle root - redirect to network.html in AP mode, serve home in full mode
 void handleRoot(AsyncWebServerRequest *request) {
+    if (ap_mode_active) {
+        // In AP mode, redirect to network configuration page
+        request->redirect("/network.html");
+    } else {
+        // In full mode, serve home page
+        AsyncWebServerResponse *response = request->beginResponse(200, "text/html", 
+                                                                   home_html_gz, 
+                                                                   home_html_gz_len);
+        response->addHeader("Content-Encoding", "gzip");
+        request->send(response);
+    }
+}
+
+// Serve home page
+void handleHome(AsyncWebServerRequest *request) {
+    if (ap_mode_active) {
+        // In AP mode, redirect to network configuration page
+        request->redirect("/network.html");
+        return;
+    }
     AsyncWebServerResponse *response = request->beginResponse(200, "text/html", 
-                                                               portal_html_gz, 
-                                                               portal_html_gz_len);
+                                                               home_html_gz, 
+                                                               home_html_gz_len);
+    response->addHeader("Content-Encoding", "gzip");
+    request->send(response);
+}
+
+// Serve network configuration page
+void handleNetwork(AsyncWebServerRequest *request) {
+    AsyncWebServerResponse *response = request->beginResponse(200, "text/html", 
+                                                               network_html_gz, 
+                                                               network_html_gz_len);
+    response->addHeader("Content-Encoding", "gzip");
+    request->send(response);
+}
+
+// Serve firmware update page
+void handleFirmware(AsyncWebServerRequest *request) {
+    if (ap_mode_active) {
+        // In AP mode, redirect to network configuration page
+        request->redirect("/network.html");
+        return;
+    }
+    AsyncWebServerResponse *response = request->beginResponse(200, "text/html", 
+                                                               firmware_html_gz, 
+                                                               firmware_html_gz_len);
     response->addHeader("Content-Encoding", "gzip");
     request->send(response);
 }
@@ -153,34 +200,51 @@ void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len,
         return;
     }
     
-    // Update config structure
-    strlcpy(current_config->wifi_ssid, doc["wifi_ssid"] | "", CONFIG_SSID_MAX_LEN);
+    // Partial update: only update fields that are present in the request
+    // This allows different pages to update only their relevant fields
     
-    // Only update password if provided
-    const char* wifi_pass = doc["wifi_password"];
-    if (wifi_pass && strlen(wifi_pass) > 0) {
-        strlcpy(current_config->wifi_password, wifi_pass, CONFIG_PASSWORD_MAX_LEN);
+    // WiFi SSID - only update if field exists in JSON
+    if (doc.containsKey("wifi_ssid")) {
+        strlcpy(current_config->wifi_ssid, doc["wifi_ssid"] | "", CONFIG_SSID_MAX_LEN);
     }
     
-    // Device name
-    const char* device_name = doc["device_name"];
-    if (device_name && strlen(device_name) > 0) {
-        strlcpy(current_config->device_name, device_name, CONFIG_DEVICE_NAME_MAX_LEN);
-    } else {
-        // Use default if not provided
-        String default_name = config_manager_get_default_device_name();
-        strlcpy(current_config->device_name, default_name.c_str(), CONFIG_DEVICE_NAME_MAX_LEN);
+    // WiFi password - only update if provided and not empty
+    if (doc.containsKey("wifi_password")) {
+        const char* wifi_pass = doc["wifi_password"];
+        if (wifi_pass && strlen(wifi_pass) > 0) {
+            strlcpy(current_config->wifi_password, wifi_pass, CONFIG_PASSWORD_MAX_LEN);
+        }
     }
     
-    // Fixed IP settings
-    strlcpy(current_config->fixed_ip, doc["fixed_ip"] | "", CONFIG_IP_STR_MAX_LEN);
-    strlcpy(current_config->subnet_mask, doc["subnet_mask"] | "", CONFIG_IP_STR_MAX_LEN);
-    strlcpy(current_config->gateway, doc["gateway"] | "", CONFIG_IP_STR_MAX_LEN);
-    strlcpy(current_config->dns1, doc["dns1"] | "", CONFIG_IP_STR_MAX_LEN);
-    strlcpy(current_config->dns2, doc["dns2"] | "", CONFIG_IP_STR_MAX_LEN);
+    // Device name - only update if field exists
+    if (doc.containsKey("device_name")) {
+        const char* device_name = doc["device_name"];
+        if (device_name && strlen(device_name) > 0) {
+            strlcpy(current_config->device_name, device_name, CONFIG_DEVICE_NAME_MAX_LEN);
+        }
+    }
     
-    // Dummy setting
-    strlcpy(current_config->dummy_setting, doc["dummy_setting"] | "", CONFIG_DUMMY_MAX_LEN);
+    // Fixed IP settings - only update if fields exist
+    if (doc.containsKey("fixed_ip")) {
+        strlcpy(current_config->fixed_ip, doc["fixed_ip"] | "", CONFIG_IP_STR_MAX_LEN);
+    }
+    if (doc.containsKey("subnet_mask")) {
+        strlcpy(current_config->subnet_mask, doc["subnet_mask"] | "", CONFIG_IP_STR_MAX_LEN);
+    }
+    if (doc.containsKey("gateway")) {
+        strlcpy(current_config->gateway, doc["gateway"] | "", CONFIG_IP_STR_MAX_LEN);
+    }
+    if (doc.containsKey("dns1")) {
+        strlcpy(current_config->dns1, doc["dns1"] | "", CONFIG_IP_STR_MAX_LEN);
+    }
+    if (doc.containsKey("dns2")) {
+        strlcpy(current_config->dns2, doc["dns2"] | "", CONFIG_IP_STR_MAX_LEN);
+    }
+    
+    // Dummy setting - only update if field exists
+    if (doc.containsKey("dummy_setting")) {
+        strlcpy(current_config->dummy_setting, doc["dummy_setting"] | "", CONFIG_DUMMY_MAX_LEN);
+    }
     
     current_config->magic = CONFIG_MAGIC;
     
@@ -192,12 +256,16 @@ void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len,
     
     // Save to NVS
     if (config_manager_save(current_config)) {
-        Logger.logMessage("Portal", "Config saved - rebooting");
+        Logger.logMessage("Portal", "Config saved");
         request->send(200, "application/json", "{\"success\":true,\"message\":\"Configuration saved\"}");
         
-        // Schedule reboot after response is sent
-        delay(100);
-        ESP.restart();
+        // Check for no_reboot parameter
+        if (!request->hasParam("no_reboot")) {
+            Logger.logMessage("Portal", "Rebooting device");
+            // Schedule reboot after response is sent
+            delay(100);
+            ESP.restart();
+        }
     } else {
         Logger.logMessage("Portal", "Config save failed");
         request->send(500, "application/json", "{\"success\":false,\"message\":\"Failed to save\"}");
@@ -506,7 +574,13 @@ void web_portal_init(DeviceConfig *config) {
         delay(100);
     }
 
+    // Page routes
     server->on("/", HTTP_GET, handleRoot);
+    server->on("/home.html", HTTP_GET, handleHome);
+    server->on("/network.html", HTTP_GET, handleNetwork);
+    server->on("/firmware.html", HTTP_GET, handleFirmware);
+    
+    // Asset routes
     server->on("/portal.css", HTTP_GET, handleCSS);
     server->on("/portal.js", HTTP_GET, handleJS);
     
