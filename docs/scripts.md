@@ -68,7 +68,7 @@ BOARD_PROFILE=psram ./build.sh esp32  # Optional build profile (if defined in co
 - Generates `.bin`, `.bootloader.bin`, `.merged.bin`, and `.partitions.bin` files per board
 - If `src/boards/<board>/` exists, adds it to include path and defines:
     - `BOARD_<BOARDNAME>` (e.g., `BOARD_ESP32C3`)
-    - `BOARD_HAS_OVERRIDE` (enables `#include_next` in `board_config.h`)
+    - `BOARD_HAS_OVERRIDE` (triggers inclusion of `board_overrides.h`)
 
 **Build Output Structure:**
 ```

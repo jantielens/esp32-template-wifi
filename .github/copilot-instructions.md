@@ -10,8 +10,9 @@ ESP32 Arduino development template using `arduino-cli` for headless builds. Desi
 - **Sketch Location**: Main Arduino file at `src/app/app.ino`
 - **Board Configuration**: Flexible system with optional board-specific overrides
   - `src/app/board_config.h` - Default configuration for all boards
-  - `src/boards/[board-name]/board_config.h` - Optional board-specific overrides (if directory exists)
+  - `src/boards/[board-name]/board_overrides.h` - Optional board-specific compile-time defines
   - Build system automatically detects and applies overrides when present
+  - Application uses `#if HAS_xxx` conditional compilation for board-specific logic
 - **Web Portal**: Async web server with captive portal support
   - `web_portal.cpp/h` - Server and REST API implementation
   - `web_assets.cpp/h` - Embedded HTML/CSS/JS (from `src/app/web/`)
@@ -125,8 +126,7 @@ See `docs/wsl-development.md` for complete USB/IP setup guide.
 ### Source
 - `src/app/app.ino` - Main sketch file (standard Arduino structure)
 - `src/app/board_config.h` - Default board configuration (LED pins, WiFi settings)
-- `src/boards/[board-name]/board_config.h` - Optional board-specific overrides
-- `src/boards/[board-name]/board_config.cpp` - Optional board-specific implementations
+- `src/boards/[board-name]/board_overrides.h` - Optional board-specific compile-time configuration
 - `src/app/web_portal.cpp/h` - Async web server and REST API endpoints
 - `src/app/web_assets.cpp/h` - Embedded HTML/CSS/JS from `web/` directory
 - `src/app/config_manager.cpp/h` - NVS-based configuration storage

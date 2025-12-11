@@ -36,7 +36,7 @@ build_board() {
     EXTRA_FLAGS=()
     if [[ -d "$board_override_dir" ]]; then
         echo -e "${YELLOW}Config:    Using board-specific overrides from src/boards/$board_name/${NC}"
-        # Force include path and board macro define; include file via board_config.h #include_next directive
+        # Add include path and define BOARD_HAS_OVERRIDE to trigger board_overrides.h inclusion
         board_macro="BOARD_${board_name^^}"
         EXTRA_FLAGS+=(--build-property "compiler.cpp.extra_flags=-I$board_override_dir -D$board_macro -DBOARD_HAS_OVERRIDE=1")
     else

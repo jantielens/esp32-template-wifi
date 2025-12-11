@@ -95,9 +95,8 @@ esp32-template-wifi/
 │   │       ├── portal.css         # Styles
 │   │       └── portal.js          # Client logic
 │   ├── boards/                    # Board-specific overrides (optional)
-│   │   └── esp32c3/               # Sample ESP32-C3 Super Mini config
-│   │       ├── board_config.h     # Sample LED GPIO8 + custom function (commented out)
-│   │       └── board_config.cpp   # Sample Board-specific implementation (commented out)
+│   │   └── esp32c3/               # ESP32-C3 Super Mini config example
+│   │       └── board_overrides.h  # Board-specific defines (LED on GPIO8)
 │   └── version.h                  # Firmware version tracking
 ├── .github/
 │   └── workflows/
@@ -198,7 +197,7 @@ declare -A FQBN_TARGETS=(
 **Board Override Macros & Includes:**
 - If `src/boards/<board>/` exists, `build.sh` adds it to the include path and defines:
   - `BOARD_<BOARDNAME>` (uppercased, e.g., `BOARD_ESP32C3`)
-  - `BOARD_HAS_OVERRIDE` (allows `src/app/board_config.h` to `#include_next` the board override)
+  - `BOARD_HAS_OVERRIDE` (allows `src/app/board_config.h` to include `board_overrides.h`)
 - No changes needed in `app.ino`; overrides are pulled automatically.
 
 **Examples:**
@@ -217,35 +216,58 @@ declare -A FQBN_TARGETS=(
 
 ### Board-Specific Configuration
 
-The project uses a flexible board configuration system that supports board-specific customization without code duplication.
+The project uses a flexible board configuration system for hardware-specific customization using compile-time defines and conditional compilation.
 
-**Default Configuration**: All boards use `src/app/board_config.h` with common settings (LED pins, WiFi settings, hardware capabilities).
+**How It Works:**
 
-**Board-Specific Overrides** (Optional): Create `src/boards/[board-name]/board_config.h` to customize specific boards:
+1. **Board Overrides Define Hardware**: Create `src/boards/[board-name]/board_overrides.h` to specify board capabilities
+2. **Application Uses Conditional Compilation**: Use `#if HAS_xxx` in `app.ino` to compile board-specific code
+3. **Compiler Eliminates Unused Code**: Zero runtime overhead - only relevant code is compiled per board
+
+**Example: Board with Built-in LED**
 
 ```bash
-# Example: ESP32 Dev Module has built-in LED
+# Create board-specific configuration
 mkdir -p src/boards/esp32
-cat > src/boards/esp32/board_config.h << 'EOF'
-#ifndef BOARD_CONFIG_H
-#define BOARD_CONFIG_H
+cat > src/boards/esp32/board_overrides.h << 'EOF'
+#ifndef BOARD_OVERRIDES_ESP32_H
+#define BOARD_OVERRIDES_ESP32_H
 
-#define BOARD_NAME "ESP32 Dev Module"
 #define HAS_BUILTIN_LED true
 #define LED_PIN 2
+#define LED_ACTIVE_HIGH true
 
 #endif
 EOF
 ```
 
-The build system automatically detects and uses board-specific overrides when present. If no override exists, default configuration is used.
+**Application Code (works for all boards):**
 
-**Configuration Options:**
-- Hardware capabilities: `HAS_BUILTIN_LED`
-- Pin mappings: `LED_PIN`, `LED_ACTIVE_HIGH`
-- WiFi settings: `WIFI_MAX_ATTEMPTS`
+```cpp
+// src/app/app.ino
+#include "board_config.h"
 
-See `src/app/board_config.h` for currently available options. Additional configuration options can be added as needed for your project.
+void setup() {
+  #if HAS_BUILTIN_LED
+  // Only compiled for boards with LED
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LED_ACTIVE_HIGH ? HIGH : LOW);
+  Serial.println("LED initialized");
+  #else
+  Serial.println("No LED on this board");
+  #endif
+}
+```
+
+**Common Use Cases:**
+
+- **Different GPIO pins**: LEDs, buttons, sensors on different pins per board
+- **Optional hardware**: Battery monitors, displays, sensors present on some boards only
+- **Different drivers**: Same peripheral (e.g., display) using different driver chips
+
+**Defaults**: Boards without overrides use defaults from `src/app/board_config.h`. See that file for available options and usage examples.
+
+**Build System**: Automatically detects board override directories and sets `-DBOARD_HAS_OVERRIDE=1` during compilation.
 
 ### Serial Port
 
