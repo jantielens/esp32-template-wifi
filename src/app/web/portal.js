@@ -323,6 +323,24 @@ async function loadMode() {
             document.querySelectorAll('.nav-tab[data-page="home"], .nav-tab[data-page="firmware"]').forEach(tab => {
                 tab.style.display = 'none';
             });
+            
+            // Show setup notice on network page
+            const setupNotice = document.getElementById('setup-notice');
+            if (setupNotice) {
+                setupNotice.style.display = 'block';
+            }
+            
+            // Hide unnecessary buttons on network page (only "Save and Reboot" makes sense)
+            const saveOnlyBtn = document.getElementById('save-only-btn');
+            const rebootBtn = document.getElementById('reboot-btn');
+            if (saveOnlyBtn) saveOnlyBtn.style.display = 'none';
+            if (rebootBtn) rebootBtn.style.display = 'none';
+            
+            // Change primary button text to be more intuitive
+            const submitBtn = document.querySelector('#config-form button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.textContent = 'Save & Connect';
+            }
         }
     } catch (error) {
         console.error('Error loading mode:', error);

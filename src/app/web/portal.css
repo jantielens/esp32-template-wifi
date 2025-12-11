@@ -473,6 +473,21 @@ footer {
     color: #86868b;
 }
 
+/* Setup Notice */
+.setup-notice {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 16px 20px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 6px rgba(102, 126, 234, 0.2);
+}
+
+.setup-notice strong {
+    font-size: 16px;
+    display: block;
+}
+
 /* Overlays */
 .reboot-overlay {
     position: fixed;

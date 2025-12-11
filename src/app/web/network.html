@@ -5,6 +5,17 @@
     <div class="container">
         {{NAV}}
 
+        <!-- Initial Setup Notice (shown in AP mode only) -->
+        <div id="setup-notice" class="setup-notice" style="display:none;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 24px;">📡</span>
+                <div>
+                    <strong>Initial Setup</strong>
+                    <p style="margin: 4px 0 0 0; font-size: 14px; color: #ffffff;">Enter your WiFi credentials to connect the device to your network. Optionally, choose a memorable device name — it will determine the mDNS address you'll use to access the device after it connects.</p>
+                </div>
+            </div>
+        </div>
+
         <form id="config-form">
             <!-- WiFi and Device Settings (2-column on desktop) -->
             <div class="grid-2col">
