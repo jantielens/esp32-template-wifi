@@ -18,6 +18,38 @@ let portalMode = 'full'; // 'core' or 'full'
 let currentPage = 'home'; // Current page: 'home', 'network', or 'firmware'
 
 /**
+ * Scroll input into view when focused (prevents mobile keyboard from covering it)
+ * @param {Event} event - Focus event
+ */
+function handleInputFocus(event) {
+    // Small delay to let the keyboard animation start
+    setTimeout(() => {
+        const input = event.target;
+        const rect = input.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+        
+        // Estimate keyboard height (typically 40-50% of viewport on mobile)
+        const estimatedKeyboardHeight = viewportHeight * 0.45;
+        const availableHeight = viewportHeight - estimatedKeyboardHeight;
+        
+        // Calculate if input would be covered by keyboard
+        const inputBottom = rect.bottom;
+        
+        // Only scroll if the input would be covered by the keyboard
+        if (inputBottom > availableHeight) {
+            // Scroll just enough to show the input with some padding
+            const padding = 20; // 20px padding above input
+            const scrollAmount = inputBottom - availableHeight + padding;
+            
+            window.scrollTo({
+                top: window.scrollY + scrollAmount,
+                behavior: 'smooth'
+            });
+        }
+    }, 300); // Wait for keyboard animation
+}
+
+/**
  * Detect current page and highlight active navigation tab
  */
 function initNavigation() {
@@ -923,6 +955,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (deviceName) {
         deviceName.addEventListener('input', updateSanitizedName);
     }
+    
+    // Add focus handlers for all inputs to prevent keyboard from covering them
+    const inputs = document.querySelectorAll('input[type="text"], input[type="password"], textarea');
+    inputs.forEach(input => {
+        input.addEventListener('focus', handleInputFocus);
+    });
     
     // Load initial data
     loadMode();
