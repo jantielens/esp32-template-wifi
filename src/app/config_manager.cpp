@@ -6,6 +6,7 @@
  */
 
 #include "config_manager.h"
+#include "board_config.h"
 #include "web_assets.h"
 #include "log_manager.h"
 #include <Preferences.h>
@@ -23,6 +24,11 @@
 #define KEY_DNS1           "dns1"
 #define KEY_DNS2           "dns2"
 #define KEY_DUMMY          "dummy"
+#define KEY_MQTT_HOST      "mqtt_host"
+#define KEY_MQTT_PORT      "mqtt_port"
+#define KEY_MQTT_USER      "mqtt_user"
+#define KEY_MQTT_PASS      "mqtt_pass"
+#define KEY_MQTT_INTERVAL  "mqtt_int"
 #define KEY_MAGIC          "magic"
 
 static Preferences preferences;
@@ -114,6 +120,13 @@ bool config_manager_load(DeviceConfig *config) {
     
     // Load dummy setting
     preferences.getString(KEY_DUMMY, config->dummy_setting, CONFIG_DUMMY_MAX_LEN);
+
+    // Load MQTT settings (all optional)
+    preferences.getString(KEY_MQTT_HOST, config->mqtt_host, CONFIG_MQTT_HOST_MAX_LEN);
+    config->mqtt_port = preferences.getUShort(KEY_MQTT_PORT, 0);
+    preferences.getString(KEY_MQTT_USER, config->mqtt_username, CONFIG_MQTT_USERNAME_MAX_LEN);
+    preferences.getString(KEY_MQTT_PASS, config->mqtt_password, CONFIG_MQTT_PASSWORD_MAX_LEN);
+    config->mqtt_interval_seconds = preferences.getUShort(KEY_MQTT_INTERVAL, 0);
     
     config->magic = magic;
     
@@ -162,6 +175,13 @@ bool config_manager_save(const DeviceConfig *config) {
     
     // Save dummy setting
     preferences.putString(KEY_DUMMY, config->dummy_setting);
+
+    // Save MQTT settings
+    preferences.putString(KEY_MQTT_HOST, config->mqtt_host);
+    preferences.putUShort(KEY_MQTT_PORT, config->mqtt_port);
+    preferences.putString(KEY_MQTT_USER, config->mqtt_username);
+    preferences.putString(KEY_MQTT_PASS, config->mqtt_password);
+    preferences.putUShort(KEY_MQTT_INTERVAL, config->mqtt_interval_seconds);
     
     // Save magic number last (indicates valid config)
     preferences.putUInt(KEY_MAGIC, CONFIG_MAGIC);
@@ -221,4 +241,22 @@ void config_manager_print(const DeviceConfig *config) {
     } else {
         Logger.logLine("IP: DHCP");
     }
+
+#if HAS_MQTT
+    if (strlen(config->mqtt_host) > 0) {
+        uint16_t port = config->mqtt_port > 0 ? config->mqtt_port : 1883;
+        if (config->mqtt_interval_seconds > 0) {
+            Logger.logLinef("MQTT: %s:%d (%ds)", config->mqtt_host, port, config->mqtt_interval_seconds);
+        } else {
+            Logger.logLinef("MQTT: %s:%d (publish disabled)", config->mqtt_host, port);
+        }
+        Logger.logLinef("MQTT User: %s", strlen(config->mqtt_username) > 0 ? config->mqtt_username : "(none)");
+        Logger.logLinef("MQTT Pass: %s", strlen(config->mqtt_password) > 0 ? "***" : "(none)");
+    } else {
+        Logger.logLine("MQTT: disabled");
+    }
+#else
+    // MQTT config can still exist in NVS, but the firmware has MQTT support compiled out.
+    Logger.logLine("MQTT: disabled (feature not compiled into firmware)");
+#endif
 }

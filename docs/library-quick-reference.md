@@ -32,12 +32,12 @@
 
 1. **Find a library:**
    ```bash
-   ./library.sh search mqtt
+   ./library.sh search bme280
    ```
 
 2. **Add to project:**
    ```bash
-   ./library.sh add PubSubClient
+   ./library.sh add "Adafruit BME280 Library"
    ```
 
 3. **Verify:**
@@ -48,7 +48,7 @@
 4. **Commit:**
    ```bash
    git add arduino-libraries.txt
-   git commit -m "Add MQTT library"
+   git commit -m "Add BME280 sensor library"
    ```
 
 5. **CI/CD automatically installs it** via `setup.sh`
@@ -77,7 +77,7 @@
 - **Local Setup**: `./setup.sh` reads `arduino-libraries.txt` and installs all libraries
 - **CI/CD**: GitHub Actions runs `./setup.sh`, automatically installing libraries
 - **Version Control**: `arduino-libraries.txt` tracks dependencies across team/environments
-- **Initial State**: Template starts with no libraries configured (examples are commented out)
+- **Initial State**: Template ships with a small set of libraries already configured; customize `arduino-libraries.txt` as needed
 
 ## Format of arduino-libraries.txt
 

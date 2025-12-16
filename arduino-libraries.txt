@@ -21,3 +21,6 @@ Async TCP@3.4.9
 # Note: NetBIOS library is included in ESP32 core (no separate install needed)
 
 # Add additional libraries below:
+
+# MQTT
+PubSubClient@2.8

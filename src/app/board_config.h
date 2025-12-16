@@ -37,6 +37,11 @@
 #define HAS_BUILTIN_LED false
 #endif
 
+// MQTT / Home Assistant integration
+#ifndef HAS_MQTT
+#define HAS_MQTT true
+#endif
+
 #ifndef LED_PIN
 #define LED_PIN 2  // Common GPIO for ESP32 boards
 #endif

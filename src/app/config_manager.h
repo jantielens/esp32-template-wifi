@@ -27,6 +27,11 @@
 #define CONFIG_IP_STR_MAX_LEN 16
 #define CONFIG_DUMMY_MAX_LEN 64
 
+// MQTT settings
+#define CONFIG_MQTT_HOST_MAX_LEN 64
+#define CONFIG_MQTT_USERNAME_MAX_LEN 32
+#define CONFIG_MQTT_PASSWORD_MAX_LEN 64
+
 // Configuration structure
 struct DeviceConfig {
     // WiFi credentials
@@ -45,6 +50,13 @@ struct DeviceConfig {
     
     // Dummy setting (example for extensibility)
     char dummy_setting[CONFIG_DUMMY_MAX_LEN];
+
+    // MQTT / Home Assistant integration settings (all optional)
+    char mqtt_host[CONFIG_MQTT_HOST_MAX_LEN];
+    uint16_t mqtt_port; // default to 1883 when mqtt_host set and mqtt_port is 0
+    char mqtt_username[CONFIG_MQTT_USERNAME_MAX_LEN];
+    char mqtt_password[CONFIG_MQTT_PASSWORD_MAX_LEN];
+    uint16_t mqtt_interval_seconds; // 0 disables periodic publish
     
     // Validation flag (magic number to detect valid config)
     uint32_t magic;
