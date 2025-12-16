@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.15] - 2025-12-16
+
+### Fixed
+- Web portal CSS now styles `input[type="number"]` fields consistently (Issue #16)
+
 ## [0.0.14] - 2025-12-11
 
 ### Fixed
