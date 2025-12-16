@@ -280,6 +280,7 @@ label {
 /* Outline-style Inputs */
 input[type="text"],
 input[type="password"],
+input[type="number"],
 input[type="file"] {
     width: 100%;
     padding: 12px 16px;
@@ -294,18 +295,21 @@ input[type="file"] {
 }
 
 input[type="text"]:focus,
-input[type="password"]:focus {
+input[type="password"]:focus,
+input[type="number"]:focus {
     border-color: #007aff;
     box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.1);
 }
 
 input[type="text"]:hover:not(:focus),
-input[type="password"]:hover:not(:focus) {
+input[type="password"]:hover:not(:focus),
+input[type="number"]:hover:not(:focus) {
     border-color: #86868b;
 }
 
 input[type="text"]::placeholder,
-input[type="password"]::placeholder {
+input[type="password"]::placeholder,
+input[type="number"]::placeholder {
     color: #c7c7cc;
 }
 
