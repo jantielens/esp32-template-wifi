@@ -79,6 +79,39 @@
                     <small>Optional - leave empty if not needed</small>
                 </div>
             </section>
+
+            <!-- MQTT Settings Section (full-width) -->
+            <section class="section" id="mqtt-settings-section">
+                <h2>🏠 MQTT (Home Assistant) (Optional)</h2>
+                <div class="form-group">
+                    <label for="mqtt_host">MQTT Host</label>
+                    <input type="text" id="mqtt_host" name="mqtt_host" maxlength="63" placeholder="e.g. homeassistant.local">
+                    <small>Hostname or IP address of your MQTT broker</small>
+                </div>
+                <div class="form-group">
+                    <label for="mqtt_port">MQTT Port</label>
+                    <input type="number" id="mqtt_port" name="mqtt_port" min="0" max="65535" placeholder="1883">
+                    <small>Defaults to 1883 when empty/0</small>
+                </div>
+                <div class="form-group">
+                    <label for="mqtt_username">MQTT Username</label>
+                    <input type="text" id="mqtt_username" name="mqtt_username" maxlength="31" placeholder="Optional">
+                    <small>Leave empty for anonymous access</small>
+                </div>
+                <div class="form-group">
+                    <label for="mqtt_password">MQTT Password</label>
+                    <input type="password" id="mqtt_password" name="mqtt_password" maxlength="63" placeholder="Optional">
+                    <small>Leave empty to keep existing password</small>
+                </div>
+                <div class="form-group">
+                    <label for="mqtt_interval_seconds">Publish Interval (seconds)</label>
+                    <input type="number" id="mqtt_interval_seconds" name="mqtt_interval_seconds" min="0" max="65535" placeholder="0">
+                    <small>
+                        Modes: leave MQTT Host empty = don't connect. Set MQTT Host + interval 0 = connect (HA discovery + availability) but no periodic health publish. Set MQTT Host + interval &gt; 0 = connect and publish.
+                    </small>
+                </div>
+            </section>
+
             </section>
 
             {{FOOTER}}

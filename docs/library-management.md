@@ -2,7 +2,7 @@
 
 This project uses a configuration file to manage Arduino libraries, ensuring consistent dependencies across local development and CI/CD environments.
 
-> **Note:** The template starts with no libraries configured. Example libraries (`WiFi` and `ArduinoJson`) are provided as comments in `arduino-libraries.txt`. Uncomment or add libraries as needed for your project.
+> **Note:** The template ships with a small set of libraries already configured. Treat `arduino-libraries.txt` as the source of truth and add/remove entries as your project evolves.
 
 ## Configuration File
 
@@ -147,22 +147,19 @@ Or visit: https://www.arduinolibraries.info/
 # Initial setup
 ./setup.sh
 
-# Later, you need an MQTT library
-./library.sh search mqtt
-# Shows: PubSubClient by Nick O'Leary
-
-# Add it to your project
-./library.sh add PubSubClient
+# Add a new dependency (example: BME280 sensor)
+./library.sh search bme280
+./library.sh add "Adafruit BME280 Library"
 
 # Verify it's configured
 ./library.sh list
 
 # Commit the change
 git add arduino-libraries.txt
-git commit -m "Add MQTT support via PubSubClient"
+git commit -m "Add BME280 sensor library"
 git push
 
-# GitHub Actions will automatically install PubSubClient during CI
+# GitHub Actions will automatically install configured libraries during CI
 ```
 
 ## Troubleshooting

@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.16] - 2025-12-16
+
+### Added
+- MQTT + Home Assistant integration (PubSubClient)
+  - Home Assistant MQTT Discovery for device telemetry
+  - Availability topic (LWT) and retained state publishing
+  - Single JSON state topic with per-entity `value_template`
+- MQTT settings in the Network page (host/port/credentials/publish interval)
+- New developer guide: `docs/home-assistant-mqtt.md`
+
+### Changed
+- Refactored health/telemetry internals to `device_telemetry` (used by `/api/health` and MQTT publishing)
+- `/api/info` now reports `has_mqtt` so the portal can hide MQTT settings for MQTT-disabled builds
+- Documentation updated to reflect built-in MQTT/HA support and optional configuration
+
 ## [0.0.15] - 2025-12-16
 
 ### Fixed

@@ -13,6 +13,8 @@
 #include "web_assets.h"
 #include "config_manager.h"
 #include "log_manager.h"
+#include "board_config.h"
+#include "device_telemetry.h"
 #include "../version.h"
 #include <ESPAsyncWebServer.h>
 #include <DNSServer.h>
@@ -20,10 +22,6 @@
 #include <ArduinoJson.h>
 #include <Update.h>
 
-// Temperature sensor support (ESP32-C3, ESP32-S2, ESP32-S3, ESP32-C2, ESP32-C6, ESP32-H2)
-#if SOC_TEMP_SENSOR_SUPPORTED
-#include "driver/temperature_sensor.h"
-#endif
 
 // Forward declarations
 void handleRoot(AsyncWebServerRequest *request);
@@ -57,11 +55,6 @@ static DeviceConfig *current_config = nullptr;
 static bool ota_in_progress = false;
 static size_t ota_progress = 0;
 static size_t ota_total = 0;
-
-// CPU usage tracking
-static uint32_t last_idle_runtime = 0;
-static uint32_t last_total_runtime = 0;
-static unsigned long last_cpu_check = 0;
 
 // ===== WEB SERVER HANDLERS =====
 
@@ -175,6 +168,13 @@ void handleGetConfig(AsyncWebServerRequest *request) {
     
     // Dummy setting
     doc["dummy_setting"] = current_config->dummy_setting;
+
+    // MQTT settings (password not returned)
+    doc["mqtt_host"] = current_config->mqtt_host;
+    doc["mqtt_port"] = current_config->mqtt_port;
+    doc["mqtt_username"] = current_config->mqtt_username;
+    doc["mqtt_password"] = "";
+    doc["mqtt_interval_seconds"] = current_config->mqtt_interval_seconds;
     
     String response;
     serializeJson(doc, response);
@@ -245,6 +245,44 @@ void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len,
     if (doc.containsKey("dummy_setting")) {
         strlcpy(current_config->dummy_setting, doc["dummy_setting"] | "", CONFIG_DUMMY_MAX_LEN);
     }
+
+    // MQTT host
+    if (doc.containsKey("mqtt_host")) {
+        strlcpy(current_config->mqtt_host, doc["mqtt_host"] | "", CONFIG_MQTT_HOST_MAX_LEN);
+    }
+
+    // MQTT port (optional; 0 means default 1883)
+    if (doc.containsKey("mqtt_port")) {
+        if (doc["mqtt_port"].is<const char*>()) {
+            const char* port_str = doc["mqtt_port"];
+            current_config->mqtt_port = (uint16_t)atoi(port_str ? port_str : "0");
+        } else {
+            current_config->mqtt_port = (uint16_t)(doc["mqtt_port"] | 0);
+        }
+    }
+
+    // MQTT username
+    if (doc.containsKey("mqtt_username")) {
+        strlcpy(current_config->mqtt_username, doc["mqtt_username"] | "", CONFIG_MQTT_USERNAME_MAX_LEN);
+    }
+
+    // MQTT password (only update if provided and not empty)
+    if (doc.containsKey("mqtt_password")) {
+        const char* mqtt_pass = doc["mqtt_password"];
+        if (mqtt_pass && strlen(mqtt_pass) > 0) {
+            strlcpy(current_config->mqtt_password, mqtt_pass, CONFIG_MQTT_PASSWORD_MAX_LEN);
+        }
+    }
+
+    // MQTT interval seconds
+    if (doc.containsKey("mqtt_interval_seconds")) {
+        if (doc["mqtt_interval_seconds"].is<const char*>()) {
+            const char* int_str = doc["mqtt_interval_seconds"];
+            current_config->mqtt_interval_seconds = (uint16_t)atoi(int_str ? int_str : "0");
+        } else {
+            current_config->mqtt_interval_seconds = (uint16_t)(doc["mqtt_interval_seconds"] | 0);
+        }
+    }
     
     current_config->magic = CONFIG_MAGIC;
     
@@ -310,9 +348,9 @@ void handleGetVersion(AsyncWebServerRequest *request) {
     response->print(",\"free_heap\":");
     response->print(ESP.getFreeHeap());
     response->print(",\"sketch_size\":");
-    response->print(ESP.getSketchSize());
+    response->print(device_telemetry_sketch_size());
     response->print(",\"free_sketch_space\":");
-    response->print(ESP.getFreeSketchSpace());
+    response->print(device_telemetry_free_sketch_space());
     response->print(",\"mac_address\":\"");
     response->print(WiFi.macAddress());
     response->print("\",\"wifi_hostname\":\"");
@@ -325,130 +363,17 @@ void handleGetVersion(AsyncWebServerRequest *request) {
     response->print(PROJECT_NAME);
     response->print("\",\"project_display_name\":\"");
     response->print(PROJECT_DISPLAY_NAME);
-    response->print("\"}");
+    response->print("\",\"has_mqtt\":");
+    response->print(HAS_MQTT ? "true" : "false");
+    response->print("}");
     request->send(response);
 }
 
 // GET /api/health - Get device health statistics
 void handleGetHealth(AsyncWebServerRequest *request) {
     JsonDocument doc;
-    
-    // System
-    uint64_t uptime_us = esp_timer_get_time();
-    doc["uptime_seconds"] = uptime_us / 1000000;
-    
-    // Reset reason
-    esp_reset_reason_t reset_reason = esp_reset_reason();
-    const char* reset_str = "Unknown";
-    switch (reset_reason) {
-        case ESP_RST_POWERON:   reset_str = "Power On"; break;
-        case ESP_RST_SW:        reset_str = "Software"; break;
-        case ESP_RST_PANIC:     reset_str = "Panic"; break;
-        case ESP_RST_INT_WDT:   reset_str = "Interrupt WDT"; break;
-        case ESP_RST_TASK_WDT:  reset_str = "Task WDT"; break;
-        case ESP_RST_WDT:       reset_str = "WDT"; break;
-        case ESP_RST_DEEPSLEEP: reset_str = "Deep Sleep"; break;
-        case ESP_RST_BROWNOUT:  reset_str = "Brownout"; break;
-        case ESP_RST_SDIO:      reset_str = "SDIO"; break;
-        default: break;
-    }
-    doc["reset_reason"] = reset_str;
-    
-    // CPU
-    doc["cpu_freq"] = ESP.getCpuFreqMHz();
-    
-    // CPU usage via IDLE task delta calculation
-    TaskStatus_t task_stats[16];
-    uint32_t total_runtime;
-    int task_count = uxTaskGetSystemState(task_stats, 16, &total_runtime);
-    
-    uint32_t idle_runtime = 0;
-    for (int i = 0; i < task_count; i++) {
-        if (strstr(task_stats[i].pcTaskName, "IDLE") != nullptr) {
-            idle_runtime += task_stats[i].ulRunTimeCounter;
-        }
-    }
-    
-    // Calculate CPU usage based on delta since last measurement
-    unsigned long now = millis();
-    int cpu_usage = 0;
-    
-    if (last_cpu_check > 0 && (now - last_cpu_check) > 100) {  // Minimum 100ms between measurements
-        uint32_t idle_delta = idle_runtime - last_idle_runtime;
-        uint32_t total_delta = total_runtime - last_total_runtime;
-        
-        if (total_delta > 0) {
-            float idle_percent = ((float)idle_delta / total_delta) * 100.0;
-            cpu_usage = (int)(100.0 - idle_percent);
-            // Clamp to valid range
-            if (cpu_usage < 0) cpu_usage = 0;
-            if (cpu_usage > 100) cpu_usage = 100;
-        }
-    }
-    
-    // Update tracking variables
-    last_idle_runtime = idle_runtime;
-    last_total_runtime = total_runtime;
-    last_cpu_check = now;
-    
-    doc["cpu_usage"] = cpu_usage;
-    
-    // Temperature - Internal sensor (supported on ESP32-C3, S2, S3, C2, C6, H2)
-#if SOC_TEMP_SENSOR_SUPPORTED
-    float temp_celsius = 0;
-    temperature_sensor_handle_t temp_sensor = NULL;
-    temperature_sensor_config_t temp_sensor_config = TEMPERATURE_SENSOR_CONFIG_DEFAULT(-10, 80);
-    
-    if (temperature_sensor_install(&temp_sensor_config, &temp_sensor) == ESP_OK) {
-        if (temperature_sensor_enable(temp_sensor) == ESP_OK) {
-            if (temperature_sensor_get_celsius(temp_sensor, &temp_celsius) == ESP_OK) {
-                doc["temperature"] = (int)temp_celsius;
-            } else {
-                doc["temperature"] = nullptr;
-            }
-            temperature_sensor_disable(temp_sensor);
-        } else {
-            doc["temperature"] = nullptr;
-        }
-        temperature_sensor_uninstall(temp_sensor);
-    } else {
-        doc["temperature"] = nullptr;
-    }
-#else
-    // Original ESP32 and other chips without temp sensor support
-    doc["temperature"] = nullptr;
-#endif
-    
-    // Memory
-    doc["heap_free"] = ESP.getFreeHeap();
-    doc["heap_min"] = ESP.getMinFreeHeap();
-    doc["heap_size"] = ESP.getHeapSize();
-    
-    // Heap fragmentation calculation
-    size_t largest_block = ESP.getMaxAllocHeap();
-    size_t free_heap = ESP.getFreeHeap();
-    float fragmentation = 0;
-    if (free_heap > 0) {
-        fragmentation = (1.0 - ((float)largest_block / free_heap)) * 100.0;
-    }
-    doc["heap_fragmentation"] = (int)fragmentation;
-    
-    // Flash usage
-    doc["flash_used"] = ESP.getSketchSize();
-    doc["flash_total"] = ESP.getSketchSize() + ESP.getFreeSketchSpace();
-    
-    // WiFi stats (only if connected)
-    if (WiFi.status() == WL_CONNECTED) {
-        doc["wifi_rssi"] = WiFi.RSSI();
-        doc["wifi_channel"] = WiFi.channel();
-        doc["ip_address"] = WiFi.localIP().toString();
-        doc["hostname"] = WiFi.getHostname();
-    } else {
-        doc["wifi_rssi"] = nullptr;
-        doc["wifi_channel"] = nullptr;
-        doc["ip_address"] = nullptr;
-        doc["hostname"] = nullptr;
-    }
+
+    device_telemetry_fill_api(doc);
     
     String response;
     serializeJson(doc, response);
@@ -492,7 +417,7 @@ void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t ind
         
         // Get OTA partition size
         size_t updateSize = (ota_total > 0) ? ota_total : UPDATE_SIZE_UNKNOWN;
-        size_t freeSpace = ESP.getFreeSketchSpace();
+        size_t freeSpace = device_telemetry_free_sketch_space();
         
         Logger.logLinef("Free space: %d bytes", freeSpace);
         

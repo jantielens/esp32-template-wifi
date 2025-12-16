@@ -388,6 +388,16 @@ async function loadVersion() {
         if (!response.ok) return;
         
         const version = await response.json();
+
+        // Strategy B: Hide/disable MQTT settings if firmware was built without MQTT support
+        const mqttSection = document.getElementById('mqtt-settings-section');
+        if (mqttSection && version.has_mqtt === false) {
+            mqttSection.style.display = 'none';
+            mqttSection.querySelectorAll('input, select, textarea').forEach(el => {
+                el.disabled = true;
+            });
+        }
+
         document.getElementById('firmware-version').textContent = `Firmware v${version.version}`;
         document.getElementById('chip-info').textContent = 
             `${version.chip_model} rev ${version.chip_revision}`;
@@ -425,7 +435,7 @@ async function loadConfig() {
         // Helper to safely set element value
         const setValueIfExists = (id, value) => {
             const element = document.getElementById(id);
-            if (element) element.value = value || '';
+            if (element) element.value = (value === 0 ? '0' : (value || ''));
         };
         
         const setTextIfExists = (id, text) => {
@@ -454,6 +464,18 @@ async function loadConfig() {
         
         // Dummy setting
         setValueIfExists('dummy_setting', config.dummy_setting);
+
+        // MQTT settings
+        setValueIfExists('mqtt_host', config.mqtt_host);
+        setValueIfExists('mqtt_port', config.mqtt_port);
+        setValueIfExists('mqtt_username', config.mqtt_username);
+        setValueIfExists('mqtt_interval_seconds', config.mqtt_interval_seconds);
+
+        const mqttPwdField = document.getElementById('mqtt_password');
+        if (mqttPwdField) {
+            mqttPwdField.value = '';
+            mqttPwdField.placeholder = hasConfig ? '(saved - leave blank to keep)' : '';
+        }
         
         // Hide loading overlay (silent load)
         const overlay = document.getElementById('form-loading-overlay');
@@ -482,7 +504,8 @@ function extractFormFields(formData) {
     // Build config from only the fields that exist on this page
     const config = {};
     const fields = ['wifi_ssid', 'wifi_password', 'device_name', 'fixed_ip', 
-                    'subnet_mask', 'gateway', 'dns1', 'dns2', 'dummy_setting'];
+                    'subnet_mask', 'gateway', 'dns1', 'dns2', 'dummy_setting',
+                    'mqtt_host', 'mqtt_port', 'mqtt_username', 'mqtt_password', 'mqtt_interval_seconds'];
     
     fields.forEach(field => {
         const value = getFieldValue(field);
@@ -1002,8 +1025,8 @@ async function updateHealth() {
         
         // CPU
         document.getElementById('health-cpu-full').textContent = `${health.cpu_usage}%`;
-        document.getElementById('health-temp').textContent = health.temperature !== null ? 
-            `${health.temperature}°C` : 'N/A';
+        document.getElementById('health-temp').textContent = health.cpu_temperature !== null ? 
+            `${health.cpu_temperature}°C` : 'N/A';
         
         // Memory
         document.getElementById('health-heap').textContent = formatHeap(health.heap_free);

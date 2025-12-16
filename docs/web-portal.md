@@ -215,6 +215,9 @@ Real-time device health monitoring integrated as a header badge with expandable 
   - Gateway (required if fixed IP set)
   - DNS Server 1 (optional, defaults to gateway)
   - DNS Server 2 (optional)
+- **📡 MQTT Settings (Optional)**: MQTT broker settings
+  - Only shown when MQTT support is enabled in firmware (`HAS_MQTT`)
+  - Host, port, username/password, publish interval
 
 **Layout:** 
 - WiFi + Device Settings side-by-side on desktop

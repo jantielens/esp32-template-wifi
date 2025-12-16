@@ -228,8 +228,8 @@ build/
 ./setup.sh
 
 # Add libraries as needed
-./library.sh search mqtt
-./library.sh add PubSubClient
+./library.sh search bme280
+./library.sh add "Adafruit BME280 Library"
 
 # Development cycle
 ./build.sh              # Compile firmware

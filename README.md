@@ -337,7 +337,13 @@ Libraries are managed via `arduino-libraries.txt` for consistency across local a
 
 Libraries in `arduino-libraries.txt` are automatically installed by `setup.sh` and in GitHub Actions.
 
-**Note:** The template starts with no libraries configured. Uncomment or add libraries as needed for your project.
+**Note:** The template ships with a small set of libraries already configured; add or remove entries in `arduino-libraries.txt` as needed for your project.
+
+## 🏠 Home Assistant + MQTT
+
+When `HAS_MQTT` is enabled, the firmware can publish MQTT state and Home Assistant MQTT Discovery.
+
+- Developer guide: [docs/home-assistant-mqtt.md](docs/home-assistant-mqtt.md)
 
 See [docs/library-management.md](docs/library-management.md) for detailed guide.
 
@@ -489,6 +495,7 @@ usbipd list
 - [Build and Release Process](docs/build-and-release-process.md) - Project branding, build system, and release workflow
 - [WSL Development Guide](docs/wsl-development.md) - Windows/WSL setup
 - [Library Management](docs/library-management.md) - Managing dependencies
+- [Home Assistant + MQTT](docs/home-assistant-mqtt.md) - MQTT topics, HA discovery, and how to extend
 - [Changelog](CHANGELOG.md) - Version history and release notes
 
 ## 📄 License

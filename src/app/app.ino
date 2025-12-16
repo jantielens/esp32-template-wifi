@@ -3,6 +3,8 @@
 #include "config_manager.h"
 #include "web_portal.h"
 #include "log_manager.h"
+#include "mqtt_manager.h"
+#include "device_telemetry.h"
 #include <WiFi.h>
 #include <ESPmDNS.h>
 #include <lwip/netif.h>
@@ -10,6 +12,10 @@
 // Configuration
 DeviceConfig device_config;
 bool config_loaded = false;
+
+#if HAS_MQTT
+MqttManager mqtt_manager;
+#endif
 
 // WiFi retry settings
 const unsigned long WIFI_BACKOFF_BASE = 3000; // 3 seconds base (DHCP typically needs 2-3s)
@@ -75,6 +81,10 @@ void setup()
   
   // Initialize configuration manager
   config_manager_init();
+
+  // Cache flash/sketch metadata early to avoid concurrent access from different tasks later
+  // (e.g., MQTT publish + web API calls).
+  device_telemetry_init();
   
   // Try to load saved configuration
   config_loaded = config_manager_load(&device_config);
@@ -116,6 +126,13 @@ void setup()
   
   // Initialize web portal AFTER WiFi is started
   web_portal_init(&device_config);
+
+  #if HAS_MQTT
+  // Initialize MQTT manager (will only connect/publish when configured)
+  char sanitized[CONFIG_DEVICE_NAME_MAX_LEN];
+  config_manager_sanitize_device_name(device_config.device_name, sanitized, sizeof(sanitized));
+  mqtt_manager.begin(&device_config, device_config.device_name, sanitized);
+  #endif
   
   lastHeartbeat = millis();
   Logger.logMessage("Main", "Setup complete");
@@ -125,6 +142,10 @@ void loop()
 {
   // Handle web portal (DNS for captive portal)
   web_portal_handle();
+
+  #if HAS_MQTT
+  mqtt_manager.loop();
+  #endif
   
   unsigned long currentMillis = millis();
   
