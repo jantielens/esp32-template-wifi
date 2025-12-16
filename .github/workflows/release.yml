@@ -90,6 +90,11 @@ jobs:
       run: |
         chmod +x setup.sh
         ./setup.sh
+
+    - name: Install custom partition tables
+      run: |
+        chmod +x tools/install-custom-partitions.sh
+        ./tools/install-custom-partitions.sh
     
     - name: Compile firmware for ${{ matrix.board.name }}
       run: |

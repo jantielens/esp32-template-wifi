@@ -39,15 +39,22 @@ PROJECT_DISPLAY_NAME="ESP32 Template"
 # - ESP32-C3, C6, S3: Add `:CDCOnBoot=cdc` to enable USB serial output
 # - ESP32 (classic): No USB-OTG, uses hardware UART - no CDC parameter needed
 # - To check if a board needs CDC: `arduino-cli board details <FQBN> | grep CDCOnBoot`
+
+# Custom Partition Schemes (PartitionScheme):
+# Some ESP32 boards (notably ESP32-C3 “Super Mini” variants) can run out of flash
+# space for OTA-enabled firmware as projects grow.
 #
 # Examples:
 #   ["esp32:esp32:esp32"]="esp32"                                       # Classic ESP32 - hardware UART
 #   ["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"]="esp32c3"   # C3 with USB CDC enabled
+#   ["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb"]="esp32c3_ota_1_9mb"    # C3 with custom partitions example
 #   ["esp32:esp32:dfrobot_firebeetle2_esp32c6:CDCOnBoot=cdc"]="esp32c6" # C6 with USB CDC enabled
 #   ["esp32:esp32:esp32c6:CDCOnBoot=cdc"]="esp32c6supermini"            # C6 with USB CDC enabled (generic Super Mini variant)
+
 declare -A FQBN_TARGETS=(
     ["esp32:esp32:esp32"]="esp32"
     ["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"]="esp32c3"
+    ["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb"]="esp32c3_ota_1_9mb"
 )
 
 # Default board (used when only one board is configured)

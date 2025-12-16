@@ -22,6 +22,7 @@ This project includes several bash scripts to streamline ESP32 development workf
 declare -A FQBN_TARGETS=(
     ["esp32:esp32:esp32"]="esp32"                                        # Custom name
     ["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"]="esp32c3"  # Custom name
+    ["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb"]="esp32c3_ota_1_9mb"  # ESP32-C3 w/ custom partitions
     ["esp32:esp32:some_new_board"]                                       # Auto-extract name
 )
 ```
@@ -43,6 +44,7 @@ declare -A FQBN_TARGETS=(
 - Downloads and installs `arduino-cli` to `./bin/`
 - Configures ESP32 board support
 - Installs ESP32 core platform
+- Installs optional custom partition tables used by example board targets (if present)
 - Installs libraries from `arduino-libraries.txt`
 
 **When to use:** Run once when setting up the project, or after a clean checkout.
@@ -58,6 +60,7 @@ declare -A FQBN_TARGETS=(
 ./build.sh              # Build all configured boards
 ./build.sh esp32        # Build only ESP32 Dev Module
 ./build.sh esp32c3      # Build only ESP32-C3 Super Mini
+./build.sh esp32c3_ota_1_9mb  # Build ESP32-C3 using custom partitions (example)
 BOARD_PROFILE=psram ./build.sh esp32  # Optional build profile (if defined in config.sh)
 ```
 
@@ -87,6 +90,27 @@ build/
 
 ---
 
+## tools/install-custom-partitions.sh
+
+**Purpose:** Install/register template-provided custom partition tables into the Arduino ESP32 core.
+
+Some FQBN options (like `PartitionScheme=ota_1_9mb`) only work if:
+1. The partition CSV exists in the ESP32 core `tools/partitions/` directory, and
+2. The scheme is registered in the ESP32 core `boards.txt`.
+
+This script automates both steps.
+
+**Usage:**
+```bash
+./tools/install-custom-partitions.sh
+```
+
+**When to use:**
+- Automatically run by `./setup.sh`
+- Run manually after upgrading the ESP32 Arduino core (the install path can change)
+
+---
+
 ## upload.sh
 
 **Purpose:** Upload compiled firmware to the ESP32 device.
@@ -103,6 +127,7 @@ build/
 ```bash
 ./upload.sh esp32              # Upload ESP32 build, auto-detect port
 ./upload.sh esp32c3            # Upload ESP32-C3 build, auto-detect port
+./upload.sh esp32c3_ota_1_9mb   # Upload ESP32-C3 build using custom partitions
 ./upload.sh esp32 /dev/ttyUSB0 # Upload ESP32 build to specific port
 ```
 
@@ -259,10 +284,12 @@ build/
 # Or build specific board
 ./build.sh esp32
 ./build.sh esp32c3
+./build.sh esp32c3_ota_1_9mb
 
 # Upload to specific board
 ./upload.sh esp32       # Auto-detects port
 ./upload.sh esp32c3     # Auto-detects port
+./upload.sh esp32c3_ota_1_9mb
 
 # Full cycle for specific board
 ./bum.sh esp32          # Build + Upload + Monitor
@@ -287,6 +314,10 @@ sudo usermod -a -G dialout $USER
 **Build directory not found:**
 - Run `./build.sh [board]` before `./upload.sh [board]`
 - Ensure board name matches configured boards in `config.sh`
+
+**Partition scheme not found / build fails with PartitionScheme:**
+- Re-run `./setup.sh`, or run `./tools/install-custom-partitions.sh`
+- First flash after changing partition tables should be done over serial (USB)
 
 **Board name required error:**
 - When multiple boards are configured, specify board name: `./upload.sh esp32`
