@@ -35,6 +35,18 @@ arduino-cli core update-index
 echo "Installing ESP32 board support..."
 arduino-cli core install esp32:esp32
 
+# Install/register template-provided custom partition schemes.
+#
+# This is required for any board FQBN using `PartitionScheme=...`.
+# Safe to run multiple times (idempotent).
+if [ -f "./tools/install-custom-partitions.sh" ]; then
+    echo "Installing custom partition schemes (optional)..."
+    chmod +x ./tools/install-custom-partitions.sh
+    ./tools/install-custom-partitions.sh || echo "Warning: custom partition install failed (builds using PartitionScheme may fail)"
+else
+    echo "Note: tools/install-custom-partitions.sh not found; skipping custom partitions"
+fi
+
 # Install libraries from arduino-libraries.txt
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LIBRARIES_FILE="$SCRIPT_DIR/arduino-libraries.txt"

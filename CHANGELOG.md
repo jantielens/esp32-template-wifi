@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.17] - 2025-12-16
+
+### Added
+- Optional custom partition scheme example for ESP32-C3 to increase OTA app space
+  - `partitions/partitions_ota_1_9mb.csv`
+  - Example board target using `PartitionScheme=ota_1_9mb`
+- Installer script to register custom partition schemes into the Arduino ESP32 core: `tools/install-custom-partitions.sh`
+- Custom partitions documentation: `partitions/README.md`
+
+### Changed
+- `setup.sh` now runs the custom partitions installer (when present)
+- CI workflows run the installer before compiling boards that use `PartitionScheme=...`
+
 ## [0.0.16] - 2025-12-16
 
 ### Added

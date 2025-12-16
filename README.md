@@ -103,6 +103,8 @@ esp32-template-wifi/
 │   │   └── esp32c3/               # ESP32-C3 Super Mini config example
 │   │       └── board_overrides.h  # Board-specific defines (LED on GPIO8)
 │   └── version.h                  # Firmware version tracking
+├── partitions/                    # Optional custom partition tables (see docs)
+│   └── partitions_ota_1_9mb.csv    # OTA-friendly layout with larger app partitions
 ├── .github/
 │   └── workflows/
 │       └── build.yml              # CI/CD pipeline
@@ -210,8 +212,22 @@ The project supports multiple ESP32 board variants configured in `config.sh`:
 declare -A FQBN_TARGETS=(
     ["esp32:esp32:esp32"]="esp32"                                        # ESP32 Dev Module
     ["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"]="esp32c3"  # ESP32-C3 Super Mini
+    ["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb"]="esp32c3_ota_1_9mb"  # ESP32-C3 Super Mini (custom partitions example)
 )
 ```
+
+### Custom Partition Scheme Example (ESP32-C3)
+
+This template includes an optional custom partition table to increase OTA app partition size on 4MB ESP32-C3 boards.
+
+- Partition CSV: `partitions/partitions_ota_1_9mb.csv`
+- Enabled by using `PartitionScheme=ota_1_9mb` in the board FQBN (see `esp32c3_ota_1_9mb` above)
+- Installed automatically by:
+  - Local dev: `./setup.sh`
+  - CI/CD: GitHub Actions workflows (build + release)
+- Manual (if you changed core versions): `./tools/install-custom-partitions.sh`
+
+**Important:** the first flash after changing the partition table should be done over serial (USB). OTA updates will work normally afterwards.
 
 **Adding/Modifying Boards:**
 

@@ -8,6 +8,7 @@ This document describes the build system configuration and automated release wor
 - [Build System](#build-system)
 - [Release Workflow](#release-workflow)
 - [Release Scenarios](#release-scenarios)
+- [Custom Partition Schemes](#custom-partition-schemes)
 
 ---
 
@@ -237,6 +238,39 @@ get_build_props_for_board() {
     esac
 }
 ```
+
+---
+
+## Custom Partition Schemes
+
+Some ESP32 boards (notably ESP32-C3 “Super Mini” variants with 4MB flash) can run out of space for OTA-enabled firmware as projects grow.
+
+This template includes an **optional** custom partition scheme that:
+- Keeps two OTA app partitions (safer OTA)
+- Increases each app partition size to ~1.9MB
+- Shrinks SPIFFS to a minimal size
+
+### What’s Included
+
+- Partition CSV: `partitions/partitions_ota_1_9mb.csv`
+- Board example in `config.sh`: `esp32c3_ota_1_9mb` (uses `PartitionScheme=ota_1_9mb`)
+- Installer script: `tools/install-custom-partitions.sh`
+
+### How It’s Installed
+
+For Arduino ESP32 core builds, **both** steps are required:
+1. Copy the CSV into the installed ESP32 core’s partitions directory:
+  `~/.arduino15/packages/esp32/hardware/esp32/*/tools/partitions/`
+2. Register the scheme in that core’s `boards.txt` so `PartitionScheme=ota_1_9mb` is recognized.
+
+This template automates the installation:
+- Local development: `./setup.sh` runs `tools/install-custom-partitions.sh`
+- CI/CD: GitHub Actions workflows run the same installer before compiling
+
+### Important Operational Notes
+
+- The **first flash after changing a partition table should be done over serial** (USB). OTA updates will work normally afterwards.
+- If you see errors like “offset not aligned” or “sketch too big”, verify your offsets are 0x10000-aligned (except NVS/otadata) and that your firmware fits in the configured app partition size.
 
 **Notes:**
 - If `get_build_props_for_board` is **not** defined, the build still proceeds (the call is guarded).
