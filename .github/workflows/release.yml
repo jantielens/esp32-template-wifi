@@ -47,8 +47,8 @@ jobs:
         # Build JSON array for matrix
         boards_json="["
         first=true
-        for fqbn in "${!FQBN_TARGETS[@]}"; do
-          board_name=$(get_board_name "$fqbn")
+        for board_name in "${!FQBN_TARGETS[@]}"; do
+          fqbn="${FQBN_TARGETS[$board_name]}"
           if [ "$first" = true ]; then
             first=false
           else
