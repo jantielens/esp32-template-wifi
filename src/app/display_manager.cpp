@@ -214,7 +214,8 @@ void DisplayManager::showSplash() {
 
 void DisplayManager::showInfo() {
     Logger.logBegin("Show Info");
-    lock();
+    // Note: Don't lock if called from LVGL callback (already locked by task)
+    // Just perform the screen change directly
     if (currentScreen) {
         Logger.logLine("Hiding current screen");
         currentScreen->hide();
@@ -222,13 +223,13 @@ void DisplayManager::showInfo() {
     currentScreen = &infoScreen;
     Logger.logLine("Loading info screen");
     currentScreen->show();
-    unlock();
     Logger.logEnd();
 }
 
 void DisplayManager::showTest() {
     Logger.logBegin("Show Test");
-    lock();
+    // Note: Don't lock if called from LVGL callback (already locked by task)
+    // Just perform the screen change directly
     if (currentScreen) {
         Logger.logLine("Hiding current screen");
         currentScreen->hide();
@@ -236,7 +237,6 @@ void DisplayManager::showTest() {
     currentScreen = &testScreen;
     Logger.logLine("Loading test screen");
     currentScreen->show();
-    unlock();
     Logger.logEnd();
 }
 

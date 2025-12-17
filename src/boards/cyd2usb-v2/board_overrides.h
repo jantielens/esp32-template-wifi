@@ -50,16 +50,32 @@
 // Backlight Control
 #define TFT_BACKLIGHT_ON HIGH
 
+// TFT_eSPI Touch Controller Pins (required for TFT_eSPI touch extensions)
+#define TOUCH_CS 33     // Touch chip select
+#define TOUCH_SCLK 25   // Touch SPI clock
+#define TOUCH_MISO 39   // Touch SPI MISO
+#define TOUCH_MOSI 32   // Touch SPI MOSI
+#define TOUCH_IRQ 36    // Touch interrupt (optional)
+
 // ============================================================================
-// Touch Screen Configuration (XPT2046) - Optional for future use
+// Touch Screen Configuration (XPT2046)
 // ============================================================================
 // Touch uses separate VSPI bus
-// #define HAS_TOUCH true
-// #define XPT2046_IRQ  36
-// #define XPT2046_MOSI 32
-// #define XPT2046_MISO 39
-// #define XPT2046_CLK  25
-// #define XPT2046_CS   33
+#define HAS_TOUCH true
+#define TOUCH_DRIVER TOUCH_DRIVER_XPT2046
+
+// XPT2046 pins (VSPI bus - separate from display)
+#define XPT2046_IRQ  36
+#define XPT2046_MOSI 32
+#define XPT2046_MISO 39
+#define XPT2046_CLK  25
+#define XPT2046_CS   33
+
+// Calibration values (from macsbug.wordpress.com)
+#define TOUCH_CAL_X_MIN 300
+#define TOUCH_CAL_X_MAX 3900
+#define TOUCH_CAL_Y_MIN 200
+#define TOUCH_CAL_Y_MAX 3700
 
 // ============================================================================
 // Additional Hardware on CYD

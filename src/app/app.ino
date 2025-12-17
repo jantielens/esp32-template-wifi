@@ -13,6 +13,10 @@
 #include "display_manager.h"
 #endif
 
+#if HAS_TOUCH
+#include "touch_manager.h"
+#endif
+
 // Configuration
 DeviceConfig device_config;
 bool config_loaded = false;
@@ -87,6 +91,11 @@ void setup()
   #if HAS_DISPLAY
   display_manager_init(&device_config);
   display_manager_set_splash_status("Loading config...");
+  #endif
+  
+  #if HAS_TOUCH
+  // Initialize touch after display is ready
+  touch_manager_init();
   #endif
   
   // Initialize configuration manager

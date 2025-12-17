@@ -34,6 +34,9 @@ private:
     lv_obj_t* separatorTop;
     lv_obj_t* separatorBottom;
     
+    // Touch event handler (static callback)
+    static void touchEventCallback(lv_event_t* e);
+    
 public:
     InfoScreen(DeviceConfig* deviceConfig, DisplayManager* manager);
     ~InfoScreen();

@@ -29,6 +29,9 @@ private:
     lv_obj_t* magentaBar;
     lv_obj_t* infoLabel;
     
+    // Touch event handler (static callback)
+    static void touchEventCallback(lv_event_t* e);
+    
 public:
     TestScreen(DisplayManager* manager);
     ~TestScreen();

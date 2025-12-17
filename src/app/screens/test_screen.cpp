@@ -1,6 +1,7 @@
 #include "test_screen.h"
 #include "log_manager.h"
 #include "../board_config.h"
+#include "../display_manager.h"
 
 TestScreen::TestScreen(DisplayManager* manager) 
     : screen(nullptr), displayMgr(manager),
@@ -28,6 +29,7 @@ void TestScreen::create() {
     lv_obj_set_style_text_color(titleLabel, lv_color_white(), 0);
     lv_obj_set_style_text_font(titleLabel, &lv_font_montserrat_18, 0);
     lv_obj_align(titleLabel, LV_ALIGN_CENTER, 0, -90);
+    lv_obj_clear_flag(titleLabel, LV_OBJ_FLAG_CLICKABLE);  // Click-transparent
     
     // Red bar
     redBar = lv_obj_create(screen);
@@ -36,6 +38,7 @@ void TestScreen::create() {
     lv_obj_set_style_border_width(redBar, 0, 0);
     lv_obj_set_style_pad_all(redBar, 0, 0);
     lv_obj_align(redBar, LV_ALIGN_CENTER, 0, -60);
+    lv_obj_clear_flag(redBar, LV_OBJ_FLAG_CLICKABLE);  // Click-transparent
     
     // Green bar
     greenBar = lv_obj_create(screen);
@@ -44,6 +47,7 @@ void TestScreen::create() {
     lv_obj_set_style_border_width(greenBar, 0, 0);
     lv_obj_set_style_pad_all(greenBar, 0, 0);
     lv_obj_align(greenBar, LV_ALIGN_CENTER, 0, -45);
+    lv_obj_clear_flag(greenBar, LV_OBJ_FLAG_CLICKABLE);  // Click-transparent
     
     // Blue bar
     blueBar = lv_obj_create(screen);
@@ -52,6 +56,7 @@ void TestScreen::create() {
     lv_obj_set_style_border_width(blueBar, 0, 0);
     lv_obj_set_style_pad_all(blueBar, 0, 0);
     lv_obj_align(blueBar, LV_ALIGN_CENTER, 0, -30);
+    lv_obj_clear_flag(blueBar, LV_OBJ_FLAG_CLICKABLE);  // Click-transparent
     
     // Grayscale gradient bar (centered for maximum width on round displays)
     gradientBar = lv_obj_create(screen);
@@ -62,6 +67,7 @@ void TestScreen::create() {
     lv_obj_set_style_border_width(gradientBar, 0, 0);
     lv_obj_set_style_pad_all(gradientBar, 0, 0);
     lv_obj_align(gradientBar, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_clear_flag(gradientBar, LV_OBJ_FLAG_CLICKABLE);  // Click-transparent
     
     // Yellow bar (R+G)
     yellowBar = lv_obj_create(screen);
@@ -70,6 +76,7 @@ void TestScreen::create() {
     lv_obj_set_style_border_width(yellowBar, 0, 0);
     lv_obj_set_style_pad_all(yellowBar, 0, 0);
     lv_obj_align(yellowBar, LV_ALIGN_CENTER, 0, 30);
+    lv_obj_clear_flag(yellowBar, LV_OBJ_FLAG_CLICKABLE);  // Click-transparent
     
     // Cyan bar (G+B)
     cyanBar = lv_obj_create(screen);
@@ -78,6 +85,7 @@ void TestScreen::create() {
     lv_obj_set_style_border_width(cyanBar, 0, 0);
     lv_obj_set_style_pad_all(cyanBar, 0, 0);
     lv_obj_align(cyanBar, LV_ALIGN_CENTER, 0, 45);
+    lv_obj_clear_flag(cyanBar, LV_OBJ_FLAG_CLICKABLE);  // Click-transparent
     
     // Magenta bar (R+B)
     magentaBar = lv_obj_create(screen);
@@ -86,6 +94,7 @@ void TestScreen::create() {
     lv_obj_set_style_border_width(magentaBar, 0, 0);
     lv_obj_set_style_pad_all(magentaBar, 0, 0);
     lv_obj_align(magentaBar, LV_ALIGN_CENTER, 0, 60);
+    lv_obj_clear_flag(magentaBar, LV_OBJ_FLAG_CLICKABLE);  // Click-transparent
     
     // Resolution info
     infoLabel = lv_label_create(screen);
@@ -94,6 +103,11 @@ void TestScreen::create() {
     lv_label_set_text(infoLabel, info_text);
     lv_obj_set_style_text_color(infoLabel, lv_color_make(150, 150, 150), 0);
     lv_obj_align(infoLabel, LV_ALIGN_CENTER, 0, 85);
+    lv_obj_clear_flag(infoLabel, LV_OBJ_FLAG_CLICKABLE);  // Click-transparent
+    
+    // Add touch event handler - tap anywhere to go to InfoScreen
+    lv_obj_add_event_cb(screen, touchEventCallback, LV_EVENT_CLICKED, this);
+    lv_obj_add_flag(screen, LV_OBJ_FLAG_CLICKABLE);
     
     Logger.logEnd();
 }
@@ -133,4 +147,13 @@ void TestScreen::hide() {
 
 void TestScreen::update() {
     // Static screen - no dynamic updates needed
+}
+
+// Touch event callback - navigate to InfoScreen
+void TestScreen::touchEventCallback(lv_event_t* e) {
+    TestScreen* instance = (TestScreen*)lv_event_get_user_data(e);
+    if (instance && instance->displayMgr) {
+        Logger.logLine("TestScreen: Touch detected, navigating to InfoScreen");
+        instance->displayMgr->showInfo();
+    }
 }

@@ -3,6 +3,7 @@
 #include "log_manager.h"
 #include "../device_telemetry.h"
 #include "../board_config.h"
+#include "../display_manager.h"
 #include <WiFi.h>
 #include <esp_chip_info.h>
 
@@ -31,17 +32,20 @@ void InfoScreen::create() {
     uptimeLabel = lv_label_create(screen);
     lv_obj_set_style_text_color(uptimeLabel, lv_color_make(200, 200, 200), 0);
     lv_obj_align(uptimeLabel, LV_ALIGN_CENTER, 0, -60);
+    lv_obj_clear_flag(uptimeLabel, LV_OBJ_FLAG_CLICKABLE);  // Click-transparent
     
     // Free heap
     heapLabel = lv_label_create(screen);
     lv_obj_set_style_text_color(heapLabel, lv_color_make(200, 200, 200), 0);
     lv_obj_align(heapLabel, LV_ALIGN_CENTER, 0, -40);
+    lv_obj_clear_flag(heapLabel, LV_OBJ_FLAG_CLICKABLE);  // Click-transparent
     
     // Firmware version
     versionLabel = lv_label_create(screen);
     lv_label_set_text(versionLabel, "v" FIRMWARE_VERSION);
     lv_obj_set_style_text_color(versionLabel, lv_color_make(200, 200, 200), 0);
     lv_obj_align(versionLabel, LV_ALIGN_CENTER, 0, -25);
+    lv_obj_clear_flag(versionLabel, LV_OBJ_FLAG_CLICKABLE);  // Click-transparent
     
     // Device name (HERO - center of screen, larger font)
     deviceNameLabel = lv_label_create(screen);
@@ -49,6 +53,7 @@ void InfoScreen::create() {
     lv_obj_set_style_text_color(deviceNameLabel, lv_color_white(), 0);
     lv_obj_set_style_text_font(deviceNameLabel, &lv_font_montserrat_18, 0);
     lv_obj_align(deviceNameLabel, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_clear_flag(deviceNameLabel, LV_OBJ_FLAG_CLICKABLE);  // Click-transparent
     
     // Separator lines above and below device name (full width)
     separatorTop = lv_obj_create(screen);
@@ -57,6 +62,7 @@ void InfoScreen::create() {
     lv_obj_set_style_border_width(separatorTop, 0, 0);
     lv_obj_set_style_pad_all(separatorTop, 0, 0);
     lv_obj_align(separatorTop, LV_ALIGN_CENTER, 0, -15);  // 15px above device name
+    lv_obj_clear_flag(separatorTop, LV_OBJ_FLAG_CLICKABLE);  // Click-transparent
     
     separatorBottom = lv_obj_create(screen);
     lv_obj_set_size(separatorBottom, lv_pct(100), 1);  // Full width, 1px tall
@@ -64,6 +70,7 @@ void InfoScreen::create() {
     lv_obj_set_style_border_width(separatorBottom, 0, 0);
     lv_obj_set_style_pad_all(separatorBottom, 0, 0);
     lv_obj_align(separatorBottom, LV_ALIGN_CENTER, 0, 15);  // 15px below device name
+    lv_obj_clear_flag(separatorBottom, LV_OBJ_FLAG_CLICKABLE);  // Click-transparent
     
     // Chip info (below center)
     chipLabel = lv_label_create(screen);
@@ -72,19 +79,26 @@ void InfoScreen::create() {
     lv_label_set_text(chipLabel, chip_text);
     lv_obj_set_style_text_color(chipLabel, lv_color_make(150, 150, 150), 0);
     lv_obj_align(chipLabel, LV_ALIGN_CENTER, 0, 25);
+    lv_obj_clear_flag(chipLabel, LV_OBJ_FLAG_CLICKABLE);  // Click-transparent
     
     // mDNS hostname
     mdnsLabel = lv_label_create(screen);
     lv_obj_set_style_text_color(mdnsLabel, lv_color_make(150, 150, 150), 0);
     lv_obj_align(mdnsLabel, LV_ALIGN_CENTER, 0, 40);
+    lv_obj_clear_flag(mdnsLabel, LV_OBJ_FLAG_CLICKABLE);  // Click-transparent
     
     // IP Address (bottom)
     ipLabel = lv_label_create(screen);
     lv_obj_set_style_text_color(ipLabel, lv_color_make(100, 200, 255), 0);
     lv_obj_align(ipLabel, LV_ALIGN_CENTER, 0, 60);
+    lv_obj_clear_flag(ipLabel, LV_OBJ_FLAG_CLICKABLE);  // Click-transparent
     
     // Removed label
     ssidLabel = nullptr;
+    
+    // Add touch event handler - tap anywhere to go to TestScreen
+    lv_obj_add_event_cb(screen, touchEventCallback, LV_EVENT_CLICKED, this);
+    lv_obj_add_flag(screen, LV_OBJ_FLAG_CLICKABLE);
 }
 
 void InfoScreen::destroy() {
@@ -175,5 +189,13 @@ void InfoScreen::update() {
         char mdns_text[CONFIG_DEVICE_NAME_MAX_LEN + 10];
         snprintf(mdns_text, sizeof(mdns_text), "%s.local", sanitized);
         lv_label_set_text(mdnsLabel, mdns_text);
+    }
+}
+
+// Touch event callback - navigate to TestScreen
+void InfoScreen::touchEventCallback(lv_event_t* e) {
+    InfoScreen* instance = (InfoScreen*)lv_event_get_user_data(e);
+    if (instance && instance->displayMgr) {
+        instance->displayMgr->showTest();
     }
 }

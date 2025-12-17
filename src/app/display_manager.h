@@ -77,6 +77,9 @@ public:
     
     // Access to splash screen for status updates
     SplashScreen* getSplash() { return &splashScreen; }
+    
+    // Access to display driver (for touch integration)
+    DisplayDriver* getDriver() { return driver; }
 };
 
 // Global instance (managed by app.ino)

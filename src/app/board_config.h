@@ -136,5 +136,23 @@
 #define LVGL_TICK_PERIOD_MS 5
 #endif
 
+// ============================================================================
+// Touch Configuration
+// ============================================================================
+#ifndef HAS_TOUCH
+#define HAS_TOUCH false
+#endif
+
+// Touch driver selection
+// Available drivers:
+//   TOUCH_DRIVER_XPT2046 (1) - XPT2046 resistive touch (via TFT_eSPI)
+//   TOUCH_DRIVER_FT6236 (2) - FT6236 capacitive touch (future support)
+#define TOUCH_DRIVER_XPT2046 1
+#define TOUCH_DRIVER_FT6236 2
+
+#ifndef TOUCH_DRIVER
+#define TOUCH_DRIVER TOUCH_DRIVER_XPT2046  // Default to XPT2046
+#endif
+
 #endif // BOARD_CONFIG_H
 
