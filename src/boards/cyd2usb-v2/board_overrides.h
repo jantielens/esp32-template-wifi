@@ -1,0 +1,84 @@
+#ifndef BOARD_OVERRIDES_CYD2USB_V2_H
+#define BOARD_OVERRIDES_CYD2USB_V2_H
+
+// ============================================================================
+// ESP32-2432S028R v2 (CYD - 1 USB Port) Board Configuration Overrides
+// ============================================================================
+// This file overrides default settings in src/app/board_config.h for the
+// ESP32-2432S028R v2 "Cheap Yellow Display" with single USB port.
+//
+// Hardware: ESP32 + 2.8" ILI9341 TFT (320x240) + XPT2046 Touch
+// Display: ILI9341 driver with TFT_INVERSION_ON + gamma correction
+//
+// Reference: https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display
+
+// ============================================================================
+// Display Configuration
+// ============================================================================
+#define HAS_DISPLAY true
+
+// TFT_eSPI Driver Configuration (must match library's User_Setup.h or use build flags)
+// For v2 (1 USB port): ILI9341_2_DRIVER with TFT_INVERSION_ON
+#define DISPLAY_DRIVER_ILI9341_2
+#define DISPLAY_INVERSION_ON true
+
+// Gamma Correction Fix Required for v2
+// Both 1-USB and 2-USB variants need gamma correction
+// See: https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display/blob/main/cyd.md
+#define DISPLAY_NEEDS_GAMMA_FIX true
+
+// Display Pins (HSPI)
+#define TFT_MISO 12
+#define TFT_MOSI 13
+#define TFT_SCLK 14
+#define TFT_CS   15
+#define TFT_DC   2
+#define TFT_RST  -1   // No reset pin
+#define TFT_BL   21   // Backlight
+
+// Display Properties
+#define DISPLAY_WIDTH  320
+#define DISPLAY_HEIGHT 240
+#define DISPLAY_ROTATION 1  // Landscape (0=portrait, 1=landscape, 2=portrait_flip, 3=landscape_flip)
+
+// SPI Frequency
+#define TFT_SPI_FREQUENCY 55000000  // 55MHz
+
+// Color Order
+#define DISPLAY_COLOR_ORDER_BGR true  // BGR color order (not RGB)
+
+// Backlight Control
+#define TFT_BACKLIGHT_ON HIGH
+
+// ============================================================================
+// Touch Screen Configuration (XPT2046) - Optional for future use
+// ============================================================================
+// Touch uses separate VSPI bus
+// #define HAS_TOUCH true
+// #define XPT2046_IRQ  36
+// #define XPT2046_MOSI 32
+// #define XPT2046_MISO 39
+// #define XPT2046_CLK  25
+// #define XPT2046_CS   33
+
+// ============================================================================
+// Additional Hardware on CYD
+// ============================================================================
+// RGB LED (active low)
+// #define HAS_RGB_LED true
+// #define RGB_LED_RED   4
+// #define RGB_LED_GREEN 16
+// #define RGB_LED_BLUE  17
+
+// SD Card (VSPI)
+// #define HAS_SD_CARD true
+// #define SD_CS   5
+// #define SD_MISO 19
+// #define SD_MOSI 23
+// #define SD_SCLK 18
+
+// Light Sensor
+// #define HAS_LDR true
+// #define LDR_PIN 34
+
+#endif // BOARD_OVERRIDES_CYD2USB_V2_H

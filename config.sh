@@ -55,8 +55,8 @@ PROJECT_DISPLAY_NAME="ESP32 Template"
 
 declare -A FQBN_TARGETS=(
     ["esp32"]="esp32:esp32:esp32"
-    ["esp32c3"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"
-    ["esp32c3_ota_1_9mb"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb"
+    ["cyd2usb-v2"]="esp32:esp32:esp32:PartitionScheme=min_spiffs"
+    ["cyd2usb-v3"]="esp32:esp32:esp32:PartitionScheme=min_spiffs"
 )
 
 # Default board (used when only one board is configured)

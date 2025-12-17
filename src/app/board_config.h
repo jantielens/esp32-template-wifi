@@ -98,5 +98,23 @@
 // #define HAS_DISPLAY false
 // #endif
 
+// ============================================================================
+// Display Configuration
+// ============================================================================
+#ifndef HAS_DISPLAY
+#define HAS_DISPLAY false
+#endif
+
+// ============================================================================
+// LVGL Configuration
+// ============================================================================
+#ifndef LVGL_BUFFER_SIZE
+#define LVGL_BUFFER_SIZE (DISPLAY_WIDTH * 10)  // 10 lines buffer
+#endif
+
+#ifndef LVGL_TICK_PERIOD_MS
+#define LVGL_TICK_PERIOD_MS 5
+#endif
+
 #endif // BOARD_CONFIG_H
 
