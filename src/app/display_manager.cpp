@@ -4,14 +4,31 @@
 
 #include "display_manager.h"
 #include "log_manager.h"
+
+// Include selected display driver
+#ifndef DISPLAY_DRIVER
+#define DISPLAY_DRIVER DISPLAY_DRIVER_TFT_ESPI  // Default to TFT_eSPI
+#endif
+
+#if DISPLAY_DRIVER == DISPLAY_DRIVER_TFT_ESPI
+#include "drivers/tft_espi_driver.h"
+#endif
+
 #include <SPI.h>
 
 // Global instance
 DisplayManager* displayManager = nullptr;
 
 DisplayManager::DisplayManager(DeviceConfig* config) 
-    : currentScreen(nullptr), infoScreen(config, this), testScreen(this),
+    : driver(nullptr), currentScreen(nullptr), infoScreen(config, this), testScreen(this),
       lvglTaskHandle(nullptr), lvglMutex(nullptr) {
+    // Instantiate selected display driver
+    #if DISPLAY_DRIVER == DISPLAY_DRIVER_TFT_ESPI
+    driver = new TFT_eSPI_Driver();
+    #else
+    #error "No display driver selected or unknown driver type"
+    #endif
+    
     // Create mutex for thread-safe LVGL access
     lvglMutex = xSemaphoreCreateMutex();
 }
@@ -31,6 +48,12 @@ DisplayManager::~DisplayManager() {
     infoScreen.destroy();
     testScreen.destroy();
     
+    // Delete display driver
+    if (driver) {
+        delete driver;
+        driver = nullptr;
+    }
+    
     // Delete mutex
     if (lvglMutex) {
         vSemaphoreDelete(lvglMutex);
@@ -45,10 +68,10 @@ void DisplayManager::flushCallback(lv_disp_drv_t *disp, const lv_area_t *area, l
     uint32_t w = (area->x2 - area->x1 + 1);
     uint32_t h = (area->y2 - area->y1 + 1);
     
-    mgr->tft.startWrite();
-    mgr->tft.setAddrWindow(area->x1, area->y1, w, h);
-    mgr->tft.pushColors((uint16_t *)&color_p->full, w * h, true);
-    mgr->tft.endWrite();
+    mgr->driver->startWrite();
+    mgr->driver->setAddrWindow(area->x1, area->y1, w, h);
+    mgr->driver->pushColors((uint16_t *)&color_p->full, w * h, true);
+    mgr->driver->endWrite();
     
     lv_disp_flush_ready(disp);
 }
@@ -94,38 +117,18 @@ void DisplayManager::lvglTask(void* pvParameter) {
 void DisplayManager::initHardware() {
     Logger.logBegin("Display Init");
     
-    // Initialize TFT
-    tft.init();
-    tft.setRotation(DISPLAY_ROTATION);
+    // Initialize display driver
+    driver->init();
+    driver->setRotation(DISPLAY_ROTATION);
     
     // Turn on backlight
-    pinMode(TFT_BL, OUTPUT);
-    digitalWrite(TFT_BL, TFT_BACKLIGHT_ON);
+    driver->setBacklight(true);
     
-    Logger.logLinef("Driver: ILI9341 (%dx%d)", DISPLAY_WIDTH, DISPLAY_HEIGHT);
+    Logger.logLinef("Resolution: %dx%d", DISPLAY_WIDTH, DISPLAY_HEIGHT);
     Logger.logLinef("Rotation: %d", DISPLAY_ROTATION);
     
-    // Apply display-specific settings
-    #ifdef DISPLAY_INVERSION_ON
-    tft.invertDisplay(true);
-    Logger.logLine("Inversion: ON");
-    #endif
-    
-    #ifdef DISPLAY_INVERSION_OFF
-    tft.invertDisplay(false);
-    Logger.logLine("Inversion: OFF");
-    #endif
-    
-    // Apply gamma fix (both v2 and v3 variants need this)
-    #ifdef DISPLAY_NEEDS_GAMMA_FIX
-    Logger.logLine("Applying gamma correction fix...");
-    tft.writecommand(0x26);
-    tft.writedata(2);
-    delay(120);
-    tft.writecommand(0x26);
-    tft.writedata(1);
-    Logger.logLine("Gamma fix applied");
-    #endif
+    // Apply display-specific settings (inversion, gamma, etc.)
+    driver->applyDisplayFixes();
     
     Logger.logEnd();
 }

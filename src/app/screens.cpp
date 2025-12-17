@@ -9,6 +9,9 @@
 
 #if HAS_DISPLAY
 
+// Include display driver implementations
+#include "drivers/tft_espi_driver.cpp"
+
 // Include all screen implementations
 #include "screens/splash_screen.cpp"
 #include "screens/info_screen.cpp"

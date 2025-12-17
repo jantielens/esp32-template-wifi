@@ -2,12 +2,12 @@
 #define DISPLAY_MANAGER_H
 
 #include "config_manager.h"
+#include "display_driver.h"
 #include "screens/screen.h"
 #include "screens/splash_screen.h"
 #include "screens/info_screen.h"
 #include "screens/test_screen.h"
 
-#include <TFT_eSPI.h>
 #include <lvgl.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -28,8 +28,8 @@
 
 class DisplayManager {
 private:
-    // Hardware
-    TFT_eSPI tft;
+    // Hardware (display driver abstraction)
+    DisplayDriver* driver;
     lv_disp_draw_buf_t draw_buf;
     lv_color_t buf[LVGL_BUFFER_SIZE];
     lv_disp_drv_t disp_drv;
