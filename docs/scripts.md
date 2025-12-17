@@ -70,7 +70,8 @@ BOARD_PROFILE=psram ./build.sh esp32  # Optional build profile (if defined in co
 - Creates board-specific directories: `./build/esp32/`, `./build/esp32c3/`, etc.
 - Generates `.bin`, `.bootloader.bin`, `.merged.bin`, and `.partitions.bin` files per board
 - If `src/boards/<board>/` exists, adds it to include path and defines:
-    - `BOARD_<BOARDNAME>` (e.g., `BOARD_ESP32C3`)
+    - `BOARD_<BOARDNAME>` - Board name sanitized to valid C++ macro (alphanumeric + underscore only)
+      - Examples: `cyd2usb-v2` → `BOARD_CYD2USB_V2`, `esp32c3` → `BOARD_ESP32C3`
     - `BOARD_HAS_OVERRIDE` (triggers inclusion of `board_overrides.h`)
 
 **Build Output Structure:**
