@@ -290,10 +290,15 @@ driver = new MyDisplayDriver();
 
 ### Step 4: Compile Driver
 
-Add to `src/app/screens.cpp`:
+Add to `src/app/screens.cpp` (conditional compilation ensures only selected driver is compiled):
 
 ```cpp
+// Include display driver implementations (conditional based on selection)
+#if DISPLAY_DRIVER == DISPLAY_DRIVER_TFT_ESPI
+#include "drivers/tft_espi_driver.cpp"
+#elif DISPLAY_DRIVER == DISPLAY_DRIVER_MY_DRIVER
 #include "drivers/my_driver.cpp"
+#endif
 ```
 
 ## Adding New Screens
