@@ -28,6 +28,15 @@
 #endif
 
 // ============================================================================
+// Project Branding
+// ============================================================================
+// Project display name for UI elements (passed from build system)
+// Default fallback if not provided by build flags
+#ifndef PROJECT_DISPLAY_NAME
+#define PROJECT_DISPLAY_NAME "ESP32 Device"
+#endif
+
+// ============================================================================
 // Phase 2: Default Hardware Capabilities
 // ============================================================================
 // These defaults are only applied if not already defined by board overrides.

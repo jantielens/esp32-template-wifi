@@ -10,22 +10,12 @@
 #include <lwip/netif.h>
 
 #if HAS_DISPLAY
-#include <TFT_eSPI.h>
-#include <SPI.h>
-#include <lvgl.h>
+#include "display_manager.h"
 #endif
 
 // Configuration
 DeviceConfig device_config;
 bool config_loaded = false;
-
-#if HAS_DISPLAY
-TFT_eSPI tft = TFT_eSPI();
-static lv_disp_draw_buf_t draw_buf;
-static lv_color_t buf[LVGL_BUFFER_SIZE];
-static lv_disp_drv_t disp_drv;
-#endif
-
 
 #if HAS_MQTT
 MqttManager mqtt_manager;
@@ -41,192 +31,6 @@ unsigned long lastHeartbeat = 0;
 // WiFi watchdog for connection monitoring
 const unsigned long WIFI_CHECK_INTERVAL = 10000; // 10 seconds
 unsigned long lastWiFiCheck = 0;
-
-#if HAS_DISPLAY
-// ============================================================================
-// Display Functions
-// ============================================================================
-
-// LVGL display flush callback
-void lvgl_flush_cb(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p) {
-  uint32_t w = (area->x2 - area->x1 + 1);
-  uint32_t h = (area->y2 - area->y1 + 1);
-  
-  tft.startWrite();
-  tft.setAddrWindow(area->x1, area->y1, w, h);
-  tft.pushColors((uint16_t *)&color_p->full, w * h, true);
-  tft.endWrite();
-  
-  lv_disp_flush_ready(disp);
-}
-
-void init_display() {
-  Logger.logBegin("Display Init");
-  
-  // Initialize TFT
-  tft.init();
-  tft.setRotation(DISPLAY_ROTATION);
-  
-  // Turn on backlight
-  pinMode(TFT_BL, OUTPUT);
-  digitalWrite(TFT_BL, TFT_BACKLIGHT_ON);
-  
-  Logger.logLinef("Driver: ILI9341 (%dx%d)", DISPLAY_WIDTH, DISPLAY_HEIGHT);
-  Logger.logLinef("Rotation: %d", DISPLAY_ROTATION);
-  
-  // Apply display-specific settings
-  #ifdef DISPLAY_INVERSION_ON
-  tft.invertDisplay(true);
-  Logger.logLine("Inversion: ON");
-  #endif
-  
-  #ifdef DISPLAY_INVERSION_OFF
-  tft.invertDisplay(false);
-  Logger.logLine("Inversion: OFF");
-  #endif
-  
-  // Apply gamma fix (both v2 and v3 variants need this)
-  // See: https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display/blob/main/cyd.md
-  // See: https://github.com/Bodmer/TFT_eSPI/issues/2985
-  #ifdef DISPLAY_NEEDS_GAMMA_FIX
-  Logger.logLine("Applying gamma correction fix...");
-  // Gamma curve selection sequence - improves grayscale gradients
-  tft.writecommand(0x26); // ILI9341_GAMMASET - Gamma curve selected
-  tft.writedata(2);       // Gamma curve 2
-  delay(120);
-  tft.writecommand(0x26); // ILI9341_GAMMASET - Gamma curve selected
-  tft.writedata(1);       // Gamma curve 1
-  Logger.logLine("Gamma fix applied");
-  #endif
-  
-  Logger.logEnd();
-  
-  // Initialize LVGL
-  Logger.logBegin("LVGL Init");
-  lv_init();
-  
-  // Set up display buffer
-  lv_disp_draw_buf_init(&draw_buf, buf, NULL, LVGL_BUFFER_SIZE);
-  
-  // Initialize display driver
-  lv_disp_drv_init(&disp_drv);
-  disp_drv.hor_res = DISPLAY_WIDTH;
-  disp_drv.ver_res = DISPLAY_HEIGHT;
-  disp_drv.flush_cb = lvgl_flush_cb;
-  disp_drv.draw_buf = &draw_buf;
-  lv_disp_drv_register(&disp_drv);
-  
-  Logger.logLinef("Buffer: %d pixels (%d lines)", LVGL_BUFFER_SIZE, LVGL_BUFFER_SIZE / DISPLAY_WIDTH);
-  Logger.logEnd();
-  
-  // Create test screen
-  create_test_screen();
-}
-
-void create_test_screen() {
-  // Create main screen container
-  lv_obj_t *scr = lv_obj_create(NULL);
-  lv_scr_load(scr);
-  lv_obj_set_style_bg_color(scr, lv_color_black(), 0);
-  
-  // Title banner with navy background
-  lv_obj_t *title_banner = lv_obj_create(scr);
-  lv_obj_set_size(title_banner, DISPLAY_WIDTH, 40);
-  lv_obj_set_pos(title_banner, 0, 0);
-  lv_obj_set_style_bg_color(title_banner, lv_color_make(0, 0, 128), 0);
-  lv_obj_set_style_border_width(title_banner, 0, 0);
-  lv_obj_set_style_pad_all(title_banner, 0, 0);
-  
-  lv_obj_t *title = lv_label_create(title_banner);
-  lv_label_set_text(title, "ESP32 Display Test");
-  lv_obj_set_style_text_color(title, lv_color_white(), 0);
-  lv_obj_align(title, LV_ALIGN_CENTER, 0, 0);
-  
-  // Hello World label
-  lv_obj_t *hello = lv_label_create(scr);
-  lv_label_set_text(hello, "Hello World!");
-  lv_obj_set_style_text_color(hello, lv_color_make(0, 255, 0), 0);
-  lv_obj_set_style_text_font(hello, &lv_font_montserrat_24, 0);
-  lv_obj_set_pos(hello, 20, 55);
-  
-  // Device info
-  char info_text[128];
-  snprintf(info_text, sizeof(info_text), "Firmware: v%s\nChip: %s Rev %d", 
-           FIRMWARE_VERSION, ESP.getChipModel(), ESP.getChipRevision());
-  lv_obj_t *info = lv_label_create(scr);
-  lv_label_set_text(info, info_text);
-  lv_obj_set_style_text_color(info, lv_color_make(0, 255, 255), 0);
-  lv_obj_set_pos(info, 20, 95);
-  
-  // Color test bars (RGB)
-  int barHeight = 20;
-  int yStart = 135;
-  
-  lv_obj_t *red_bar = lv_obj_create(scr);
-  lv_obj_set_size(red_bar, DISPLAY_WIDTH/3, barHeight);
-  lv_obj_set_pos(red_bar, 0, yStart);
-  lv_obj_set_style_bg_color(red_bar, lv_color_make(255, 0, 0), 0);
-  lv_obj_set_style_border_width(red_bar, 0, 0);
-  
-  lv_obj_t *green_bar = lv_obj_create(scr);
-  lv_obj_set_size(green_bar, DISPLAY_WIDTH/3, barHeight);
-  lv_obj_set_pos(green_bar, DISPLAY_WIDTH/3, yStart);
-  lv_obj_set_style_bg_color(green_bar, lv_color_make(0, 255, 0), 0);
-  lv_obj_set_style_border_width(green_bar, 0, 0);
-  
-  lv_obj_t *blue_bar = lv_obj_create(scr);
-  lv_obj_set_size(blue_bar, DISPLAY_WIDTH/3, barHeight);
-  lv_obj_set_pos(blue_bar, (DISPLAY_WIDTH/3)*2, yStart);
-  lv_obj_set_style_bg_color(blue_bar, lv_color_make(0, 0, 255), 0);
-  lv_obj_set_style_border_width(blue_bar, 0, 0);
-  
-  // Gradient label
-  lv_obj_t *grad_label = lv_label_create(scr);
-  lv_label_set_text(grad_label, "Grayscale Gradient (256 levels):");
-  lv_obj_set_style_text_color(grad_label, lv_color_white(), 0);
-  lv_obj_set_pos(grad_label, 10, yStart + barHeight + 8);
-  
-  // Grayscale gradient using individual rectangles (memory efficient)
-  int gradientY = yStart + barHeight + 25;
-  int gradientHeight = 30;
-  
-  // Draw gradient in 32 steps to reduce memory usage
-  int numSteps = 32;
-  int stepWidth = DISPLAY_WIDTH / numSteps;
-  for (int i = 0; i < numSteps; i++) {
-    uint8_t gray = map(i, 0, numSteps - 1, 0, 255);
-    lv_obj_t *bar = lv_obj_create(scr);
-    lv_obj_set_size(bar, stepWidth + 1, gradientHeight);  // +1 to avoid gaps
-    lv_obj_set_pos(bar, i * stepWidth, gradientY);
-    lv_obj_set_style_bg_color(bar, lv_color_make(gray, gray, gray), 0);
-    lv_obj_set_style_border_width(bar, 0, 0);
-    lv_obj_set_style_pad_all(bar, 0, 0);
-  }
-  
-  // Border around gradient
-  lv_obj_t *grad_border = lv_obj_create(scr);
-  lv_obj_set_size(grad_border, DISPLAY_WIDTH, gradientHeight + 2);
-  lv_obj_set_pos(grad_border, 0, gradientY - 1);
-  lv_obj_set_style_bg_opa(grad_border, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_border_color(grad_border, lv_color_white(), 0);
-  lv_obj_set_style_border_width(grad_border, 1, 0);
-  
-  // Board variant footer
-  #if defined(BOARD_CYD2USB_V2)
-  const char* variant = "CYD v2 (1 USB)";
-  #elif defined(BOARD_CYD2USB_V3)
-  const char* variant = "CYD v3 (2 USB)";
-  #else
-  const char* variant = "Unknown";
-  #endif
-  
-  lv_obj_t *footer = lv_label_create(scr);
-  lv_label_set_text_fmt(footer, "Board: %s", variant);
-  lv_obj_set_style_text_color(footer, lv_color_make(255, 255, 0), 0);
-  lv_obj_set_pos(footer, 10, DISPLAY_HEIGHT - 15);
-}
-
-#endif // HAS_DISPLAY
 
 // WiFi event handlers for connection lifecycle monitoring
 void onWiFiConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
@@ -281,7 +85,8 @@ void setup()
   #endif
   
   #if HAS_DISPLAY
-  init_display();
+  display_manager_init(&device_config);
+  display_manager_set_splash_status("Loading config...");
   #endif
   
   // Initialize configuration manager
@@ -302,6 +107,10 @@ void setup()
   }
   
   // Start WiFi BEFORE initializing web server (critical for ESP32-C3)
+  #if HAS_DISPLAY
+  display_manager_set_splash_status("Connecting WiFi...");
+  #endif
+  
   if (!config_loaded) {
     Logger.logMessage("Main", "No config - starting AP mode");
     web_portal_start_ap();
@@ -341,6 +150,15 @@ void setup()
   
   lastHeartbeat = millis();
   Logger.logMessage("Main", "Setup complete");
+  
+  #if HAS_DISPLAY
+  // Show splash for minimum duration to ensure visibility
+  display_manager_set_splash_status("Ready!");
+  delay(2000);  // 2 seconds to see splash + status updates
+  
+  // Navigate to info screen
+  display_manager_show_info();
+  #endif
 }
 
 void loop()
@@ -350,10 +168,6 @@ void loop()
 
   #if HAS_MQTT
   mqtt_manager.loop();
-  #endif
-  
-  #if HAS_DISPLAY
-  lv_timer_handler();  // LVGL task handler
   #endif
   
   unsigned long currentMillis = millis();

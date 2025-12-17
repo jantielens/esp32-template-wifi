@@ -34,6 +34,7 @@ build_board() {
     
     # Check for board-specific configuration overrides
     EXTRA_FLAGS=()
+    
     if [[ -d "$board_override_dir" ]]; then
         echo -e "${YELLOW}Config:    Using board-specific overrides from src/boards/$board_name/${NC}"
         # Add include path and define BOARD_HAS_OVERRIDE to trigger board_overrides.h inclusion
