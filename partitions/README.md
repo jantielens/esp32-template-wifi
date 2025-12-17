@@ -57,7 +57,7 @@ The `boards.txt` entries you’re effectively adding look like:
 Add a target in [config.sh](../config.sh) that includes your `PartitionScheme` option in the FQBN, for example:
 
 ```bash
-["esp32:esp32:<BOARD_ID>:CDCOnBoot=cdc,PartitionScheme=<SCHEME_ID>"]="<board_name>"
+["<board_name>"]="esp32:esp32:<BOARD_ID>:CDCOnBoot=cdc,PartitionScheme=<SCHEME_ID>"
 ```
 
 ### 4) Re-run setup (or installer) and build

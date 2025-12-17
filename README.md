@@ -210,9 +210,9 @@ The project supports multiple ESP32 board variants configured in `config.sh`:
 ```bash
 # Default configuration includes:
 declare -A FQBN_TARGETS=(
-    ["esp32:esp32:esp32"]="esp32"                                        # ESP32 Dev Module
-    ["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"]="esp32c3"  # ESP32-C3 Super Mini
-    ["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb"]="esp32c3_ota_1_9mb"  # ESP32-C3 Super Mini (custom partitions example)
+    ["esp32"]="esp32:esp32:esp32"                                        # ESP32 Dev Module
+    ["esp32c3"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"  # ESP32-C3 Super Mini
+    ["esp32c3_ota_1_9mb"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb"  # ESP32-C3 Super Mini (custom partitions)
 )
 ```
 

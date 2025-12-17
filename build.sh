@@ -94,8 +94,8 @@ else
     echo "Sketch:    $SKETCH_PATH"
     echo ""
     
-    for fqbn in "${!FQBN_TARGETS[@]}"; do
-        board_name=$(get_board_name "$fqbn")
+    for board_name in "${!FQBN_TARGETS[@]}"; do
+        fqbn="${FQBN_TARGETS[$board_name]}"
         build_board "$fqbn" "$board_name"
     done
     

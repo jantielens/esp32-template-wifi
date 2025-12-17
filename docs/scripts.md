@@ -11,7 +11,7 @@ This project includes several bash scripts to streamline ESP32 development workf
 - Board targets (`FQBN_TARGETS` associative array)
 - `find_arduino_cli()` - Locates arduino-cli (local or system-wide)
 - `find_serial_port()` - Auto-detects `/dev/ttyUSB0` or `/dev/ttyACM0`
-- `get_board_name()` - Extracts/returns board name from FQBN
+- `get_board_name()` - Returns board name (identity function for compatibility)
 - `list_boards()` - Lists all configured boards
 - `get_fqbn_for_board()` - Gets FQBN for a board name
 
@@ -20,10 +20,10 @@ This project includes several bash scripts to streamline ESP32 development workf
 **Multi-Board Configuration:**
 ```bash
 declare -A FQBN_TARGETS=(
-    ["esp32:esp32:esp32"]="esp32"                                        # Custom name
-    ["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"]="esp32c3"  # Custom name
-    ["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb"]="esp32c3_ota_1_9mb"  # ESP32-C3 w/ custom partitions
-    ["esp32:esp32:some_new_board"]                                       # Auto-extract name
+    ["esp32"]="esp32:esp32:esp32"                                        # ESP32 Dev Module
+    ["esp32c3"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"  # ESP32-C3 Super Mini
+    ["esp32c3_ota_1_9mb"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb"  # ESP32-C3 w/ custom partitions
+    ["cyd2usb-v2"]="esp32:esp32:esp32"                                   # CYD v2 (same FQBN, different board_overrides.h)
 )
 ```
 

@@ -20,10 +20,12 @@ ESP32 Arduino development template using `arduino-cli` for headless builds. Desi
   - Multi-page architecture: Home, Network, Firmware
   - Template system: `_header.html`, `_nav.html`, `_footer.html` for DRY
 - **Output**: Compiled binaries in `./build/<board-name>/` directories
-- **Board Targets**: Multi-board support via `FQBN_TARGETS` array in `config.sh`
-  - `esp32:esp32:esp32` → `build/esp32/` (ESP32 Dev Module)
-  - `esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc` → `build/esp32c3/` (ESP32-C3 Super Mini)
-  - `esp32:esp32:esp32c6:CDCOnBoot=cdc` → `build/esp32c6/` (ESP32-C6 Dev Module)
+- **Board Targets**: Multi-board support via `FQBN_TARGETS` associative array in `config.sh`
+  - Board name → FQBN mapping allows multiple board variants with same FQBN
+  - `["esp32"]="esp32:esp32:esp32"` → `build/esp32/` (ESP32 Dev Module)
+  - `["esp32c3"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"` → `build/esp32c3/` (ESP32-C3 Super Mini)
+  - `["esp32c6"]="esp32:esp32:esp32c6:CDCOnBoot=cdc"` → `build/esp32c6/` (ESP32-C6 Dev Module)
+  - `["cyd2usb-v2"]="esp32:esp32:esp32"` → `build/cyd2usb-v2/` (CYD v2 - same FQBN as esp32, different config)
 
 ## Critical Developer Workflows
 

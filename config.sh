@@ -31,9 +31,10 @@ PROJECT_NAME="esp32-template"
 PROJECT_DISPLAY_NAME="ESP32 Template"
 
 # Board configuration (FQBN - Fully Qualified Board Name)
-# Define target boards as an associative array: [FQBN]="board-name"
-# - Provide custom board name for clean directory naming
-# - Omit board name (or leave empty) to auto-extract from FQBN (3rd segment)
+# Define target boards as an associative array: ["board-name"]="FQBN"
+# - Board name is the key (used for directories, script arguments, CI/CD matrix)
+# - FQBN is the value (used by arduino-cli for compilation)
+# - Multiple board names can share the same FQBN (different board_overrides.h)
 #
 # USB Serial Support (CDCOnBoot):
 # - ESP32-C3, C6, S3: Add `:CDCOnBoot=cdc` to enable USB serial output
@@ -45,16 +46,17 @@ PROJECT_DISPLAY_NAME="ESP32 Template"
 # space for OTA-enabled firmware as projects grow.
 #
 # Examples:
-#   ["esp32:esp32:esp32"]="esp32"                                       # Classic ESP32 - hardware UART
-#   ["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"]="esp32c3"   # C3 with USB CDC enabled
-#   ["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb"]="esp32c3_ota_1_9mb"    # C3 with custom partitions example
-#   ["esp32:esp32:dfrobot_firebeetle2_esp32c6:CDCOnBoot=cdc"]="esp32c6" # C6 with USB CDC enabled
-#   ["esp32:esp32:esp32c6:CDCOnBoot=cdc"]="esp32c6supermini"            # C6 with USB CDC enabled (generic Super Mini variant)
+#   ["esp32"]="esp32:esp32:esp32"                                       # Classic ESP32 - hardware UART
+#   ["esp32c3"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"   # C3 with USB CDC enabled
+#   ["esp32c3_ota_1_9mb"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb"    # C3 with custom partitions
+#   ["esp32c6"]="esp32:esp32:dfrobot_firebeetle2_esp32c6:CDCOnBoot=cdc" # C6 with USB CDC enabled
+#   ["cyd2usb-v2"]="esp32:esp32:esp32"                                  # CYD display v2 (same FQBN as esp32)
+#   ["cyd2usb-v3"]="esp32:esp32:esp32"                                  # CYD display v3 (same FQBN as esp32)
 
 declare -A FQBN_TARGETS=(
-    ["esp32:esp32:esp32"]="esp32"
-    ["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"]="esp32c3"
-    ["esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb"]="esp32c3_ota_1_9mb"
+    ["esp32"]="esp32:esp32:esp32"
+    ["esp32c3"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"
+    ["esp32c3_ota_1_9mb"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb"
 )
 
 # Default board (used when only one board is configured)
@@ -104,27 +106,17 @@ find_serial_port() {
     fi
 }
 
-# Get board name for a given FQBN
-# If custom name is provided in FQBN_TARGETS, use it
-# Otherwise, extract board ID (3rd segment) from FQBN
+# Get board name (identity function now - board names are the keys)
+# Kept for backward compatibility with existing code
 get_board_name() {
-    local fqbn="$1"
-    local board_name="${FQBN_TARGETS[$fqbn]}"
-    
-    if [[ -n "$board_name" ]]; then
-        echo "$board_name"
-    else
-        # Extract board ID (3rd segment) from FQBN
-        # Example: "esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc" → "nologo_esp32c3_super_mini"
-        echo "$fqbn" | cut -d':' -f3
-    fi
+    echo "$1"
 }
 
 # List all configured boards
 list_boards() {
     echo -e "${CYAN}Available boards:${NC}"
-    for fqbn in "${!FQBN_TARGETS[@]}"; do
-        local board_name=$(get_board_name "$fqbn")
+    for board_name in "${!FQBN_TARGETS[@]}"; do
+        local fqbn="${FQBN_TARGETS[$board_name]}"
         echo -e "  ${GREEN}$board_name${NC} → $fqbn"
     done
 }
@@ -132,13 +124,11 @@ list_boards() {
 # Get FQBN for a given board name
 get_fqbn_for_board() {
     local target_board="$1"
-    for fqbn in "${!FQBN_TARGETS[@]}"; do
-        local board_name=$(get_board_name "$fqbn")
-        if [[ "$board_name" == "$target_board" ]]; then
-            echo "$fqbn"
-            return 0
-        fi
-    done
+    local fqbn="${FQBN_TARGETS[$target_board]}"
+    if [[ -n "$fqbn" ]]; then
+        echo "$fqbn"
+        return 0
+    fi
     return 1
 }
 
@@ -170,8 +160,7 @@ parse_board_and_port_args() {
         # Single board: allow either explicit BOARD (arg1) or PORT (arg1)
         local arg1="$1"
         local arg2="$2"
-        local default_board
-        default_board=$(get_board_name "${!FQBN_TARGETS[@]}")
+        local default_board="${!FQBN_TARGETS[@]}"
 
         if [[ -n "$arg1" ]] && get_fqbn_for_board "$arg1" >/dev/null 2>&1; then
             # Explicit board name provided even though only one board exists

@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.18] - 2025-12-17
+
+### Changed
+- **BREAKING**: Reversed FQBN_TARGETS associative array mapping in `config.sh` (Resolves #21)
+  - **Old format**: `["FQBN"]="board-name"` → **New format**: `["board-name"]="FQBN"`
+  - Board name is now the key, FQBN is the value
+  - Enables multiple board variants with the same FQBN (e.g., CYD display v2/v3)
+  - Simplifies helper functions (`get_fqbn_for_board()` is now direct array lookup)
+  - **Migration**: Swap keys and values in your `FQBN_TARGETS` array
+- Updated build scripts, CI/CD workflows, and documentation to use new mapping format
+
+---
+
 ## [0.0.17] - 2025-12-16
 
 ### Added
