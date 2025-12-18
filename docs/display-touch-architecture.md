@@ -117,8 +117,78 @@ public:
     virtual void endWrite() = 0;
     virtual void setAddrWindow(int16_t x, int16_t y, uint16_t w, uint16_t h) = 0;
     virtual void pushColors(uint16_t* data, uint32_t len, bool swap_bytes = true) = 0;
+    
+    // LVGL configuration hook (override for driver-specific behavior)
+    // Called during LVGL initialization to allow driver-specific settings
+    // such as software rotation, full refresh mode, etc.
+    // Default implementation: no special configuration (hardware handles rotation)
+    virtual void configureLVGL(lv_disp_drv_t* drv, uint8_t rotation) {
+        // Override if driver needs software rotation or other LVGL tweaks
+    }
 };
 ```
+
+### LVGL Configuration Hook
+
+The `configureLVGL()` method allows drivers to customize LVGL behavior without modifying DisplayManager code:
+
+**Use Cases:**
+- **Software rotation** - When panel hardware doesn't support rotation via registers (e.g., ST7789V2)
+- **Full refresh mode** - For e-paper displays that need full-screen updates
+- **Direct mode** - For high-FPS applications bypassing buffering
+- **Custom DPI** - For panels with non-standard pixel density
+
+**Example: ST7789V2 Software Rotation**
+```cpp
+void ST7789V2_Driver::configureLVGL(lv_disp_drv_t* drv, uint8_t rotation) {
+    // ST7789V2 panel stays in portrait mode (240x280)
+    // LVGL handles rotation via software rendering (more efficient than register updates)
+    switch (rotation) {
+        case 1:  // 90° (landscape)
+            drv->sw_rotate = 1;
+            drv->rotated = LV_DISP_ROT_90;
+            break;
+        case 2:  // 180° (portrait inverted)
+            drv->sw_rotate = 1;
+            drv->rotated = LV_DISP_ROT_180;
+            break;
+        case 3:  // 270° (landscape inverted)
+            drv->sw_rotate = 1;
+            drv->rotated = LV_DISP_ROT_270;
+            break;
+        default:  // 0° (portrait) - no rotation
+            break;
+    }
+}
+```
+
+**Example: TFT_eSPI Hardware Rotation (Default)**
+```cpp
+// TFT_eSPI_Driver doesn't override configureLVGL()
+// Uses default implementation (no special configuration)
+// Hardware rotation via setRotation() is sufficient
+```
+
+**DisplayManager Integration:**
+```cpp
+void DisplayManager::initLVGL() {
+    lv_disp_drv_init(&disp_drv);
+    disp_drv.hor_res = DISPLAY_WIDTH;
+    disp_drv.ver_res = DISPLAY_HEIGHT;
+    disp_drv.flush_cb = DisplayManager::flushCallback;
+    
+    // Call driver's LVGL configuration hook
+    driver->configureLVGL(&disp_drv, DISPLAY_ROTATION);
+    
+    lv_disp_drv_register(&disp_drv);
+}
+```
+
+**Benefits:**
+- Driver encapsulates its own LVGL requirements
+- No `#if DISPLAY_DRIVER == ...` conditionals in DisplayManager
+- Easy to add new drivers with quirky behavior
+- Self-documenting (driver implementation shows what's needed)
 
 ### Performance Impact
 
@@ -438,6 +508,16 @@ public:
         // Board-specific fixes (inversion, gamma, etc.)
     }
     
+    void configureLVGL(lv_disp_drv_t* drv, uint8_t rotation) override {
+        // Override to customize LVGL behavior (e.g., software rotation)
+        // Example: ST7789V2 uses software rotation for landscape mode
+        if (rotation == 1) {
+            drv->sw_rotate = 1;
+            drv->rotated = LV_DISP_ROT_90;
+        }
+        // Default: hardware handles rotation via setRotation()
+    }
+    
     void startWrite() override { display.startWrite(); }
     void endWrite() override { display.endWrite(); }
     void setAddrWindow(int16_t x, int16_t y, uint16_t w, uint16_t h) override {
@@ -478,16 +558,27 @@ driver = new MyDisplayDriver();
 
 ### Step 4: Compile Driver
 
-Add to `src/app/screens.cpp` (conditional compilation ensures only selected driver is compiled):
+**IMPORTANT**: Arduino build system only compiles .cpp files in sketch root directory, not subdirectories. Driver .cpp files **must** be included in `display_manager.cpp`:
 
 ```cpp
-// Include display driver implementations (conditional based on selection)
+// src/app/display_manager.cpp
+// Include selected display driver (header + implementation)
+// Driver .cpp files must be included here because Arduino build system
+// only compiles .cpp files in sketch root directory, not subdirectories
 #if DISPLAY_DRIVER == DISPLAY_DRIVER_TFT_ESPI
+#include "drivers/tft_espi_driver.h"
 #include "drivers/tft_espi_driver.cpp"
 #elif DISPLAY_DRIVER == DISPLAY_DRIVER_MY_DRIVER
-#include "drivers/my_driver.cpp"
+#include "drivers/my_driver.h"
+#include "drivers/my_driver.cpp"  // Required for compilation!
 #endif
 ```
+
+**Why this pattern?**
+- Arduino doesn't auto-compile subdirectory .cpp files
+- Including .cpp directly makes it part of display_manager.cpp compilation unit
+- Semantically correct: drivers are display manager's responsibility
+- Conditional compilation ensures only selected driver is compiled
 
 ## Adding New Touch Drivers
 
@@ -561,13 +652,16 @@ In `src/app/board_config.h`:
 
 ### Step 3: Include in Compilation
 
-In `src/app/screens.cpp`:
+**Note**: Touch drivers are typically included in `touch_manager.cpp` (similar pattern to display drivers):
 
 ```cpp
+// src/app/touch_manager.cpp
 #if HAS_TOUCH
     #if TOUCH_DRIVER == TOUCH_DRIVER_XPT2046
+        #include "drivers/xpt2046_driver.h"
         #include "drivers/xpt2046_driver.cpp"
     #elif TOUCH_DRIVER == TOUCH_DRIVER_MY_TOUCH
+        #include "drivers/my_touch_driver.h"
         #include "drivers/my_touch_driver.cpp"  // Add new driver
     #endif
 #endif

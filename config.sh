@@ -57,6 +57,7 @@ declare -A FQBN_TARGETS=(
     ["esp32"]="esp32:esp32:esp32"
     ["cyd-v2"]="esp32:esp32:esp32:PartitionScheme=min_spiffs"
     ["cyd-v3"]="esp32:esp32:esp32:PartitionScheme=min_spiffs"
+    ["esp32c3"]="esp32:esp32:nologo_esp32c3_super_mini:PartitionScheme=ota_1_9mb,CDCOnBoot=default"
 )
 
 # Default board (used when only one board is configured)

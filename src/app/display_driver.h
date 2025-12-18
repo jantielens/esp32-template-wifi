@@ -5,16 +5,34 @@
  * Allows DisplayManager to work with different display libraries
  * (TFT_eSPI, LovyanGFX, Adafruit_GFX, etc.) through a common interface.
  * 
- * To add a new display library:
- * 1. Create a new driver class implementing this interface
- * 2. Add driver selection in board_config.h
- * 3. Include the driver header in display_manager.cpp
+ * IMPLEMENTATION GUIDE FOR NEW DRIVERS:
+ * =====================================
+ * 
+ * 1. Create driver class implementing this interface:
+ *    - drivers/your_driver.h (interface)
+ *    - drivers/your_driver.cpp (implementation)
+ * 
+ * 2. Register in display_manager.cpp:
+ *    Arduino build system only compiles .cpp files in sketch root directory,
+ *    not subdirectories. Driver .cpp files MUST be included in display_manager.cpp:
+ * 
+ *      #if DISPLAY_DRIVER == DISPLAY_DRIVER_YOUR_DRIVER
+ *      #include "drivers/your_driver.h"
+ *      #include "drivers/your_driver.cpp"  // Required for compilation!
+ *      #endif
+ * 
+ * 3. Add driver constant to board_config.h:
+ *    #define DISPLAY_DRIVER_YOUR_DRIVER 3  // Next available number
+ * 
+ * 4. Configure in board override file:
+ *    #define DISPLAY_DRIVER DISPLAY_DRIVER_YOUR_DRIVER
  */
 
 #ifndef DISPLAY_DRIVER_H
 #define DISPLAY_DRIVER_H
 
 #include <Arduino.h>
+#include <lvgl.h>
 
 // ============================================================================
 // Display Driver Interface
@@ -46,6 +64,15 @@ public:
     virtual void endWrite() = 0;
     virtual void setAddrWindow(int16_t x, int16_t y, uint16_t w, uint16_t h) = 0;
     virtual void pushColors(uint16_t* data, uint32_t len, bool swap_bytes = true) = 0;
+    
+    // LVGL configuration hook (override to customize LVGL driver settings)
+    // Called during LVGL initialization to allow driver-specific configuration
+    // such as software rotation, full refresh mode, etc.
+    // Default implementation: no special configuration needed
+    virtual void configureLVGL(lv_disp_drv_t* drv, uint8_t rotation) {
+        // Default: hardware handles rotation via setRotation()
+        // Override if driver needs software rotation or other LVGL tweaks
+    }
 };
 
 #endif // DISPLAY_DRIVER_H

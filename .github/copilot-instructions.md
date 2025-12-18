@@ -13,6 +13,14 @@ ESP32 Arduino development template using `arduino-cli` for headless builds. Desi
   - `src/boards/[board-name]/board_overrides.h` - Optional board-specific compile-time defines
   - Build system automatically detects and applies overrides when present
   - Application uses `#if HAS_xxx` conditional compilation for board-specific logic
+- **Display & Touch Subsystem**: HAL-based architecture with LVGL integration (see `docs/display-touch-architecture.md`)
+  - `display_driver.h` - DisplayDriver HAL interface with `configureLVGL()` hook
+  - `display_manager.cpp/h` - Hardware lifecycle, LVGL init, FreeRTOS rendering task
+  - `touch_driver.h` - TouchDriver HAL interface
+  - `touch_manager.cpp/h` - Touch input registration and calibration
+  - `drivers/` - Driver implementations (TFT_eSPI, ST7789V2, XPT2046)
+  - `screens/` - Screen base class and implementations (splash, info, test)
+  - Conditional compilation: Only selected drivers compiled via `display_manager.cpp`
 - **Web Portal**: Multi-page async web server with captive portal support
   - `web_portal.cpp/h` - Server and REST API implementation
   - `web_assets.cpp/h` - Embedded HTML/CSS/JS (from `src/app/web/`)
@@ -155,6 +163,18 @@ See `docs/wsl-development.md` for complete USB/IP setup guide.
 - `src/app/web_portal.cpp/h` - Async web server and REST API endpoints
 - `src/app/web_assets.cpp/h` - Embedded HTML/CSS/JS from `web/` directory
 - `src/app/config_manager.cpp/h` - NVS-based configuration storage
+- `src/app/display_driver.h` - Display HAL interface with configureLVGL() hook
+- `src/app/display_manager.cpp/h` - Display lifecycle, LVGL init, FreeRTOS rendering task
+- `src/app/touch_driver.h` - Touch HAL interface
+- `src/app/touch_manager.cpp/h` - Touch input device registration and calibration
+- `src/app/drivers/tft_espi_driver.cpp/h` - TFT_eSPI display driver (hardware rotation)
+- `src/app/drivers/st7789v2_driver.cpp/h` - ST7789V2 native SPI driver (software rotation)
+- `src/app/drivers/xpt2046_driver.cpp/h` - XPT2046 resistive touch driver
+- `src/app/screens/screen.h` - Screen base class interface
+- `src/app/screens/splash_screen.cpp/h` - Boot splash with animated spinner
+- `src/app/screens/info_screen.cpp/h` - Device info and real-time stats
+- `src/app/screens/test_screen.cpp/h` - Display calibration and color testing
+- `src/app/screens.cpp` - Screen compilation unit (includes all screen .cpp files)
 - `src/app/web/_header.html` - Common HTML head template
 - `src/app/web/_nav.html` - Navigation tabs and loading overlay wrapper
 - `src/app/web/_footer.html` - Form buttons template
@@ -324,6 +344,7 @@ After every significant change, the agent must:
 2. **Check if documentation needs updates** by reviewing:
    - `README.md` - Main project documentation
    - `docs/web-portal.md` - Web portal and REST API guide
+   - `docs/display-touch-architecture.md` - Display/touch HAL and screen architecture
    - `docs/scripts.md` - Script usage guide
    - `docs/library-management.md` - Library management guide
    - `docs/build-and-release-process.md` - Project branding, build system, and release workflow guide
@@ -357,6 +378,8 @@ After every significant change, the agent must:
 - New requirement added → Update `README.md` prerequisites
 - REST API endpoint added/changed → Update `docs/web-portal.md` and `README.md` API table
 - Web UI feature changed → Update `docs/web-portal.md` features section
+- Display/touch driver added/changed → Update `docs/display-touch-architecture.md` driver sections
+- Screen management changed → Update `docs/display-touch-architecture.md` screen lifecycle
 - New version released → Update `CHANGELOG.md` with changes, update `src/version.h` with new version number
 - Release process changed → Update `docs/build-and-release-process.md` with new workflow
 

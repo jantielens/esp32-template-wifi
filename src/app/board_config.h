@@ -117,9 +117,11 @@
 // Display driver selection
 // Available drivers:
 //   DISPLAY_DRIVER_TFT_ESPI (1) - Bodmer's TFT_eSPI (supports ILI9341, ST7789, etc.)
-//   DISPLAY_DRIVER_LOVYANGFX (2) - LovyanGFX (future support)
+//   DISPLAY_DRIVER_ST7789V2 (2) - Native ST7789V2 driver (1.69" IPS LCD 240x280)
+//   DISPLAY_DRIVER_LOVYANGFX (3) - LovyanGFX (future support)
 #define DISPLAY_DRIVER_TFT_ESPI 1
-#define DISPLAY_DRIVER_LOVYANGFX 2
+#define DISPLAY_DRIVER_ST7789V2 2
+#define DISPLAY_DRIVER_LOVYANGFX 3
 
 #ifndef DISPLAY_DRIVER
 #define DISPLAY_DRIVER DISPLAY_DRIVER_TFT_ESPI  // Default to TFT_eSPI

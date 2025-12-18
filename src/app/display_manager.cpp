@@ -5,13 +5,19 @@
 #include "display_manager.h"
 #include "log_manager.h"
 
-// Include selected display driver
+// Include selected display driver (header + implementation)
+// Driver .cpp files must be included here because Arduino build system
+// only compiles .cpp files in sketch root directory, not subdirectories
 #ifndef DISPLAY_DRIVER
 #define DISPLAY_DRIVER DISPLAY_DRIVER_TFT_ESPI  // Default to TFT_eSPI
 #endif
 
 #if DISPLAY_DRIVER == DISPLAY_DRIVER_TFT_ESPI
 #include "drivers/tft_espi_driver.h"
+#include "drivers/tft_espi_driver.cpp"
+#elif DISPLAY_DRIVER == DISPLAY_DRIVER_ST7789V2
+#include "drivers/st7789v2_driver.h"
+#include "drivers/st7789v2_driver.cpp"
 #endif
 
 #include <SPI.h>
@@ -25,6 +31,8 @@ DisplayManager::DisplayManager(DeviceConfig* cfg)
     // Instantiate selected display driver
     #if DISPLAY_DRIVER == DISPLAY_DRIVER_TFT_ESPI
     driver = new TFT_eSPI_Driver();
+    #elif DISPLAY_DRIVER == DISPLAY_DRIVER_ST7789V2
+    driver = new ST7789V2_Driver();
     #else
     #error "No display driver selected or unknown driver type"
     #endif
@@ -173,6 +181,10 @@ void DisplayManager::initLVGL() {
     disp_drv.flush_cb = DisplayManager::flushCallback;
     disp_drv.draw_buf = &draw_buf;
     disp_drv.user_data = this;  // Pass instance for callback
+    
+    // Apply driver-specific LVGL configuration (rotation, full refresh, etc.)
+    driver->configureLVGL(&disp_drv, DISPLAY_ROTATION);
+    
     lv_disp_drv_register(&disp_drv);
     
     Logger.logLinef("Buffer: %d pixels (%d lines)", LVGL_BUFFER_SIZE, LVGL_BUFFER_SIZE / DISPLAY_WIDTH);
