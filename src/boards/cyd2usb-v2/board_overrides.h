@@ -48,7 +48,9 @@
 #define DISPLAY_COLOR_ORDER_BGR true  // BGR color order (not RGB)
 
 // Backlight Control
+#define HAS_BACKLIGHT true
 #define TFT_BACKLIGHT_ON HIGH
+#define TFT_BACKLIGHT_PWM_CHANNEL 0  // LEDC channel for PWM
 
 // TFT_eSPI Touch Controller Pins (required for TFT_eSPI touch extensions)
 #define TOUCH_CS 33     // Touch chip select

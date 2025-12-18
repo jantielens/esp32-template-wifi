@@ -137,6 +137,17 @@
 #endif
 
 // ============================================================================
+// Backlight Configuration
+// ============================================================================
+#ifndef HAS_BACKLIGHT
+#define HAS_BACKLIGHT false
+#endif
+
+#ifndef TFT_BACKLIGHT_PWM_CHANNEL
+#define TFT_BACKLIGHT_PWM_CHANNEL 0  // LEDC channel for PWM control
+#endif
+
+// ============================================================================
 // Touch Configuration
 // ============================================================================
 #ifndef HAS_TOUCH

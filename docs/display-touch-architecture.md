@@ -107,6 +107,11 @@ public:
     virtual void setBacklight(bool on) = 0;
     virtual void applyDisplayFixes() = 0;
     
+    // Brightness control (optional - only when HAS_BACKLIGHT enabled)
+    virtual void setBacklightBrightness(uint8_t brightness_percent) {}  // 0-100%
+    virtual uint8_t getBacklightBrightness() { return 100; }
+    virtual bool hasBacklightControl() { return false; }
+    
     // LVGL flush interface (hot path - called frequently)
     virtual void startWrite() = 0;
     virtual void endWrite() = 0;
@@ -123,6 +128,53 @@ The hot path (`pushColors`) is called 24 times per full screen refresh:
 - Virtual call overhead: ~0.01 µs
 - SPI transfer time: 640-1280 µs (at 40-80 MHz)
 - **Total overhead: 0.01%** (completely negligible)
+
+### Backlight Brightness Control
+
+The HAL supports optional PWM-based brightness control via the `HAS_BACKLIGHT` feature flag:
+
+**Enable in board_config.h or board_overrides.h:**
+```cpp
+#define HAS_BACKLIGHT true
+#define TFT_BL 27                    // Backlight GPIO pin
+#define TFT_BACKLIGHT_ON HIGH        // Active-high or active-low
+```
+
+**Implementation Details:**
+- Uses ESP32 LEDC peripheral (PWM at 5kHz, 8-bit resolution)
+- Brightness range: 0-100% (user-friendly percentage)
+- Automatically handles active-high/low polarity via `TFT_BACKLIGHT_ON`
+- Supports both Arduino Core 2.x and 3.x LEDC APIs
+- Stored in NVS configuration (persists across reboots)
+- Exposed via REST API (`PUT /api/display/brightness`, `GET/POST /api/config`)
+- Web UI slider for live adjustment
+
+**Driver Methods:**
+```cpp
+virtual void setBacklightBrightness(uint8_t brightness_percent);  // 0-100%
+virtual uint8_t getBacklightBrightness();                         // Current value
+virtual bool hasBacklightControl();                               // Feature detection
+```
+
+**Manager API:**
+```cpp
+void display_manager_set_backlight_brightness(uint8_t brightness_percent);
+```
+
+**Example Implementation (TFT_eSPI_Driver):**
+```cpp
+void TFT_eSPI_Driver::setBacklightBrightness(uint8_t brightness_percent) {
+    #if HAS_BACKLIGHT
+    uint8_t duty = map(brightness_percent, 0, 100, 0, 255);
+    if (!TFT_BACKLIGHT_ON) duty = 255 - duty;  // Invert for active-low
+    #if ESP_ARDUINO_VERSION_MAJOR >= 3
+    ledcWrite(TFT_BL, duty);
+    #else
+    ledcWrite(BACKLIGHT_CHANNEL, duty);
+    #endif
+    #endif
+}
+```
 
 ### Selecting a Driver
 
@@ -363,7 +415,23 @@ public:
     }
     
     void setBacklight(bool on) override {
-        // Control backlight
+        // Control backlight on/off
+    }
+    
+    void setBacklightBrightness(uint8_t brightness_percent) override {
+        // PWM brightness control (0-100%)
+        #if HAS_BACKLIGHT
+        uint8_t duty = map(brightness_percent, 0, 100, 0, 255);
+        // Apply to PWM channel
+        #endif
+    }
+    
+    bool hasBacklightControl() override {
+        #if HAS_BACKLIGHT
+        return true;
+        #else
+        return false;
+        #endif
     }
     
     void applyDisplayFixes() override {

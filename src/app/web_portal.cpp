@@ -16,6 +16,11 @@
 #include "board_config.h"
 #include "device_telemetry.h"
 #include "../version.h"
+
+#if HAS_DISPLAY
+#include "display_manager.h"
+#endif
+
 #include <ESPAsyncWebServer.h>
 #include <DNSServer.h>
 #include <WiFi.h>
@@ -33,6 +38,7 @@ void handleJS(AsyncWebServerRequest *request);
 void handleGetConfig(AsyncWebServerRequest *request);
 void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total);
 void handleDeleteConfig(AsyncWebServerRequest *request);
+void handleSetDisplayBrightness(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total);
 void handleGetVersion(AsyncWebServerRequest *request);
 void handleGetMode(AsyncWebServerRequest *request);
 void handleGetHealth(AsyncWebServerRequest *request);
@@ -176,6 +182,9 @@ void handleGetConfig(AsyncWebServerRequest *request) {
     doc["mqtt_password"] = "";
     doc["mqtt_interval_seconds"] = current_config->mqtt_interval_seconds;
     
+    // Display settings
+    doc["backlight_brightness"] = current_config->backlight_brightness;
+    
     String response;
     serializeJson(doc, response);
     
@@ -284,6 +293,31 @@ void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len,
         }
     }
     
+    // Display settings - backlight brightness (0-100%)
+    if (doc.containsKey("backlight_brightness")) {
+        uint8_t brightness;
+        // Handle both string and integer values from form
+        if (doc["backlight_brightness"].is<const char*>()) {
+            const char* brightness_str = doc["backlight_brightness"];
+            brightness = (uint8_t)atoi(brightness_str ? brightness_str : "100");
+            Logger.logLinef("Config: Brightness from string '%s' -> %d", brightness_str, brightness);
+        } else {
+            brightness = (uint8_t)(doc["backlight_brightness"] | 100);
+            Logger.logLinef("Config: Brightness from int -> %d", brightness);
+        }
+        
+        if (brightness > 100) brightness = 100;
+        current_config->backlight_brightness = brightness;
+        
+        Logger.logLinef("Config: Backlight brightness set to %d%% (current_config->backlight_brightness = %d)", 
+                        brightness, current_config->backlight_brightness);
+        
+        // Apply brightness immediately (will also be persisted when config saved)
+        #if HAS_DISPLAY
+        display_manager_set_backlight_brightness(brightness);
+        #endif
+    }
+    
     current_config->magic = CONFIG_MAGIC;
     
     // Validate config
@@ -364,8 +398,8 @@ void handleGetVersion(AsyncWebServerRequest *request) {
     response->print("\",\"project_display_name\":\"");
     response->print(PROJECT_DISPLAY_NAME);
     response->print("\",\"has_mqtt\":");
-    response->print(HAS_MQTT ? "true" : "false");
-    response->print("}");
+    response->print(HAS_MQTT ? "true" : "false");    response->print(",\"has_backlight\":");
+    response->print(HAS_BACKLIGHT ? "true" : "false");    response->print("}");
     request->send(response);
 }
 
@@ -391,6 +425,43 @@ void handleReboot(AsyncWebServerRequest *request) {
     delay(100);
     Logger.logMessage("Portal", "Rebooting");
     ESP.restart();
+}
+
+// PUT /api/display/brightness - Set backlight brightness immediately (no persist)
+void handleSetDisplayBrightness(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+    // Only handle the complete request (index == 0 && index + len == total)
+    if (index != 0 || index + len != total) {
+        return;
+    }
+    
+    // Parse JSON body
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, data, len);
+    
+    if (error) {
+        request->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid JSON\"}");
+        return;
+    }
+    
+    // Get brightness value (0-100)
+    if (!doc.containsKey("brightness")) {
+        request->send(400, "application/json", "{\"success\":false,\"message\":\"Missing brightness value\"}");
+        return;
+    }
+    
+    uint8_t brightness = (uint8_t)(doc["brightness"] | 100);
+    if (brightness > 100) brightness = 100;
+    
+    // Apply brightness immediately (does not persist to NVS)
+    #if HAS_DISPLAY
+    display_manager_set_backlight_brightness(brightness);
+    Logger.logLinef("Display brightness: %d%%", brightness);
+    #endif
+    
+    // Return success
+    char response[64];
+    snprintf(response, sizeof(response), "{\"success\":true,\"brightness\":%d}", brightness);
+    request->send(200, "application/json", response);
 }
 
 // POST /api/update - Handle OTA firmware upload
@@ -487,6 +558,8 @@ void web_portal_init(DeviceConfig *config) {
     Logger.logBegin("Portal Init");
     
     current_config = config;
+    Logger.logLinef("Portal config pointer: %p, backlight_brightness: %d", 
+                    current_config, current_config->backlight_brightness);
     
     // Create web server instance (avoid global constructor issues)
     if (server == nullptr) {
@@ -523,6 +596,13 @@ void web_portal_init(DeviceConfig *config) {
     server->on("/api/info", HTTP_GET, handleGetVersion);
     server->on("/api/health", HTTP_GET, handleGetHealth);
     server->on("/api/reboot", HTTP_POST, handleReboot);
+    
+    // Display API endpoints
+    server->on("/api/display/brightness", HTTP_PUT,
+        [](AsyncWebServerRequest *request) {},
+        NULL,
+        handleSetDisplayBrightness
+    );
     
     // OTA upload endpoint
     server->on("/api/update", HTTP_POST,

@@ -33,6 +33,11 @@ public:
     virtual void setRotation(uint8_t rotation) = 0;
     virtual void setBacklight(bool on) = 0;
     
+    // Backlight brightness control (0-100%)
+    virtual void setBacklightBrightness(uint8_t brightness) = 0;  // 0-100
+    virtual uint8_t getBacklightBrightness() = 0;
+    virtual bool hasBacklightControl() = 0;  // Capability query
+    
     // Display-specific fixes/configuration (optional, board-dependent)
     virtual void applyDisplayFixes() = 0;
     

@@ -15,6 +15,7 @@
 class TFT_eSPI_Driver : public DisplayDriver {
 private:
     TFT_eSPI tft;
+    uint8_t currentBrightness;  // Current brightness level (0-100%)
     
 public:
     TFT_eSPI_Driver();
@@ -23,6 +24,9 @@ public:
     void init() override;
     void setRotation(uint8_t rotation) override;
     void setBacklight(bool on) override;
+    void setBacklightBrightness(uint8_t brightness) override;  // 0-100%
+    uint8_t getBacklightBrightness() override;
+    bool hasBacklightControl() override;
     void applyDisplayFixes() override;
     
     void startWrite() override;

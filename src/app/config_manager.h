@@ -58,6 +58,9 @@ struct DeviceConfig {
     char mqtt_password[CONFIG_MQTT_PASSWORD_MAX_LEN];
     uint16_t mqtt_interval_seconds; // 0 disables periodic publish
     
+    // Display settings
+    uint8_t backlight_brightness;  // 0-100%, default 100
+    
     // Validation flag (magic number to detect valid config)
     uint32_t magic;
 };

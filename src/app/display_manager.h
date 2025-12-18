@@ -34,6 +34,9 @@ private:
     lv_color_t buf[LVGL_BUFFER_SIZE];
     lv_disp_drv_t disp_drv;
     
+    // Configuration reference
+    DeviceConfig* config;
+    
     // FreeRTOS task and mutex
     TaskHandle_t lvglTaskHandle;
     SemaphoreHandle_t lvglMutex;
@@ -91,5 +94,6 @@ void display_manager_show_splash();
 void display_manager_show_info();
 void display_manager_show_test();
 void display_manager_set_splash_status(const char* text);
+void display_manager_set_backlight_brightness(uint8_t brightness);  // 0-100%
 
 #endif // DISPLAY_MANAGER_H

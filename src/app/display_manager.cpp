@@ -19,8 +19,8 @@
 // Global instance
 DisplayManager* displayManager = nullptr;
 
-DisplayManager::DisplayManager(DeviceConfig* config) 
-    : driver(nullptr), currentScreen(nullptr), infoScreen(config, this), testScreen(this),
+DisplayManager::DisplayManager(DeviceConfig* cfg) 
+    : driver(nullptr), config(cfg), currentScreen(nullptr), infoScreen(cfg, this), testScreen(this),
       lvglTaskHandle(nullptr), lvglMutex(nullptr) {
     // Instantiate selected display driver
     #if DISPLAY_DRIVER == DISPLAY_DRIVER_TFT_ESPI
@@ -121,8 +121,17 @@ void DisplayManager::initHardware() {
     driver->init();
     driver->setRotation(DISPLAY_ROTATION);
     
-    // Turn on backlight
+    // Apply saved brightness from config (or default to 100%)
+    #if HAS_BACKLIGHT
+    uint8_t brightness = config ? config->backlight_brightness : 100;
+    if (brightness > 100) brightness = 100;
+    driver->setBacklightBrightness(brightness);
+    Logger.logLinef("Backlight: %d%%", brightness);
+    #else
+    // Turn on backlight (on/off only)
     driver->setBacklight(true);
+    Logger.logLine("Backlight: ON");
+    #endif
     
     Logger.logLinef("Resolution: %dx%d", DISPLAY_WIDTH, DISPLAY_HEIGHT);
     Logger.logLinef("Rotation: %d", DISPLAY_ROTATION);
@@ -275,6 +284,12 @@ void display_manager_show_test() {
 void display_manager_set_splash_status(const char* text) {
     if (displayManager) {
         displayManager->setSplashStatus(text);
+    }
+}
+
+void display_manager_set_backlight_brightness(uint8_t brightness) {
+    if (displayManager && displayManager->getDriver()) {
+        displayManager->getDriver()->setBacklightBrightness(brightness);
     }
 }
 

@@ -82,6 +82,13 @@ void setup()
   // #endif
   Logger.logEnd();
   
+  // Initialize device_config with sensible defaults
+  // (Important: must happen before display_manager_init uses the config)
+  memset(&device_config, 0, sizeof(DeviceConfig));
+  device_config.backlight_brightness = 100;  // Default to full brightness
+  device_config.mqtt_port = 0;
+  device_config.mqtt_interval_seconds = 0;
+  
   // Initialize board-specific hardware
   #if HAS_BUILTIN_LED
   pinMode(LED_PIN, OUTPUT);
@@ -114,6 +121,12 @@ void setup()
     strlcpy(device_config.device_name, default_name.c_str(), CONFIG_DEVICE_NAME_MAX_LEN);
     device_config.magic = CONFIG_MAGIC;
   }
+  
+  // Re-apply brightness from loaded config (display was initialized before config load)
+  #if HAS_DISPLAY && HAS_BACKLIGHT
+  Logger.logLinef("Main: Applying loaded brightness: %d%%", device_config.backlight_brightness);
+  display_manager_set_backlight_brightness(device_config.backlight_brightness);
+  #endif
   
   // Start WiFi BEFORE initializing web server (critical for ESP32-C3)
   #if HAS_DISPLAY
