@@ -401,7 +401,7 @@ async function loadVersion() {
         // Hide/disable display settings if firmware was built without backlight support
         const displaySection = document.getElementById('display-settings-section');
         if (displaySection) {
-            if (version.has_backlight === true) {
+            if (version.has_backlight === true || version.has_display === true) {
                 displaySection.style.display = 'block';
             } else {
                 displaySection.style.display = 'none';
@@ -409,6 +409,30 @@ async function loadVersion() {
                     el.disabled = true;
                 });
             }
+        }
+        
+        // Populate screen selection dropdown if device has display
+        const screenSelect = document.getElementById('screen_selection');
+        const screenGroup = document.getElementById('screen-selection-group');
+        if (screenSelect && screenGroup && version.has_display === true && version.available_screens) {
+            // Clear existing options
+            screenSelect.innerHTML = '';
+            
+            // Add option for each available screen
+            version.available_screens.forEach(screen => {
+                const option = document.createElement('option');
+                option.value = screen.id;
+                option.textContent = screen.name;
+                if (screen.id === version.current_screen) {
+                    option.selected = true;
+                }
+                screenSelect.appendChild(option);
+            });
+            
+            // Show screen selection group
+            screenGroup.style.display = 'block';
+        } else if (screenGroup) {
+            screenGroup.style.display = 'none';
         }
 
         document.getElementById('firmware-version').textContent = `Firmware v${version.version}`;
@@ -954,6 +978,39 @@ async function handleBrightnessChange(event) {
 }
 
 /**
+ * Handle screen selection change - switch screens immediately
+ * @param {Event} event - Change event from select dropdown
+ */
+async function handleScreenChange(event) {
+    const screenId = event.target.value;
+    
+    if (!screenId) return;
+    
+    try {
+        const response = await fetch('/api/display/screen', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ screen: screenId })
+        });
+        
+        if (!response.ok) {
+            console.error('Failed to switch screen:', response.statusText);
+            showMessage('Failed to switch screen', 'error');
+            // Revert dropdown to previous value
+            loadVersion(); // Refresh to get current screen
+        }
+        // Success - dropdown already shows new value
+    } catch (error) {
+        console.error('Error switching screen:', error);
+        showMessage('Error switching screen: ' + error.message, 'error');
+        // Revert dropdown to previous value
+        loadVersion(); // Refresh to get current screen
+    }
+}
+
+/**
  * Initialize page on DOM ready
  */
 document.addEventListener('DOMContentLoaded', () => {
@@ -1006,6 +1063,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const brightnessSlider = document.getElementById('backlight_brightness');
     if (brightnessSlider) {
         brightnessSlider.addEventListener('input', handleBrightnessChange);
+    }
+    
+    // Add screen selection dropdown event handler
+    const screenSelect = document.getElementById('screen_selection');
+    if (screenSelect) {
+        screenSelect.addEventListener('change', handleScreenChange);
     }
     
     // Load initial data

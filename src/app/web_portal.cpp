@@ -399,7 +399,42 @@ void handleGetVersion(AsyncWebServerRequest *request) {
     response->print(PROJECT_DISPLAY_NAME);
     response->print("\",\"has_mqtt\":");
     response->print(HAS_MQTT ? "true" : "false");    response->print(",\"has_backlight\":");
-    response->print(HAS_BACKLIGHT ? "true" : "false");    response->print("}");
+    response->print(HAS_BACKLIGHT ? "true" : "false");
+    
+    #if HAS_DISPLAY
+    // Display screen information
+    response->print(",\"has_display\":true");
+    
+    // Get available screens
+    size_t screen_count = 0;
+    const ScreenInfo* screens = display_manager_get_available_screens(&screen_count);
+    
+    response->print(",\"available_screens\":[");
+    for (size_t i = 0; i < screen_count; i++) {
+        if (i > 0) response->print(",");
+        response->print("{\"id\":\"");
+        response->print(screens[i].id);
+        response->print("\",\"name\":\"");
+        response->print(screens[i].display_name);
+        response->print("\"}");
+    }
+    response->print("]");
+    
+    // Get current screen
+    const char* current_screen = display_manager_get_current_screen_id();
+    response->print(",\"current_screen\":");
+    if (current_screen) {
+        response->print("\"");
+        response->print(current_screen);
+        response->print("\"");
+    } else {
+        response->print("null");
+    }
+    #else
+    response->print(",\"has_display\":false");
+    #endif
+    
+    response->print("}");
     request->send(response);
 }
 
@@ -463,6 +498,53 @@ void handleSetDisplayBrightness(AsyncWebServerRequest *request, uint8_t *data, s
     snprintf(response, sizeof(response), "{\"success\":true,\"brightness\":%d}", brightness);
     request->send(200, "application/json", response);
 }
+
+#if HAS_DISPLAY
+// PUT /api/display/screen - Switch to a different screen (runtime only, no persist)
+void handleSetDisplayScreen(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+    // Only handle the complete request (index == 0 && index + len == total)
+    if (index != 0 || index + len != total) {
+        return;
+    }
+    
+    // Parse JSON body
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, data, len);
+    
+    if (error) {
+        request->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid JSON\"}");
+        return;
+    }
+    
+    // Get screen ID
+    if (!doc.containsKey("screen")) {
+        request->send(400, "application/json", "{\"success\":false,\"message\":\"Missing screen ID\"}");
+        return;
+    }
+    
+    const char* screen_id = doc["screen"];
+    if (!screen_id || strlen(screen_id) == 0) {
+        request->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid screen ID\"}");
+        return;
+    }
+    
+    Logger.logMessagef("API", "PUT /api/display/screen: %s", screen_id);
+    
+    // Switch to requested screen
+    bool success = false;
+    display_manager_show_screen(screen_id, &success);
+    
+    if (success) {
+        // Build success response with new screen ID
+        String response = "{\"success\":true,\"screen\":\"";
+        response += screen_id;
+        response += "\"}";
+        request->send(200, "application/json", response);
+    } else {
+        request->send(404, "application/json", "{\"success\":false,\"message\":\"Screen not found\"}");
+    }
+}
+#endif
 
 // POST /api/update - Handle OTA firmware upload
 void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
@@ -603,6 +685,14 @@ void web_portal_init(DeviceConfig *config) {
         NULL,
         handleSetDisplayBrightness
     );
+    
+    #if HAS_DISPLAY
+    server->on("/api/display/screen", HTTP_PUT,
+        [](AsyncWebServerRequest *request) {},
+        NULL,
+        handleSetDisplayScreen
+    );
+    #endif
     
     // OTA upload endpoint
     server->on("/api/update", HTTP_POST,

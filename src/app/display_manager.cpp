@@ -21,7 +21,7 @@ DisplayManager* displayManager = nullptr;
 
 DisplayManager::DisplayManager(DeviceConfig* cfg) 
     : driver(nullptr), config(cfg), currentScreen(nullptr), infoScreen(cfg, this), testScreen(this),
-      lvglTaskHandle(nullptr), lvglMutex(nullptr) {
+      lvglTaskHandle(nullptr), lvglMutex(nullptr), screenCount(0) {
     // Instantiate selected display driver
     #if DISPLAY_DRIVER == DISPLAY_DRIVER_TFT_ESPI
     driver = new TFT_eSPI_Driver();
@@ -31,6 +31,11 @@ DisplayManager::DisplayManager(DeviceConfig* cfg)
     
     // Create mutex for thread-safe LVGL access
     lvglMutex = xSemaphoreCreateMutex();
+    
+    // Initialize screen registry (exclude splash - it's boot-specific)
+    availableScreens[0] = {"info", "Info Screen", &infoScreen};
+    availableScreens[1] = {"test", "Test Screen", &testScreen};
+    screenCount = 2;
 }
 
 DisplayManager::~DisplayManager() {
@@ -255,6 +260,46 @@ void DisplayManager::setSplashStatus(const char* text) {
     unlock();
 }
 
+bool DisplayManager::showScreen(const char* screen_id) {
+    if (!screen_id) return false;
+    
+    // Look up screen in registry
+    for (size_t i = 0; i < screenCount; i++) {
+        if (strcmp(availableScreens[i].id, screen_id) == 0) {
+            Logger.logMessagef("Display", "Switching to screen: %s", screen_id);
+            
+            // Lock - this method is called from web server task (external to LVGL)
+            lock();
+            if (currentScreen) {
+                currentScreen->hide();
+            }
+            currentScreen = availableScreens[i].instance;
+            currentScreen->show();
+            unlock();
+            
+            return true;
+        }
+    }
+    
+    Logger.logMessagef("Display", "Screen not found: %s", screen_id);
+    return false;
+}
+
+const char* DisplayManager::getCurrentScreenId() {
+    // Return ID of current screen (nullptr if splash or unknown)
+    for (size_t i = 0; i < screenCount; i++) {
+        if (currentScreen == availableScreens[i].instance) {
+            return availableScreens[i].id;
+        }
+    }
+    return nullptr;  // Splash or unknown screen
+}
+
+const ScreenInfo* DisplayManager::getAvailableScreens(size_t* count) {
+    if (count) *count = screenCount;
+    return availableScreens;
+}
+
 // C-style interface for app.ino
 void display_manager_init(DeviceConfig* config) {
     if (!displayManager) {
@@ -285,6 +330,29 @@ void display_manager_set_splash_status(const char* text) {
     if (displayManager) {
         displayManager->setSplashStatus(text);
     }
+}
+
+void display_manager_show_screen(const char* screen_id, bool* success) {
+    bool result = false;
+    if (displayManager) {
+        result = displayManager->showScreen(screen_id);
+    }
+    if (success) *success = result;
+}
+
+const char* display_manager_get_current_screen_id() {
+    if (displayManager) {
+        return displayManager->getCurrentScreenId();
+    }
+    return nullptr;
+}
+
+const ScreenInfo* display_manager_get_available_screens(size_t* count) {
+    if (displayManager) {
+        return displayManager->getAvailableScreens(count);
+    }
+    if (count) *count = 0;
+    return nullptr;
 }
 
 void display_manager_set_backlight_brightness(uint8_t brightness) {
