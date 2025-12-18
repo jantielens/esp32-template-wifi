@@ -585,15 +585,16 @@ Upload a JPEG image for display on the device screen (full mode - deferred decod
 
 #### `POST /api/display/image/strips`
 
-Upload JPEG image strips for memory-efficient display (synchronous decode).
+Upload JPEG image strips for memory-efficient display (async decode).
 
 **Request:**
 - Content-Type: `application/octet-stream`
 - Query parameters:
-  - `stripIndex`: Strip number (0-based)
-  - `totalStrips`: Total number of strips
-  - `imageWidth`: Full image width
-  - `imageHeight`: Full image height
+  - `strip_index`: Strip number (0-based)
+  - `strip_count`: Total number of strips
+  - `width`: Full image width
+  - `height`: Full image height
+  - `timeout` (optional): Display timeout in seconds (defaults to firmware setting)
 - Body: Raw JPEG strip data
 
 **Response (Success):**
@@ -612,11 +613,11 @@ Upload JPEG image strips for memory-efficient display (synchronous decode).
 ```
 
 **Notes:**
-- Strips are decoded synchronously (blocks until decode complete)
+- Strips are queued and decoded by the main loop (HTTP handler does not decode)
 - Memory efficient: only one strip in memory at a time
 - Use for large images or memory-constrained devices
 - Client must send strips in sequential order (0, 1, 2, ...)
-- Race condition protection: returns HTTP 409 if previous upload still processing
+- Flow control: returns HTTP 409 if a previous strip is still being processed
 
 **Example Client:**
 ```bash

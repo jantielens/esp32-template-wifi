@@ -182,7 +182,7 @@ The hostname is automatically set from the device name and includes the last 4 h
 | POST | `/api/update` | OTA firmware upload |
 | POST | `/api/reboot` | Reboot device without saving |
 | POST | `/api/display/image` | Upload JPEG image for display (full mode - deferred decode) |
-| POST | `/api/display/image/strips` | Upload JPEG image strips (memory efficient - sync decode) |
+| POST | `/api/display/image/strips` | Upload JPEG image strips (memory efficient - async decode) |
 | DELETE | `/api/display/image` | Dismiss currently displayed image |
 
 See [docs/web-portal.md](docs/web-portal.md) for detailed guide.

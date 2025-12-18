@@ -18,7 +18,9 @@
 
 // ===== Constants =====
 
-static const unsigned long UPLOAD_WAIT_TIMEOUT_MS = 1000;  // Wait for concurrent upload to complete
+// Note: AsyncWebServer callbacks run on the AsyncTCP task. Do not block
+// (e.g., with delay()/busy waits). If we're busy, return 409 and let the
+// client retry.
 
 // ===== Internal state =====
 
@@ -49,9 +51,22 @@ struct PendingImageOp {
 };
 static PendingImageOp pending_image_op = {nullptr, 0, false, 10000, 0};
 
-// Current strip being uploaded (stateless - metadata comes with each request)
+// Strip upload state (buffering during HTTP upload)
 static uint8_t* current_strip_buffer = nullptr;
 static size_t current_strip_size = 0;
+
+// Strip processing state (async decode queue)
+struct PendingStripOp {
+    uint8_t* buffer;
+    size_t size;
+    uint8_t strip_index;
+    int image_width;
+    int image_height;
+    int total_strips;
+    unsigned long timeout_ms;
+    unsigned long start_time;
+};
+static PendingStripOp pending_strip_op = {nullptr, 0, 0, 0, 0, 0, 10000, 0};
 
 static bool is_jpeg_magic(const uint8_t* buf, size_t sz) {
     return (buf && sz >= 3 && buf[0] == 0xFF && buf[1] == 0xD8 && buf[2] == 0xFF);
@@ -78,24 +93,10 @@ static void handleImageUpload(AsyncWebServerRequest *request, String filename, s
 
     // First chunk - initialize upload
     if (index == 0) {
-        // Check if upload already in progress OR pending display - wait for it to complete
+        // If upload already in progress OR pending display, reject (client can retry)
         if (upload_state == UPLOAD_IN_PROGRESS || upload_state == UPLOAD_READY_TO_DISPLAY) {
-            Logger.logMessage("Upload", "Previous upload pending, waiting...");
-
-            // Wait for current operation to complete (with timeout)
-            unsigned long wait_start = millis();
-            while ((upload_state == UPLOAD_IN_PROGRESS || upload_state == UPLOAD_READY_TO_DISPLAY) 
-                   && (millis() - wait_start) < UPLOAD_WAIT_TIMEOUT_MS) {
-                delay(10);
-            }
-
-            if (upload_state != UPLOAD_IDLE) {
-                Logger.logMessage("Upload", "ERROR: Timeout waiting for previous operation");
-                request->send(409, "application/json", "{\"success\":false,\"message\":\"Previous upload still pending after timeout\"}");
-                return;
-            }
-
-            Logger.logMessage("Upload", "Previous operation completed, proceeding");
+            request->send(409, "application/json", "{\"success\":false,\"message\":\"Upload busy\"}");
+            return;
         }
 
         Logger.logBegin("Image Upload");
@@ -258,7 +259,7 @@ static void handleImageDelete(AsyncWebServerRequest *request) {
 }
 
 // POST /api/display/image/strips?strip_index=N&strip_count=T&width=W&height=H[&timeout=seconds]
-// Upload a single JPEG strip (stateless/atomic); decode is synchronous.
+// Upload a single JPEG strip; decode is deferred to the main loop.
 static void handleStripUpload(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
     // Validate required params
     if (index == 0) {
@@ -289,6 +290,12 @@ static void handleStripUpload(AsyncWebServerRequest *request, uint8_t *data, siz
         : g_cfg.default_timeout_ms;
 
     if (index == 0) {
+        // Reject if we're busy. AsyncWebServer runs on AsyncTCP task; do not block.
+        if (upload_state == UPLOAD_IN_PROGRESS || upload_state == UPLOAD_READY_TO_DISPLAY || pending_strip_op.buffer) {
+            request->send(409, "application/json", "{\"success\":false,\"message\":\"Busy\"}");
+            return;
+        }
+
         // Only log first strip to reduce verbosity
         if (stripIndex == 0) {
             Logger.logMessagef("Strip Mode", "Uploading %dx%d image (%d strips)", imageWidth, imageHeight, totalStrips);
@@ -305,15 +312,6 @@ static void handleStripUpload(AsyncWebServerRequest *request, uint8_t *data, siz
             Logger.logEnd();
             request->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid image dimensions\"}");
             return;
-        }
-
-        // Initialize display session on first strip
-        if (stripIndex == 0) {
-            if (!g_backend.start_strip_session || !g_backend.start_strip_session(imageWidth, imageHeight, timeoutMs, millis())) {
-                Logger.logEnd("ERROR: Failed to initialize display");
-                request->send(500, "application/json", "{\"success\":false,\"message\":\"Failed to initialize display\"}");
-                return;
-            }
         }
 
         if (current_strip_buffer) {
@@ -377,33 +375,40 @@ static void handleStripUpload(AsyncWebServerRequest *request, uint8_t *data, siz
             return;
         }
 
-        bool success = false;
-        if (g_backend.decode_strip) {
-            success = g_backend.decode_strip(current_strip_buffer, current_strip_size, (uint8_t)stripIndex, false);
-        }
-
-        free((void*)current_strip_buffer);
-        current_strip_buffer = nullptr;
-        current_strip_size = 0;
-
-        const bool is_last = (stripIndex == totalStrips - 1);
-        if (!success) {
-            Logger.logLinef("ERROR: Failed to decode strip %d", stripIndex);
+        // Queue strip for async decode (don't decode in HTTP handler)
+        // If we're busy, reject and let client retry.
+        if (upload_state == UPLOAD_IN_PROGRESS || upload_state == UPLOAD_READY_TO_DISPLAY || pending_strip_op.buffer) {
+            free((void*)current_strip_buffer);
+            current_strip_buffer = nullptr;
             Logger.logEnd();
-            request->send(500, "application/json", "{\"success\":false,\"message\":\"Decode failed\"}");
+            request->send(409, "application/json", "{\"success\":false,\"message\":\"Busy\"}" );
             return;
         }
 
-        if (is_last) {
-            Logger.logLinef("✓ All %d strips uploaded and decoded", totalStrips);
-        }
-
+        // Transfer strip buffer to pending operation
+        upload_state = UPLOAD_IN_PROGRESS;
+        pending_strip_op.buffer = current_strip_buffer;
+        pending_strip_op.size = current_strip_size;
+        pending_strip_op.strip_index = (uint8_t)stripIndex;
+        pending_strip_op.image_width = imageWidth;
+        pending_strip_op.image_height = imageHeight;
+        pending_strip_op.total_strips = totalStrips;
+        pending_strip_op.timeout_ms = timeoutMs;
+        pending_strip_op.start_time = millis();
+        
+        current_strip_buffer = nullptr;
+        current_strip_size = 0;
+        
+        upload_state = UPLOAD_READY_TO_DISPLAY;
+        pending_op_id++;
+        
+        Logger.logMessagef("Strip", "Strip %d/%d queued for decode", stripIndex, totalStrips - 1);
         Logger.logEnd();
 
         char response[160];
         snprintf(response, sizeof(response),
                  "{\"success\":true,\"strip_index\":%d,\"strip_count\":%d,\"complete\":%s}",
-                 stripIndex, totalStrips, is_last ? "true" : "false");
+                 stripIndex, totalStrips, (stripIndex == totalStrips - 1) ? "true" : "false");
         request->send(200, "application/json", response);
     }
 }
@@ -426,6 +431,12 @@ void image_api_init(const ImageApiConfig& cfg, const ImageApiBackend& backend) {
         current_strip_buffer = nullptr;
     }
     current_strip_size = 0;
+
+    if (pending_strip_op.buffer) {
+        free((void*)pending_strip_op.buffer);
+        pending_strip_op.buffer = nullptr;
+    }
+    pending_strip_op = {nullptr, 0, 0, 0, 0, 0, g_cfg.default_timeout_ms, 0};
 
     if (image_upload_buffer) {
         free((void*)image_upload_buffer);
@@ -467,6 +478,7 @@ void image_api_process_pending(bool ota_in_progress) {
 
     last_processed_id = pending_op_id;
 
+    // Handle dismiss operation
     if (pending_image_op.dismiss) {
         if (g_backend.hide_current_image) {
             g_backend.hide_current_image();
@@ -476,6 +488,55 @@ void image_api_process_pending(bool ota_in_progress) {
         return;
     }
 
+    // Handle strip operation
+    if (pending_strip_op.buffer && pending_strip_op.size > 0) {
+        const uint8_t* buf = pending_strip_op.buffer;
+        const size_t sz = pending_strip_op.size;
+        const uint8_t strip_index = pending_strip_op.strip_index;
+        const int total_strips = pending_strip_op.total_strips;
+
+        Logger.logMessagef("Portal", "Processing strip %d/%d (%u bytes)", strip_index, total_strips - 1, (unsigned)sz);
+
+        // Initialize strip session on first strip
+        if (strip_index == 0) {
+            if (!g_backend.start_strip_session) {
+                Logger.logMessage("Portal", "ERROR: No strip session handler");
+                free((void*)pending_strip_op.buffer);
+                pending_strip_op.buffer = nullptr;
+                upload_state = UPLOAD_IDLE;
+                return;
+            }
+
+            if (!g_backend.start_strip_session(pending_strip_op.image_width, pending_strip_op.image_height, 
+                                                pending_strip_op.timeout_ms, pending_strip_op.start_time)) {
+                Logger.logMessage("Portal", "ERROR: Failed to init strip session");
+                free((void*)pending_strip_op.buffer);
+                pending_strip_op.buffer = nullptr;
+                upload_state = UPLOAD_IDLE;
+                return;
+            }
+        }
+
+        // Decode strip
+        bool success = false;
+        if (g_backend.decode_strip) {
+            success = g_backend.decode_strip(buf, sz, strip_index, false);
+        }
+
+        free((void*)pending_strip_op.buffer);
+        pending_strip_op.buffer = nullptr;
+        pending_strip_op.size = 0;
+        upload_state = UPLOAD_IDLE;
+
+        if (!success) {
+            Logger.logMessagef("Portal", "ERROR: Failed to decode strip %d", strip_index);
+        } else if (strip_index == total_strips - 1) {
+            Logger.logMessagef("Portal", "\u2713 All %d strips decoded", total_strips);
+        }
+        return;
+    }
+
+    // Handle full image operation (fallback for full mode)
     if (pending_image_op.buffer && pending_image_op.size > 0) {
         const uint8_t* buf = pending_image_op.buffer;
         const size_t sz = pending_image_op.size;

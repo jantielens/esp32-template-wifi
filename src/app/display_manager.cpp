@@ -26,7 +26,8 @@
 DisplayManager* displayManager = nullptr;
 
 DisplayManager::DisplayManager(DeviceConfig* cfg) 
-    : driver(nullptr), config(cfg), currentScreen(nullptr), infoScreen(cfg, this), testScreen(this),
+    : driver(nullptr), config(cfg), currentScreen(nullptr), previousScreen(nullptr), 
+      infoScreen(cfg, this), testScreen(this),
       #if HAS_IMAGE_API
       directImageScreen(this),
       #endif
@@ -89,6 +90,15 @@ DisplayManager::~DisplayManager() {
 // LVGL flush callback
 void DisplayManager::flushCallback(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p) {
     DisplayManager* mgr = (DisplayManager*)disp->user_data;
+
+    // When DirectImageScreen is active, the JPEG decoder writes directly to the LCD.
+    // Avoid concurrent SPI/TFT_eSPI access from LVGL flushes (can cause WDT/deadlocks).
+    #if HAS_IMAGE_API
+    if (mgr && mgr->currentScreen == &mgr->directImageScreen) {
+        lv_disp_flush_ready(disp);
+        return;
+    }
+    #endif
     
     uint32_t w = (area->x2 - area->x1 + 1);
     uint32_t h = (area->y2 - area->y1 + 1);
@@ -99,6 +109,26 @@ void DisplayManager::flushCallback(lv_disp_drv_t *disp, const lv_area_t *area, l
     mgr->driver->endWrite();
     
     lv_disp_flush_ready(disp);
+}
+
+bool DisplayManager::isInLvglTask() const {
+    if (!lvglTaskHandle) return false;
+    return xTaskGetCurrentTaskHandle() == lvglTaskHandle;
+}
+
+void DisplayManager::lockIfNeeded(bool& didLock) {
+    if (isInLvglTask()) {
+        didLock = false;
+        return;
+    }
+    lock();
+    didLock = true;
+}
+
+void DisplayManager::unlockIfNeeded(bool didLock) {
+    if (didLock) {
+        unlock();
+    }
 }
 
 void DisplayManager::lock() {
@@ -254,6 +284,8 @@ void DisplayManager::showInfo() {
     Logger.logBegin("Show Info");
     // Note: Don't lock if called from LVGL callback (already locked by task)
     // Just perform the screen change directly
+    bool didLock = false;
+    lockIfNeeded(didLock);
     if (currentScreen) {
         Logger.logLine("Hiding current screen");
         currentScreen->hide();
@@ -261,6 +293,7 @@ void DisplayManager::showInfo() {
     currentScreen = &infoScreen;
     Logger.logLine("Loading info screen");
     currentScreen->show();
+    unlockIfNeeded(didLock);
     Logger.logEnd();
 }
 
@@ -268,6 +301,8 @@ void DisplayManager::showTest() {
     Logger.logBegin("Show Test");
     // Note: Don't lock if called from LVGL callback (already locked by task)
     // Just perform the screen change directly
+    bool didLock = false;
+    lockIfNeeded(didLock);
     if (currentScreen) {
         Logger.logLine("Hiding current screen");
         currentScreen->hide();
@@ -275,6 +310,7 @@ void DisplayManager::showTest() {
     currentScreen = &testScreen;
     Logger.logLine("Loading test screen");
     currentScreen->show();
+    unlockIfNeeded(didLock);
     Logger.logEnd();
 }
 
@@ -283,20 +319,31 @@ void DisplayManager::showDirectImage() {
     Logger.logBegin("Show Direct Image");
     // Note: Don't lock if called from LVGL callback (already locked by task)
     // Just perform the screen change directly
+    bool didLock = false;
+    lockIfNeeded(didLock);
     if (currentScreen) {
         Logger.logLine("Hiding current screen");
-        // Save current screen so we can return to it after timeout
-        previousScreen = currentScreen;
+        // Save current screen so we can return to it after timeout.
+        // If we're already on DirectImageScreen (e.g., a second upload arrives before timeout),
+        // do NOT overwrite previousScreen; we still want to return to the screen that was
+        // active before the first image was shown.
+        if (currentScreen != &directImageScreen) {
+            previousScreen = currentScreen;
+        }
         currentScreen->hide();
     }
     currentScreen = &directImageScreen;
     Logger.logLine("Loading direct image screen");
     currentScreen->show();
+    unlockIfNeeded(didLock);
     Logger.logEnd();
 }
 
 void DisplayManager::returnToPreviousScreen() {
     Logger.logBegin("Return to Previous Screen");
+
+    bool didLock = false;
+    lockIfNeeded(didLock);
     
     // If no previous screen, default to info screen
     Screen* targetScreen = previousScreen ? previousScreen : &infoScreen;
@@ -308,6 +355,8 @@ void DisplayManager::returnToPreviousScreen() {
     currentScreen = targetScreen;
     currentScreen->show();
     previousScreen = nullptr;  // Clear previous screen reference
+
+    unlockIfNeeded(didLock);
     
     Logger.logEnd();
 }

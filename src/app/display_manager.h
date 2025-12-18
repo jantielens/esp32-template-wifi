@@ -64,6 +64,11 @@ private:
     // Screen management
     Screen* currentScreen;
     Screen* previousScreen;  // Track previous screen for return navigation
+
+    // Helpers: avoid taking the LVGL mutex when already inside the LVGL task
+    bool isInLvglTask() const;
+    void lockIfNeeded(bool& didLock);
+    void unlockIfNeeded(bool didLock);
     
     // Screen instances (created at init, kept in memory)
     SplashScreen splashScreen;

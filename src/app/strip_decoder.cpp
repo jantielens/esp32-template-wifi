@@ -185,6 +185,12 @@ static UINT jpeg_output_func(JDEC* jd, void* bitmap, JRECT* rect) {
         ctx->driver->setAddrWindow(lcd_x, lcd_y, line_width, 1);
         ctx->driver->pushColors(ctx->line_buffer, line_width, true);
         ctx->driver->endWrite();
+        
+        // Yield periodically to prevent watchdog timeouts during long decodes.
+        // Yielding every line can be unnecessarily expensive.
+        if ((lcd_y & 0x03) == 0) {
+            taskYIELD();
+        }
     }
     
     return 1;  // Continue decoding

@@ -712,12 +712,9 @@ void web_portal_init(DeviceConfig *config) {
     ImageApiBackend backend;
     backend.hide_current_image = []() {
         #if HAS_DISPLAY
-        DirectImageScreen* screen = display_manager_get_direct_image_screen();
-        if (screen) {
-            screen->hide();
-        }
-        // Return to info screen
-        display_manager_show_info();
+        // Don't call screen->hide() here - it should only be called from LVGL task
+        // The screen transition will happen when showDirectImage() is called from main loop
+        // This callback is called from async HTTP handler (different task/no mutex)
         #endif
     };
     
@@ -729,14 +726,13 @@ void web_portal_init(DeviceConfig *config) {
             return false;
         }
         
-        // Show the blank screen
+        // Now called from main loop with proper task context
+        // Show the DirectImageScreen first
         display_manager_show_direct_image();
         
-        // Configure timeout
+        // Configure timeout and start session
         screen->set_timeout(timeout_ms);
         screen->set_start_time(start_time);
-        
-        // Start strip session
         screen->begin_strip_session(width, height);
         return true;
         #else
@@ -752,6 +748,7 @@ void web_portal_init(DeviceConfig *config) {
             return false;
         }
         
+        // Now called from main loop - safe to decode
         return screen->decode_strip(jpeg_data, jpeg_size, strip_index, output_bgr565);
         #else
         return false;
