@@ -27,6 +27,9 @@ DisplayManager* displayManager = nullptr;
 
 DisplayManager::DisplayManager(DeviceConfig* cfg) 
     : driver(nullptr), config(cfg), currentScreen(nullptr), infoScreen(cfg, this), testScreen(this),
+      #if HAS_IMAGE_API
+      directImageScreen(this),
+      #endif
       lvglTaskHandle(nullptr), lvglMutex(nullptr), screenCount(0) {
     // Instantiate selected display driver
     #if DISPLAY_DRIVER == DISPLAY_DRIVER_TFT_ESPI
@@ -44,6 +47,11 @@ DisplayManager::DisplayManager(DeviceConfig* cfg)
     availableScreens[0] = {"info", "Info Screen", &infoScreen};
     availableScreens[1] = {"test", "Test Screen", &testScreen};
     screenCount = 2;
+    
+    #if HAS_IMAGE_API
+    // Register DirectImageScreen (optional, only shown via API)
+    // Not added to navigation menu - shown programmatically
+    #endif
 }
 
 DisplayManager::~DisplayManager() {
@@ -60,6 +68,10 @@ DisplayManager::~DisplayManager() {
     splashScreen.destroy();
     infoScreen.destroy();
     testScreen.destroy();
+    
+    #if HAS_IMAGE_API
+    directImageScreen.destroy();
+    #endif
     
     // Delete display driver
     if (driver) {
@@ -266,6 +278,41 @@ void DisplayManager::showTest() {
     Logger.logEnd();
 }
 
+#if HAS_IMAGE_API
+void DisplayManager::showDirectImage() {
+    Logger.logBegin("Show Direct Image");
+    // Note: Don't lock if called from LVGL callback (already locked by task)
+    // Just perform the screen change directly
+    if (currentScreen) {
+        Logger.logLine("Hiding current screen");
+        // Save current screen so we can return to it after timeout
+        previousScreen = currentScreen;
+        currentScreen->hide();
+    }
+    currentScreen = &directImageScreen;
+    Logger.logLine("Loading direct image screen");
+    currentScreen->show();
+    Logger.logEnd();
+}
+
+void DisplayManager::returnToPreviousScreen() {
+    Logger.logBegin("Return to Previous Screen");
+    
+    // If no previous screen, default to info screen
+    Screen* targetScreen = previousScreen ? previousScreen : &infoScreen;
+    
+    if (currentScreen) {
+        currentScreen->hide();
+    }
+    
+    currentScreen = targetScreen;
+    currentScreen->show();
+    previousScreen = nullptr;  // Clear previous screen reference
+    
+    Logger.logEnd();
+}
+#endif
+
 void DisplayManager::setSplashStatus(const char* text) {
     lock();
     splashScreen.setStatus(text);
@@ -372,5 +419,20 @@ void display_manager_set_backlight_brightness(uint8_t brightness) {
         displayManager->getDriver()->setBacklightBrightness(brightness);
     }
 }
+
+#if HAS_IMAGE_API
+void display_manager_show_direct_image() {
+    if (displayManager) {
+        displayManager->showDirectImage();
+    }
+}
+
+DirectImageScreen* display_manager_get_direct_image_screen() {
+    if (displayManager) {
+        return displayManager->getDirectImageScreen();
+    }
+    return nullptr;
+}
+#endif // HAS_IMAGE_API
 
 #endif // HAS_DISPLAY

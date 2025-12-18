@@ -317,6 +317,13 @@ public:
 - Centered grayscale gradient (black to white)
 - Resolution info display
 
+**DirectImageScreen** (`direct_image_screen.h/cpp`)
+- Blank black LVGL screen for direct LCD hardware writes
+- Used by Image API for JPEG image display
+- Automatic timeout returns to previous screen
+- No LVGL widgets (allows strip decoder to write directly to display)
+- Configured via `display_manager_show_direct_image(timeout_ms)`
+
 ## Rendering System
 
 ### FreeRTOS Task-Based Architecture

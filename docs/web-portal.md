@@ -546,6 +546,101 @@ Upload new firmware binary for over-the-air update.
 - Progress logged to serial monitor
 - Web portal shows upload progress bar, then automatically polls for reconnection (see [Automatic Reconnection](#automatic-reconnection-after-reboot))
 
+### Image Display (HAS_DISPLAY enabled)
+
+#### `POST /api/display/image`
+
+Upload a JPEG image for display on the device screen (full mode - deferred decode).
+
+**Request:**
+- Content-Type: `multipart/form-data`
+- Required fields:
+  - `image`: JPEG file (max 50KB)
+  - `width`: Image width in pixels
+  - `height`: Image height in pixels
+- Optional fields:
+  - `timeout`: Display timeout in milliseconds (default: 10000)
+
+**Response (Success):**
+```json
+{
+  "success": true,
+  "message": "Image queued for display"
+}
+```
+
+**Response (Error):**
+```json
+{
+  "success": false,
+  "message": "Error description"
+}
+```
+
+**Notes:**
+- Image is queued and decoded asynchronously by main loop
+- Device shows image on screen, then returns to previous screen after timeout
+- Use for single image uploads or testing
+- Requires enough heap memory to buffer entire JPEG
+
+#### `POST /api/display/image/strips`
+
+Upload JPEG image strips for memory-efficient display (synchronous decode).
+
+**Request:**
+- Content-Type: `application/octet-stream`
+- Query parameters:
+  - `stripIndex`: Strip number (0-based)
+  - `totalStrips`: Total number of strips
+  - `imageWidth`: Full image width
+  - `imageHeight`: Full image height
+- Body: Raw JPEG strip data
+
+**Response (Success):**
+```json
+{
+  "success": true
+}
+```
+
+**Response (Error - HTTP 409):**
+```json
+{
+  "success": false,
+  "message": "Upload in progress, try again"
+}
+```
+
+**Notes:**
+- Strips are decoded synchronously (blocks until decode complete)
+- Memory efficient: only one strip in memory at a time
+- Use for large images or memory-constrained devices
+- Client must send strips in sequential order (0, 1, 2, ...)
+- Race condition protection: returns HTTP 409 if previous upload still processing
+
+**Example Client:**
+```bash
+# Python upload script included in tools/
+python3 tools/upload_image.py <device-ip> --image photo.jpg --mode strip --quality 85
+python3 tools/upload_image.py <device-ip> --generate 240x280 --mode full --timeout 5000
+```
+
+#### `DELETE /api/display/image`
+
+Dismiss the currently displayed image and return to previous screen.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Image dismissed"
+}
+```
+
+**Notes:**
+- Returns to the screen that was active before image was displayed
+- Safe to call even if no image is currently shown
+
 ## Implementation Details
 
 ### Architecture

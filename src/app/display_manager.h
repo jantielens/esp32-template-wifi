@@ -1,12 +1,17 @@
 #ifndef DISPLAY_MANAGER_H
 #define DISPLAY_MANAGER_H
 
+#include "board_config.h"
 #include "config_manager.h"
 #include "display_driver.h"
 #include "screens/screen.h"
 #include "screens/splash_screen.h"
 #include "screens/info_screen.h"
 #include "screens/test_screen.h"
+
+#if HAS_IMAGE_API
+#include "screens/direct_image_screen.h"
+#endif
 
 #include <lvgl.h>
 #include <freertos/FreeRTOS.h>
@@ -58,11 +63,16 @@ private:
     
     // Screen management
     Screen* currentScreen;
+    Screen* previousScreen;  // Track previous screen for return navigation
     
     // Screen instances (created at init, kept in memory)
     SplashScreen splashScreen;
     InfoScreen infoScreen;
     TestScreen testScreen;
+    
+    #if HAS_IMAGE_API
+    DirectImageScreen directImageScreen;
+    #endif
     
     // Screen registry for runtime navigation (static allocation, no heap)
     // screenCount tracks how many slots are actually used (currently 2: info, test)
@@ -92,6 +102,11 @@ public:
     void showInfo();
     void showTest();
     
+    #if HAS_IMAGE_API
+    void showDirectImage();
+    void returnToPreviousScreen();  // Return to screen before image was shown
+    #endif
+    
     // Screen selection by ID (thread-safe, returns true if found)
     bool showScreen(const char* screen_id);
     
@@ -111,6 +126,11 @@ public:
     // Access to splash screen for status updates
     SplashScreen* getSplash() { return &splashScreen; }
     
+    #if HAS_IMAGE_API
+    // Access to direct image screen for image API
+    DirectImageScreen* getDirectImageScreen() { return &directImageScreen; }
+    #endif
+    
     // Access to display driver (for touch integration)
     DisplayDriver* getDriver() { return driver; }
 };
@@ -128,5 +148,11 @@ const char* display_manager_get_current_screen_id();
 const ScreenInfo* display_manager_get_available_screens(size_t* count);
 void display_manager_set_splash_status(const char* text);
 void display_manager_set_backlight_brightness(uint8_t brightness);  // 0-100%
+
+#if HAS_IMAGE_API
+// C-style interface for image API
+void display_manager_show_direct_image();
+DirectImageScreen* display_manager_get_direct_image_screen();
+#endif
 
 #endif // DISPLAY_MANAGER_H

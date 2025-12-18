@@ -167,5 +167,35 @@
 #define TOUCH_DRIVER TOUCH_DRIVER_XPT2046  // Default to XPT2046
 #endif
 
+// ============================================================================
+// Image API Configuration
+// ============================================================================
+// Enable web-based image upload and display functionality
+// Requires: HAS_DISPLAY = true
+// Adds REST endpoints:
+//   POST   /api/display/image          - Upload full JPEG (deferred decode)
+//   DELETE /api/display/image          - Dismiss current image
+//   POST   /api/display/image/strips   - Upload JPEG strip (synchronous)
+#ifndef HAS_IMAGE_API
+#define HAS_IMAGE_API false
+#endif
+
+// Image API configuration (only relevant when HAS_IMAGE_API is true)
+#ifndef IMAGE_API_MAX_SIZE_BYTES
+#define IMAGE_API_MAX_SIZE_BYTES (100 * 1024)  // 100KB max for full image upload
+#endif
+
+#ifndef IMAGE_API_DECODE_HEADROOM_BYTES
+#define IMAGE_API_DECODE_HEADROOM_BYTES (50 * 1024)  // 50KB headroom for decoding
+#endif
+
+#ifndef IMAGE_API_DEFAULT_TIMEOUT_MS
+#define IMAGE_API_DEFAULT_TIMEOUT_MS 10000  // 10 seconds default display timeout
+#endif
+
+#ifndef IMAGE_API_MAX_TIMEOUT_MS
+#define IMAGE_API_MAX_TIMEOUT_MS (86400UL * 1000UL)  // 24 hours max timeout
+#endif
+
 #endif // BOARD_CONFIG_H
 

@@ -21,6 +21,10 @@
 #include "display_manager.h"
 #endif
 
+#if HAS_IMAGE_API
+#include "image_api.h"
+#endif
+
 #include <ESPAsyncWebServer.h>
 #include <DNSServer.h>
 #include <WiFi.h>
@@ -700,6 +704,88 @@ void web_portal_init(DeviceConfig *config) {
         handleOTAUpload
     );
     
+    // Image API integration (if enabled)
+    #if HAS_IMAGE_API && HAS_DISPLAY
+    Logger.logMessage("Portal", "Initializing image API");
+    
+    // Setup backend adapter
+    ImageApiBackend backend;
+    backend.hide_current_image = []() {
+        #if HAS_DISPLAY
+        DirectImageScreen* screen = display_manager_get_direct_image_screen();
+        if (screen) {
+            screen->hide();
+        }
+        // Return to info screen
+        display_manager_show_info();
+        #endif
+    };
+    
+    backend.start_strip_session = [](int width, int height, unsigned long timeout_ms, unsigned long start_time) -> bool {
+        #if HAS_DISPLAY
+        DirectImageScreen* screen = display_manager_get_direct_image_screen();
+        if (!screen) {
+            Logger.logMessage("ImageAPI", "ERROR: No direct image screen");
+            return false;
+        }
+        
+        // Show the blank screen
+        display_manager_show_direct_image();
+        
+        // Configure timeout
+        screen->set_timeout(timeout_ms);
+        screen->set_start_time(start_time);
+        
+        // Start strip session
+        screen->begin_strip_session(width, height);
+        return true;
+        #else
+        return false;
+        #endif
+    };
+    
+    backend.decode_strip = [](const uint8_t* jpeg_data, size_t jpeg_size, uint8_t strip_index, bool output_bgr565) -> bool {
+        #if HAS_DISPLAY
+        DirectImageScreen* screen = display_manager_get_direct_image_screen();
+        if (!screen) {
+            Logger.logMessage("ImageAPI", "ERROR: No direct image screen");
+            return false;
+        }
+        
+        return screen->decode_strip(jpeg_data, jpeg_size, strip_index, output_bgr565);
+        #else
+        return false;
+        #endif
+    };
+    
+    // Setup configuration
+    ImageApiConfig image_cfg;
+    
+    #ifdef DISPLAY_WIDTH
+    image_cfg.lcd_width = DISPLAY_WIDTH;
+    #else
+    image_cfg.lcd_width = 240;  // Fallback default
+    #endif
+    
+    #ifdef DISPLAY_HEIGHT
+    image_cfg.lcd_height = DISPLAY_HEIGHT;
+    #else
+    image_cfg.lcd_height = 320;  // Fallback default
+    #endif
+    
+    image_cfg.max_image_size_bytes = IMAGE_API_MAX_SIZE_BYTES;
+    image_cfg.decode_headroom_bytes = IMAGE_API_DECODE_HEADROOM_BYTES;
+    image_cfg.default_timeout_ms = IMAGE_API_DEFAULT_TIMEOUT_MS;
+    image_cfg.max_timeout_ms = IMAGE_API_MAX_TIMEOUT_MS;
+    
+    // Initialize and register routes
+    Logger.logMessage("Portal", "Calling image_api_init...");
+    image_api_init(image_cfg, backend);
+    Logger.logMessage("Portal", "Calling image_api_register_routes...");
+    image_api_register_routes(server);
+    Logger.logMessage("Portal", "Image API initialized");
+    #endif // HAS_IMAGE_API && HAS_DISPLAY
+    
     // 404 handler
     server->onNotFound([](AsyncWebServerRequest *request) {
         // In AP mode, redirect to root for captive portal
@@ -777,3 +863,10 @@ bool web_portal_is_ap_mode() {
 bool web_portal_ota_in_progress() {
     return ota_in_progress;
 }
+
+#if HAS_IMAGE_API
+// Process pending image uploads (call from main loop)
+void web_portal_process_pending_images() {
+    image_api_process_pending(ota_in_progress);
+}
+#endif

@@ -53,6 +53,14 @@
 #define TFT_BL LCD_BL_PIN
 #define TFT_BACKLIGHT_ON HIGH
 
+// ============================================================================
+// Image API Configuration
+// ============================================================================
+#define HAS_IMAGE_API true
+// CYD has more RAM than ESP32-C3, can handle larger images
+#define IMAGE_API_MAX_SIZE_BYTES (150 * 1024)  // 150KB max for full image upload
+#define IMAGE_API_DECODE_HEADROOM_BYTES (50 * 1024)  // 50KB headroom for decoding
+
 // LVGL buffer size (lines to buffer - larger = faster but more RAM)
 // 20 lines × 240 pixels × 2 bytes = 9.6KB per buffer (double buffered = 19.2KB total)
 #define LVGL_BUFFER_SIZE (DISPLAY_WIDTH * 20)
