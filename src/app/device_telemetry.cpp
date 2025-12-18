@@ -3,16 +3,29 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include "soc/soc_caps.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/semphr.h>
 
 // Temperature sensor support (ESP32-C3, ESP32-S2, ESP32-S3, ESP32-C2, ESP32-C6, ESP32-H2)
 #if SOC_TEMP_SENSOR_SUPPORTED
 #include "driver/temperature_sensor.h"
 #endif
 
-// CPU usage tracking (delta-based)
+// CPU usage tracking (task-based with min/max over 60s window)
+static SemaphoreHandle_t cpu_mutex = nullptr;
+static int cpu_usage_current = 0;
+static int cpu_usage_min = 100;
+static int cpu_usage_max = 0;
+static unsigned long last_minmax_reset = 0;
+static TaskHandle_t cpu_task_handle = nullptr;
+
+// Delta tracking for calculation
 static uint32_t last_idle_runtime = 0;
 static uint32_t last_total_runtime = 0;
-static unsigned long last_cpu_check = 0;
+static bool first_calculation = true;
+
+#define CPU_MINMAX_WINDOW_SECONDS 60
 
 // Flash/sketch metadata caching (avoid re-entrant ESP-IDF image/mmap helpers)
 static bool flash_cache_initialized = false;
@@ -85,6 +98,127 @@ size_t device_telemetry_free_sketch_space() {
     return cached_free_sketch_space;
 }
 
+// Internal: Calculate CPU usage from IDLE task runtime
+static int calculate_cpu_usage() {
+    TaskStatus_t task_stats[16];
+    uint32_t total_runtime;
+    int task_count = uxTaskGetSystemState(task_stats, 16, &total_runtime);
+
+    // Count IDLE tasks and sum their runtimes
+    uint32_t idle_runtime = 0;
+    int idle_task_count = 0;
+    for (int i = 0; i < task_count; i++) {
+        if (strstr(task_stats[i].pcTaskName, "IDLE") != nullptr) {
+            idle_runtime += task_stats[i].ulRunTimeCounter;
+            idle_task_count++;
+        }
+    }
+
+    // Skip first calculation (need delta)
+    if (first_calculation) {
+        last_idle_runtime = idle_runtime;
+        last_total_runtime = total_runtime;
+        first_calculation = false;
+        return 0;
+    }
+
+    // Calculate delta
+    uint32_t idle_delta = idle_runtime - last_idle_runtime;
+    uint32_t total_delta = total_runtime - last_total_runtime;
+    
+    last_idle_runtime = idle_runtime;
+    last_total_runtime = total_runtime;
+
+    if (total_delta == 0) return 0;
+
+    // On multi-core systems, total_runtime is sum across all tasks,
+    // but we have multiple IDLE tasks (one per core).
+    // Multiply total_delta by number of IDLE tasks to get equivalent "total possible idle time"
+    uint32_t max_idle_time = total_delta * idle_task_count;
+    float idle_percent = ((float)idle_delta / max_idle_time) * 100.0;
+    int cpu_usage = (int)(100.0 - idle_percent);
+    
+    if (cpu_usage < 0) cpu_usage = 0;
+    if (cpu_usage > 100) cpu_usage = 100;
+    
+    return cpu_usage;
+}
+
+// Background task: Calculate CPU usage every 1s, track min/max over 60s window
+static void cpu_monitoring_task(void* param) {
+    while (true) {
+        int new_value = calculate_cpu_usage();
+        unsigned long now = millis();
+        
+        xSemaphoreTake(cpu_mutex, portMAX_DELAY);
+        
+        cpu_usage_current = new_value;
+        
+        // Update min/max
+        if (new_value < cpu_usage_min) cpu_usage_min = new_value;
+        if (new_value > cpu_usage_max) cpu_usage_max = new_value;
+        
+        // Reset min/max every 60 seconds
+        if (last_minmax_reset == 0 || (now - last_minmax_reset >= CPU_MINMAX_WINDOW_SECONDS * 1000UL)) {
+            cpu_usage_min = new_value;
+            cpu_usage_max = new_value;
+            last_minmax_reset = now;
+        }
+        
+        xSemaphoreGive(cpu_mutex);
+        
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+void device_telemetry_start_cpu_monitoring() {
+    if (cpu_task_handle != nullptr) return;  // Already started
+    
+    cpu_mutex = xSemaphoreCreateMutex();
+    if (cpu_mutex == nullptr) {
+        Serial.println("[CPU Monitor] Failed to create mutex");
+        return;
+    }
+    
+    BaseType_t result = xTaskCreate(
+        cpu_monitoring_task,
+        "cpu_monitor",
+        2048,  // Stack size
+        nullptr,
+        1,  // Low priority
+        &cpu_task_handle
+    );
+    
+    if (result != pdPASS) {
+        Serial.println("[CPU Monitor] Failed to create task");
+        vSemaphoreDelete(cpu_mutex);
+        cpu_mutex = nullptr;
+    }
+}
+
+int device_telemetry_get_cpu_usage() {
+    if (cpu_mutex == nullptr) return 0;  // Not initialized
+    
+    xSemaphoreTake(cpu_mutex, portMAX_DELAY);
+    int value = cpu_usage_current;
+    xSemaphoreGive(cpu_mutex);
+    
+    return value;
+}
+
+void device_telemetry_get_cpu_minmax(int* out_min, int* out_max) {
+    if (cpu_mutex == nullptr) {
+        if (out_min) *out_min = 0;
+        if (out_max) *out_max = 0;
+        return;
+    }
+    
+    xSemaphoreTake(cpu_mutex, portMAX_DELAY);
+    if (out_min) *out_min = cpu_usage_min;
+    if (out_max) *out_max = cpu_usage_max;
+    xSemaphoreGive(cpu_mutex);
+}
+
 static void fill_common(JsonDocument &doc, bool include_ip_and_channel, bool include_debug_fields) {
     // System
     uint64_t uptime_us = esp_timer_get_time();
@@ -112,38 +246,12 @@ static void fill_common(JsonDocument &doc, bool include_ip_and_channel, bool inc
         doc["cpu_freq"] = ESP.getCpuFreqMHz();
     }
 
-    // CPU usage via IDLE task delta calculation
-    TaskStatus_t task_stats[16];
-    uint32_t total_runtime;
-    int task_count = uxTaskGetSystemState(task_stats, 16, &total_runtime);
-
-    uint32_t idle_runtime = 0;
-    for (int i = 0; i < task_count; i++) {
-        if (strstr(task_stats[i].pcTaskName, "IDLE") != nullptr) {
-            idle_runtime += task_stats[i].ulRunTimeCounter;
-        }
-    }
-
-    unsigned long now = millis();
-    int cpu_usage = 0;
-
-    if (last_cpu_check > 0 && (now - last_cpu_check) > 100) {
-        uint32_t idle_delta = idle_runtime - last_idle_runtime;
-        uint32_t total_delta = total_runtime - last_total_runtime;
-
-        if (total_delta > 0) {
-            float idle_percent = ((float)idle_delta / total_delta) * 100.0;
-            cpu_usage = (int)(100.0 - idle_percent);
-            if (cpu_usage < 0) cpu_usage = 0;
-            if (cpu_usage > 100) cpu_usage = 100;
-        }
-    }
-
-    last_idle_runtime = idle_runtime;
-    last_total_runtime = total_runtime;
-    last_cpu_check = now;
-
-    doc["cpu_usage"] = cpu_usage;
+    // CPU usage with min/max over 60s window
+    doc["cpu_usage"] = device_telemetry_get_cpu_usage();
+    int cpu_min, cpu_max;
+    device_telemetry_get_cpu_minmax(&cpu_min, &cpu_max);
+    doc["cpu_usage_min"] = cpu_min;
+    doc["cpu_usage_max"] = cpu_max;
 
     // CPU / SoC temperature
 #if SOC_TEMP_SENSOR_SUPPORTED

@@ -112,6 +112,9 @@ void setup()
   // (e.g., MQTT publish + web API calls).
   device_telemetry_init();
   
+  // Start CPU monitoring background task
+  device_telemetry_start_cpu_monitoring();
+  
   // Try to load saved configuration
   config_loaded = config_manager_load(&device_config);
   

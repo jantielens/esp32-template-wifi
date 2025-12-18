@@ -1160,6 +1160,7 @@ async function updateHealth() {
         
         // CPU
         document.getElementById('health-cpu-full').textContent = `${health.cpu_usage}%`;
+        document.getElementById('health-cpu-minmax').textContent = `${health.cpu_usage_min}% / ${health.cpu_usage_max}%`;
         document.getElementById('health-temp').textContent = health.cpu_temperature !== null ? 
             `${health.cpu_temperature}°C` : 'N/A';
         

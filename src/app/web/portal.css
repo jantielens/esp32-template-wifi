@@ -72,7 +72,7 @@ h1 {
 }
 
 #chip-info {
-    min-width: 140px;
+    min-width: 200px;
 }
 
 #cpu-cores {
@@ -397,6 +397,11 @@ small {
     z-index: 999;
 }
 
+/* Hide footer buttons on firmware page (no form to submit) */
+body[data-page="firmware"] .floating-action-footer {
+    display: none;
+}
+
 .floating-action-footer .button-group {
     max-width: none;
     margin: 0;
@@ -716,14 +721,14 @@ footer {
 .health-stats {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
 }
 
 .health-stat {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 4px 0;
+    padding: 2px 0;
 }
 
 .health-label {

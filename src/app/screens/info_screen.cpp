@@ -34,18 +34,18 @@ void InfoScreen::create() {
     lv_obj_align(uptimeLabel, LV_ALIGN_CENTER, 0, -60);
     lv_obj_clear_flag(uptimeLabel, LV_OBJ_FLAG_CLICKABLE);  // Click-transparent
     
-    // Free heap
-    heapLabel = lv_label_create(screen);
-    lv_obj_set_style_text_color(heapLabel, lv_color_make(200, 200, 200), 0);
-    lv_obj_align(heapLabel, LV_ALIGN_CENTER, 0, -40);
-    lv_obj_clear_flag(heapLabel, LV_OBJ_FLAG_CLICKABLE);  // Click-transparent
-    
     // Firmware version
     versionLabel = lv_label_create(screen);
     lv_label_set_text(versionLabel, "v" FIRMWARE_VERSION);
     lv_obj_set_style_text_color(versionLabel, lv_color_make(200, 200, 200), 0);
-    lv_obj_align(versionLabel, LV_ALIGN_CENTER, 0, -25);
+    lv_obj_align(versionLabel, LV_ALIGN_CENTER, 0, -40);
     lv_obj_clear_flag(versionLabel, LV_OBJ_FLAG_CLICKABLE);  // Click-transparent
+    
+    // Free heap with CPU usage
+    heapLabel = lv_label_create(screen);
+    lv_obj_set_style_text_color(heapLabel, lv_color_make(200, 200, 200), 0);
+    lv_obj_align(heapLabel, LV_ALIGN_CENTER, 0, -25);
+    lv_obj_clear_flag(heapLabel, LV_OBJ_FLAG_CLICKABLE);  // Click-transparent
     
     // Device name (HERO - center of screen, larger font)
     deviceNameLabel = lv_label_create(screen);
@@ -163,11 +163,12 @@ void InfoScreen::update() {
         lv_label_set_text(uptimeLabel, uptime_text);
     }
     
-    // Update free heap
+    // Update free heap with CPU usage
     if (heapLabel) {
-        char heap_text[32];
+        char heap_text[64];
         unsigned long heap_kb = ESP.getFreeHeap() / 1024;
-        snprintf(heap_text, sizeof(heap_text), "%lu KB free", heap_kb);
+        int cpu_usage = device_telemetry_get_cpu_usage();
+        snprintf(heap_text, sizeof(heap_text), "%lu KB free / %d%% CPU", heap_kb, cpu_usage);
         lv_label_set_text(heapLabel, heap_text);
     }
     
