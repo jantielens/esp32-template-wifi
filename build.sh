@@ -60,12 +60,47 @@ build_board() {
     fi
 
     # Compile the sketch with optional board-specific includes and build props
-    "$ARDUINO_CLI" compile \
+    # Capture output to check for warnings/errors that don't fail the build
+    local build_output
+    build_output=$("$ARDUINO_CLI" compile \
         --fqbn "$fqbn" \
         "${EXTRA_FLAGS[@]}" \
         "${BUILD_PROPS_ARR[@]}" \
         --output-dir "$board_build_path" \
-        "$SKETCH_PATH"
+        "$SKETCH_PATH" 2>&1)
+    
+    local build_exit_code=$?
+    
+    # Always show the build output
+    echo "$build_output"
+    
+    # Check for build failure
+    if [[ $build_exit_code -ne 0 ]]; then
+        echo ""
+        echo -e "${RED}✗ Build failed for $board_name (exit code: $build_exit_code)${NC}"
+        return 1
+    fi
+    
+    # Check for undefined references (silent linker warnings)
+    if echo "$build_output" | grep -q "undefined reference to"; then
+        echo ""
+        echo -e "${RED}✗ Build completed but has undefined symbol errors:${NC}"
+        echo "$build_output" | grep "undefined reference to" | sed 's/^/  /'
+        echo ""
+        echo -e "${YELLOW}Common causes:${NC}"
+        echo "  - Missing driver .cpp inclusion in display_manager.cpp or touch_manager.cpp"
+        echo "  - Arduino doesn't compile subdirectory .cpp files automatically"
+        echo "  - Check that driver implementation files are included via #include"
+        return 1
+    fi
+    
+    # Check for other common warning patterns that indicate problems
+    if echo "$build_output" | grep -qE "(warning:.*will not be executed|error:|fatal error:)"; then
+        echo ""
+        echo -e "${YELLOW}⚠ Build completed with warnings/errors:${NC}"
+        echo "$build_output" | grep -E "(warning:.*will not be executed|error:|fatal error:)" | sed 's/^/  /'
+        echo ""
+    fi
     
     echo ""
     echo -e "${GREEN}✓ Build complete for $board_name${NC}"

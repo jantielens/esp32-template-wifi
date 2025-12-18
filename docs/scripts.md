@@ -69,6 +69,11 @@ BOARD_PROFILE=psram ./build.sh esp32  # Optional build profile (if defined in co
 - Compiles `src/app/app.ino` for specified board(s)
 - Creates board-specific directories: `./build/esp32/`, `./build/esp32c3/`, etc.
 - Generates `.bin`, `.bootloader.bin`, `.merged.bin`, and `.partitions.bin` files per board
+- Detects build errors including:
+  - Compilation failures (exit code ≠ 0)
+  - Undefined symbol references (e.g., missing driver `.cpp` includes)
+  - Common warning patterns that indicate problems
+  - Provides helpful diagnostics for Arduino build system limitations
 - If `src/boards/<board>/` exists, adds it to include path and defines:
     - `BOARD_<BOARDNAME>` - Board name sanitized to valid C++ macro (alphanumeric + underscore only)
       - Examples: `cyd-v2` → `BOARD_CYD_V2`, `esp32c3` → `BOARD_ESP32C3`
