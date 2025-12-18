@@ -23,7 +23,7 @@ declare -A FQBN_TARGETS=(
     ["esp32"]="esp32:esp32:esp32"                                        # ESP32 Dev Module
     ["esp32c3"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"  # ESP32-C3 Super Mini
     ["esp32c3_ota_1_9mb"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb"  # ESP32-C3 w/ custom partitions
-    ["cyd2usb-v2"]="esp32:esp32:esp32"                                   # CYD v2 (same FQBN, different board_overrides.h)
+    ["cyd-v2"]="esp32:esp32:esp32"                                   # CYD v2 (same FQBN, different board_overrides.h)
 )
 ```
 
@@ -71,7 +71,7 @@ BOARD_PROFILE=psram ./build.sh esp32  # Optional build profile (if defined in co
 - Generates `.bin`, `.bootloader.bin`, `.merged.bin`, and `.partitions.bin` files per board
 - If `src/boards/<board>/` exists, adds it to include path and defines:
     - `BOARD_<BOARDNAME>` - Board name sanitized to valid C++ macro (alphanumeric + underscore only)
-      - Examples: `cyd2usb-v2` → `BOARD_CYD2USB_V2`, `esp32c3` → `BOARD_ESP32C3`
+      - Examples: `cyd-v2` → `BOARD_CYD_V2`, `esp32c3` → `BOARD_ESP32C3`
     - `BOARD_HAS_OVERRIDE` (triggers inclusion of `board_overrides.h`)
 
 **Build Output Structure:**

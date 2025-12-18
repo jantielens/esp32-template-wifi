@@ -827,7 +827,7 @@ All included screens are designed for **240x240 minimum round displays**:
 The build system automatically detects board-specific display configurations:
 
 ```bash
-./build.sh cyd2usb-v2  # Builds with CYD display config
+./build.sh cyd-v2  # Builds with CYD display config
 ./build.sh esp32       # Builds without display (HAS_DISPLAY=false)
 ```
 

@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed board macro sanitization in build system to generate valid C++ identifiers
   - Board names with special characters (hyphens, dots, etc.) now properly converted to underscores
   - Macro pattern: `BOARD_<BOARDNAME>` where `<BOARDNAME>` is alphanumeric + underscore only
-  - Example: `cyd2usb-v2` → `BOARD_CYD2USB_V2`, `board.name` → `BOARD_BOARD_NAME`
+  - Example: `cyd-v2` → `BOARD_CYD_V2`, `board.name` → `BOARD_BOARD_NAME`
   - Resolves compilation errors when using `#if defined(BOARD_xxx)` with hyphenated board names
 - Updated documentation to explain board macro sanitization behavior
 

@@ -25,7 +25,7 @@ ESP32 Arduino development template using `arduino-cli` for headless builds. Desi
   - `["esp32"]="esp32:esp32:esp32"` → `build/esp32/` (ESP32 Dev Module)
   - `["esp32c3"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"` → `build/esp32c3/` (ESP32-C3 Super Mini)
   - `["esp32c6"]="esp32:esp32:esp32c6:CDCOnBoot=cdc"` → `build/esp32c6/` (ESP32-C6 Dev Module)
-  - `["cyd2usb-v2"]="esp32:esp32:esp32"` → `build/cyd2usb-v2/` (CYD v2 - same FQBN as esp32, different config)
+  - `["cyd-v2"]="esp32:esp32:esp32"` → `build/cyd-v2/` (CYD v2 - same FQBN as esp32, different config)
 
 ## Critical Developer Workflows
 

@@ -50,13 +50,13 @@ PROJECT_DISPLAY_NAME="ESP32 Template"
 #   ["esp32c3"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"   # C3 with USB CDC enabled
 #   ["esp32c3_ota_1_9mb"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb"    # C3 with custom partitions
 #   ["esp32c6"]="esp32:esp32:dfrobot_firebeetle2_esp32c6:CDCOnBoot=cdc" # C6 with USB CDC enabled
-#   ["cyd2usb-v2"]="esp32:esp32:esp32"                                  # CYD display v2 (same FQBN as esp32)
-#   ["cyd2usb-v3"]="esp32:esp32:esp32"                                  # CYD display v3 (same FQBN as esp32)
+#   ["cyd-v2"]="esp32:esp32:esp32"                                  # CYD display v2 (same FQBN as esp32)
+#   ["cyd-v3"]="esp32:esp32:esp32"                                  # CYD display v3 (same FQBN as esp32)
 
 declare -A FQBN_TARGETS=(
     ["esp32"]="esp32:esp32:esp32"
-    ["cyd2usb-v2"]="esp32:esp32:esp32:PartitionScheme=min_spiffs"
-    ["cyd2usb-v3"]="esp32:esp32:esp32:PartitionScheme=min_spiffs"
+    ["cyd-v2"]="esp32:esp32:esp32:PartitionScheme=min_spiffs"
+    ["cyd-v3"]="esp32:esp32:esp32:PartitionScheme=min_spiffs"
 )
 
 # Default board (used when only one board is configured)
