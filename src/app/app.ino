@@ -61,7 +61,7 @@ void setup()
   // Initialize log manager (wraps Serial for web streaming)
   Logger.begin(115200);
   delay(1000);
-  
+
   // Register WiFi event handlers for connection lifecycle
   WiFi.onEvent(onWiFiConnected, ARDUINO_EVENT_WIFI_STA_CONNECTED);
   WiFi.onEvent(onWiFiGotIP, ARDUINO_EVENT_WIFI_STA_GOT_IP);

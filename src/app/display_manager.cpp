@@ -18,6 +18,9 @@
 #elif DISPLAY_DRIVER == DISPLAY_DRIVER_ST7789V2
 #include "drivers/st7789v2_driver.h"
 #include "drivers/st7789v2_driver.cpp"
+#elif DISPLAY_DRIVER == DISPLAY_DRIVER_ARDUINO_GFX
+#include "drivers/arduino_gfx_driver.h"
+#include "drivers/arduino_gfx_driver.cpp"
 #endif
 
 #include <SPI.h>
@@ -31,12 +34,14 @@ DisplayManager::DisplayManager(DeviceConfig* cfg)
       #if HAS_IMAGE_API
       directImageScreen(this),
       #endif
-      lvglTaskHandle(nullptr), lvglMutex(nullptr), screenCount(0) {
+      lvglTaskHandle(nullptr), lvglMutex(nullptr), screenCount(0), buf(nullptr) {
     // Instantiate selected display driver
     #if DISPLAY_DRIVER == DISPLAY_DRIVER_TFT_ESPI
     driver = new TFT_eSPI_Driver();
     #elif DISPLAY_DRIVER == DISPLAY_DRIVER_ST7789V2
     driver = new ST7789V2_Driver();
+    #elif DISPLAY_DRIVER == DISPLAY_DRIVER_ARDUINO_GFX
+    driver = new Arduino_GFX_Driver();
     #else
     #error "No display driver selected or unknown driver type"
     #endif
@@ -84,6 +89,12 @@ DisplayManager::~DisplayManager() {
     if (lvglMutex) {
         vSemaphoreDelete(lvglMutex);
         lvglMutex = nullptr;
+    }
+    
+    // Free LVGL buffer
+    if (buf) {
+        heap_caps_free(buf);
+        buf = nullptr;
     }
 }
 
@@ -162,6 +173,10 @@ void DisplayManager::lvglTask(void* pvParameter) {
             mgr->currentScreen->update();
         }
         
+        // Flush canvas buffer to display (for canvas-based drivers like Arduino_GFX)
+        // Direct rendering drivers (TFT_eSPI) have no-op implementation
+        mgr->driver->flush();
+        
         mgr->unlock();
         
         // LVGL recommends 5-10ms update interval
@@ -201,6 +216,20 @@ void DisplayManager::initLVGL() {
     Logger.logBegin("LVGL Init");
     
     lv_init();
+    
+    // Allocate LVGL buffer from PSRAM (ESP32-S3 has 8MB PSRAM)
+    // Try PSRAM first (SPIRAM), fallback to internal RAM if not available
+    buf = (lv_color_t*)heap_caps_malloc(LVGL_BUFFER_SIZE * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
+    if (!buf) {
+        Logger.logLine("PSRAM allocation failed, trying internal RAM...");
+        buf = (lv_color_t*)heap_caps_malloc(LVGL_BUFFER_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    }
+    if (!buf) {
+        Logger.logLine("ERROR: Failed to allocate LVGL buffer!");
+        Logger.logEnd();
+        return;
+    }
+    Logger.logLinef("Buffer allocated: %d bytes (%d pixels)", LVGL_BUFFER_SIZE * sizeof(lv_color_t), LVGL_BUFFER_SIZE);
     
     // Initialize default theme (dark mode with custom primary color)
     lv_theme_t* theme = lv_theme_default_init(
@@ -253,13 +282,14 @@ void DisplayManager::init() {
     showSplash();
     
     // Create LVGL rendering task
+    // Stack size increased to 8KB for ESP32-S3 and larger displays
     // On dual-core: pin to Core 0 (Arduino loop runs on Core 1)
     // On single-core: runs on Core 0 (time-sliced with Arduino loop)
     #if CONFIG_FREERTOS_UNICORE
-    xTaskCreate(lvglTask, "LVGL", 4096, this, 1, &lvglTaskHandle);
+    xTaskCreate(lvglTask, "LVGL", 8192, this, 1, &lvglTaskHandle);
     Logger.logLine("Rendering task created (single-core)");
     #else
-    xTaskCreatePinnedToCore(lvglTask, "LVGL", 4096, this, 1, &lvglTaskHandle, 0);
+    xTaskCreatePinnedToCore(lvglTask, "LVGL", 8192, this, 1, &lvglTaskHandle, 0);
     Logger.logLine("Rendering task created (pinned to Core 0)");
     #endif
     

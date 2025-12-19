@@ -51,7 +51,7 @@ private:
     // Hardware (display driver abstraction)
     DisplayDriver* driver;
     lv_disp_draw_buf_t draw_buf;
-    lv_color_t buf[LVGL_BUFFER_SIZE];
+    lv_color_t* buf;  // Dynamically allocated LVGL buffer
     lv_disp_drv_t disp_drv;
     
     // Configuration reference

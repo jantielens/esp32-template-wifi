@@ -58,6 +58,7 @@ declare -A FQBN_TARGETS=(
     ["cyd-v2"]="esp32:esp32:esp32:PartitionScheme=min_spiffs"
     ["cyd-v3"]="esp32:esp32:esp32:PartitionScheme=min_spiffs"
     ["esp32c3"]="esp32:esp32:nologo_esp32c3_super_mini:PartitionScheme=ota_1_9mb,CDCOnBoot=default"
+    ["jc3248w535"]="esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB,USBMode=hwcdc,CDCOnBoot=cdc"
 )
 
 # Default board (used when only one board is configured)

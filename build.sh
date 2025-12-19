@@ -60,16 +60,18 @@ build_board() {
     fi
 
     # Compile the sketch with optional board-specific includes and build props
-    # Capture output to check for warnings/errors that don't fail the build
+    # Run compile and capture exit code (disable set -e temporarily to capture output even on failure)
     local build_output
+    local build_exit_code
+    set +e
     build_output=$("$ARDUINO_CLI" compile \
         --fqbn "$fqbn" \
         "${EXTRA_FLAGS[@]}" \
         "${BUILD_PROPS_ARR[@]}" \
         --output-dir "$board_build_path" \
         "$SKETCH_PATH" 2>&1)
-    
-    local build_exit_code=$?
+    build_exit_code=$?
+    set -e
     
     # Always show the build output
     echo "$build_output"

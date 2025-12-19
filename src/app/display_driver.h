@@ -65,6 +65,12 @@ public:
     virtual void setAddrWindow(int16_t x, int16_t y, uint16_t w, uint16_t h) = 0;
     virtual void pushColors(uint16_t* data, uint32_t len, bool swap_bytes = true) = 0;
     
+    // Canvas/buffer flush (called after LVGL rendering to push buffered data to display)
+    // Default implementation: no-op (for direct rendering drivers like TFT_eSPI)
+    virtual void flush() {
+        // Override in canvas-based drivers (e.g., Arduino_GFX)
+    }
+    
     // LVGL configuration hook (override to customize LVGL driver settings)
     // Called during LVGL initialization to allow driver-specific configuration
     // such as software rotation, full refresh mode, etc.

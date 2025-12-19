@@ -12,6 +12,10 @@
 
 #if TOUCH_DRIVER == TOUCH_DRIVER_XPT2046
 #include "drivers/xpt2046_driver.h"
+#elif TOUCH_DRIVER == TOUCH_DRIVER_AXS15231B
+#include "drivers/axs15231b_touch_driver.h"
+#include "drivers/axs15231b_touch_driver.cpp"
+#include "drivers/vendor/AXS15231B_touch.cpp"
 #endif
 
 // Global instance
@@ -48,6 +52,8 @@ void TouchManager::init() {
     // Create standalone touch driver (no dependency on display)
     #if TOUCH_DRIVER == TOUCH_DRIVER_XPT2046
     driver = new XPT2046_Driver(TOUCH_CS, TOUCH_IRQ);
+    #elif TOUCH_DRIVER == TOUCH_DRIVER_AXS15231B
+    driver = new AXS15231B_TouchDriver();
     #else
     #error "No touch driver selected or unknown driver type"
     #endif
