@@ -98,6 +98,11 @@ The DisplayDriver interface decouples LVGL from specific display libraries, allo
 class DisplayDriver {
 public:
     virtual ~DisplayDriver() = default;
+
+    // How the driver completes a frame:
+    // - Direct: LVGL flush pushes pixels straight to the panel
+    // - Buffered: LVGL flush writes into a buffer/canvas; DisplayManager calls present()
+    enum class RenderMode : uint8_t { Direct = 0, Buffered = 1 };
     
     // Hardware initialization
     virtual void init() = 0;
@@ -117,6 +122,12 @@ public:
     virtual void endWrite() = 0;
     virtual void setAddrWindow(int16_t x, int16_t y, uint16_t w, uint16_t h) = 0;
     virtual void pushColors(uint16_t* data, uint32_t len, bool swap_bytes = true) = 0;
+
+    // Default: Direct
+    virtual RenderMode renderMode() const { return RenderMode::Direct; }
+
+    // Buffered drivers override this to push the accumulated framebuffer/canvas to the panel.
+    virtual void present() {}
     
     // LVGL configuration hook (override for driver-specific behavior)
     // Called during LVGL initialization to allow driver-specific settings
@@ -127,6 +138,13 @@ public:
     }
 };
 ```
+
+### Arduino Build System Note (Driver Compilation Units)
+
+Arduino only compiles `.cpp` files in the sketch root directory. Driver implementations under `src/app/drivers/` are compiled by including the selected driver `.cpp` from dedicated translation units:
+
+- `src/app/display_drivers.cpp`
+- `src/app/touch_drivers.cpp`
 
 ### LVGL Configuration Hook
 
@@ -253,7 +271,9 @@ In `board_config.h` or `board_overrides.h`:
 ```cpp
 // Available drivers
 #define DISPLAY_DRIVER_TFT_ESPI 1
-#define DISPLAY_DRIVER_LOVYANGFX 2
+#define DISPLAY_DRIVER_ST7789V2 2
+#define DISPLAY_DRIVER_LOVYANGFX 3
+#define DISPLAY_DRIVER_ARDUINO_GFX 4
 
 // Select driver (defaults to TFT_eSPI)
 #define DISPLAY_DRIVER DISPLAY_DRIVER_TFT_ESPI
@@ -334,13 +354,22 @@ DisplayManager creates a dedicated task for LVGL rendering:
 void DisplayManager::lvglTask(void* pvParameter) {
     while (true) {
         mgr->lock();                        // Acquire mutex
-        lv_timer_handler();                 // LVGL rendering
+        uint32_t delayMs = lv_timer_handler();  // LVGL rendering (returns suggested delay)
         if (mgr->currentScreen) {
             mgr->currentScreen->update();   // Screen data refresh
         }
+
+        // Buffered display drivers (e.g., Arduino_GFX canvas) require a post-render present().
+        if (mgr->flushPending && mgr->driver->renderMode() == DisplayDriver::RenderMode::Buffered) {
+            mgr->driver->present();
+        }
+        mgr->flushPending = false;
         mgr->unlock();                      // Release mutex
-        
-        vTaskDelay(pdMS_TO_TICKS(5));      // 5ms interval
+
+        // Clamp delay to keep UI responsive while avoiding busy looping on static screens.
+        if (delayMs < 1) delayMs = 1;
+        if (delayMs > 10) delayMs = 10;
+        vTaskDelay(pdMS_TO_TICKS(delayMs));
     }
 }
 ```
@@ -565,27 +594,29 @@ driver = new MyDisplayDriver();
 
 ### Step 4: Compile Driver
 
-**IMPORTANT**: Arduino build system only compiles .cpp files in sketch root directory, not subdirectories. Driver .cpp files **must** be included in `display_manager.cpp`:
+**IMPORTANT**: Arduino build system only auto-compiles `.cpp` files in the sketch root directory, not subdirectories.
+
+This repo solves that by compiling driver implementations via dedicated “translation unit” files in the sketch root:
+- `src/app/display_drivers.cpp` for display backends
+- `src/app/touch_drivers.cpp` for touch backends
+
+To add a new display driver implementation (`src/app/drivers/my_driver.cpp`), include it conditionally in `src/app/display_drivers.cpp`:
 
 ```cpp
-// src/app/display_manager.cpp
-// Include selected display driver (header + implementation)
-// Driver .cpp files must be included here because Arduino build system
-// only compiles .cpp files in sketch root directory, not subdirectories
+// src/app/display_drivers.cpp
 #if DISPLAY_DRIVER == DISPLAY_DRIVER_TFT_ESPI
-#include "drivers/tft_espi_driver.h"
-#include "drivers/tft_espi_driver.cpp"
+    #include "drivers/tft_espi_driver.cpp"
 #elif DISPLAY_DRIVER == DISPLAY_DRIVER_MY_DRIVER
-#include "drivers/my_driver.h"
-#include "drivers/my_driver.cpp"  // Required for compilation!
+    #include "drivers/my_driver.cpp"
+#else
+    #error "Unknown DISPLAY_DRIVER"
 #endif
 ```
 
 **Why this pattern?**
-- Arduino doesn't auto-compile subdirectory .cpp files
-- Including .cpp directly makes it part of display_manager.cpp compilation unit
-- Semantically correct: drivers are display manager's responsibility
-- Conditional compilation ensures only selected driver is compiled
+- Keeps `.cpp`-includes out of manager code
+- Ensures only the selected driver is compiled
+- Avoids duplicate-symbol issues (each driver `.cpp` is included exactly once)
 
 ## Adding New Touch Drivers
 
@@ -659,17 +690,19 @@ In `src/app/board_config.h`:
 
 ### Step 3: Include in Compilation
 
-**Note**: Touch drivers are typically included in `touch_manager.cpp` (similar pattern to display drivers):
+Touch driver implementations are compiled via `src/app/touch_drivers.cpp` (a sketch-root translation unit).
+
+To add a new touch driver implementation (`src/app/drivers/my_touch_driver.cpp`), include it conditionally in `src/app/touch_drivers.cpp`:
 
 ```cpp
-// src/app/touch_manager.cpp
+// src/app/touch_drivers.cpp
 #if HAS_TOUCH
     #if TOUCH_DRIVER == TOUCH_DRIVER_XPT2046
-        #include "drivers/xpt2046_driver.h"
         #include "drivers/xpt2046_driver.cpp"
     #elif TOUCH_DRIVER == TOUCH_DRIVER_MY_TOUCH
-        #include "drivers/my_touch_driver.h"
-        #include "drivers/my_touch_driver.cpp"  // Add new driver
+        #include "drivers/my_touch_driver.cpp"
+    #else
+        #error "Unknown TOUCH_DRIVER"
     #endif
 #endif
 ```

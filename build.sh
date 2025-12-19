@@ -90,7 +90,7 @@ build_board() {
         echo "$build_output" | grep "undefined reference to" | sed 's/^/  /'
         echo ""
         echo -e "${YELLOW}Common causes:${NC}"
-        echo "  - Missing driver .cpp inclusion in display_manager.cpp or touch_manager.cpp"
+        echo "  - Missing driver .cpp inclusion in display_drivers.cpp or touch_drivers.cpp"
         echo "  - Arduino doesn't compile subdirectory .cpp files automatically"
         echo "  - Check that driver implementation files are included via #include"
         return 1

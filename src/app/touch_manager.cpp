@@ -5,17 +5,12 @@
 #include "touch_manager.h"
 #include "log_manager.h"
 
-// Include selected touch driver
-#ifndef TOUCH_DRIVER
-#define TOUCH_DRIVER TOUCH_DRIVER_XPT2046  // Default to XPT2046
-#endif
-
+// Include selected touch driver header.
+// Driver implementations are compiled via src/app/touch_drivers.cpp.
 #if TOUCH_DRIVER == TOUCH_DRIVER_XPT2046
 #include "drivers/xpt2046_driver.h"
 #elif TOUCH_DRIVER == TOUCH_DRIVER_AXS15231B
 #include "drivers/axs15231b_touch_driver.h"
-#include "drivers/axs15231b_touch_driver.cpp"
-#include "drivers/vendor/AXS15231B_touch.cpp"
 #endif
 
 // Global instance

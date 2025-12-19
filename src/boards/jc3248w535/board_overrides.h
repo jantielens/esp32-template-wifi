@@ -16,7 +16,14 @@
 // Display Configuration
 // ============================================================================
 #define HAS_DISPLAY true
+
+// ============================================================================
+// Driver Selection (HAL)
+// ============================================================================
+// Display backend: Arduino_GFX (AXS15231B over QSPI)
+// Touch backend:   AXS15231B (I2C)
 #define DISPLAY_DRIVER DISPLAY_DRIVER_ARDUINO_GFX
+#define TOUCH_DRIVER   TOUCH_DRIVER_AXS15231B
 
 // Physical panel resolution (portrait)
 #define DISPLAY_WIDTH  320
@@ -26,8 +33,9 @@
 #define DISPLAY_ROTATION 1
 
 // LVGL buffer size - larger for 320x480 display
-// Use 20 lines for smoother rendering with PSRAM
-#define LVGL_BUFFER_SIZE (DISPLAY_WIDTH * 20)
+// Increase to reduce the number of flush chunks LVGL emits per frame.
+// This buffer is allocated from PSRAM in DisplayManager.
+#define LVGL_BUFFER_SIZE (DISPLAY_WIDTH * 80)
 
 // QSPI pins (from sample/esp_bsp.h)
 #define LCD_QSPI_HOST SPI2_HOST
@@ -51,7 +59,6 @@
 // Touch Configuration
 // ============================================================================
 #define HAS_TOUCH true
-#define TOUCH_DRIVER TOUCH_DRIVER_AXS15231B
 
 // Touch is I2C (from sample/esp_bsp.h)
 #define TOUCH_I2C_PORT 0    // I2C_NUM_0

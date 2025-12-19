@@ -17,7 +17,18 @@
 // ============================================================================
 #define HAS_DISPLAY true
 
-// TFT_eSPI Driver Configuration (must match library's User_Setup.h or use build flags)
+// ============================================================================
+// Driver Selection (HAL)
+// ============================================================================
+// Display backend: TFT_eSPI (ILI9341 over SPI)
+// Touch backend:   XPT2046 (SPI)
+#define DISPLAY_DRIVER DISPLAY_DRIVER_TFT_ESPI
+#define TOUCH_DRIVER   TOUCH_DRIVER_XPT2046
+
+// ============================================================================
+// Display Controller Config (TFT_eSPI)
+// ============================================================================
+// Must match library's User_Setup.h or use build flags
 // For v2 (1 USB port): ILI9341_2_DRIVER with TFT_INVERSION_ON
 #define DISPLAY_DRIVER_ILI9341_2
 #define DISPLAY_INVERSION_ON true
@@ -64,7 +75,6 @@
 // ============================================================================
 // Touch uses separate VSPI bus
 #define HAS_TOUCH true
-#define TOUCH_DRIVER TOUCH_DRIVER_XPT2046
 
 // XPT2046 pins (VSPI bus - separate from display)
 #define XPT2046_IRQ  36

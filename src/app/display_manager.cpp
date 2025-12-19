@@ -5,22 +5,14 @@
 #include "display_manager.h"
 #include "log_manager.h"
 
-// Include selected display driver (header + implementation)
-// Driver .cpp files must be included here because Arduino build system
-// only compiles .cpp files in sketch root directory, not subdirectories
-#ifndef DISPLAY_DRIVER
-#define DISPLAY_DRIVER DISPLAY_DRIVER_TFT_ESPI  // Default to TFT_eSPI
-#endif
-
+// Include selected display driver header.
+// Driver implementations are compiled via src/app/display_drivers.cpp.
 #if DISPLAY_DRIVER == DISPLAY_DRIVER_TFT_ESPI
 #include "drivers/tft_espi_driver.h"
-#include "drivers/tft_espi_driver.cpp"
 #elif DISPLAY_DRIVER == DISPLAY_DRIVER_ST7789V2
 #include "drivers/st7789v2_driver.h"
-#include "drivers/st7789v2_driver.cpp"
 #elif DISPLAY_DRIVER == DISPLAY_DRIVER_ARDUINO_GFX
 #include "drivers/arduino_gfx_driver.h"
-#include "drivers/arduino_gfx_driver.cpp"
 #endif
 
 #include <SPI.h>
@@ -34,7 +26,7 @@ DisplayManager::DisplayManager(DeviceConfig* cfg)
       #if HAS_IMAGE_API
       directImageScreen(this),
       #endif
-      lvglTaskHandle(nullptr), lvglMutex(nullptr), screenCount(0), buf(nullptr) {
+    lvglTaskHandle(nullptr), lvglMutex(nullptr), screenCount(0), buf(nullptr), flushPending(false) {
     // Instantiate selected display driver
     #if DISPLAY_DRIVER == DISPLAY_DRIVER_TFT_ESPI
     driver = new TFT_eSPI_Driver();
@@ -118,6 +110,12 @@ void DisplayManager::flushCallback(lv_disp_drv_t *disp, const lv_area_t *area, l
     mgr->driver->setAddrWindow(area->x1, area->y1, w, h);
     mgr->driver->pushColors((uint16_t *)&color_p->full, w * h, true);
     mgr->driver->endWrite();
+
+    // Signal that the driver may need a post-render present() step.
+    // For Direct render-mode drivers this is harmless (present() is a no-op).
+    if (mgr) {
+        mgr->flushPending = true;
+    }
     
     lv_disp_flush_ready(disp);
 }
@@ -166,21 +164,28 @@ void DisplayManager::lvglTask(void* pvParameter) {
         mgr->lock();
         
         // Handle LVGL rendering (animations, timers, etc.)
-        lv_timer_handler();
+        uint32_t delayMs = lv_timer_handler();
         
         // Update current screen (data refresh)
         if (mgr->currentScreen) {
             mgr->currentScreen->update();
         }
         
-        // Flush canvas buffer to display (for canvas-based drivers like Arduino_GFX)
-        // Direct rendering drivers (TFT_eSPI) have no-op implementation
-        mgr->driver->flush();
+        // Flush canvas buffer only when LVGL produced draw data.
+        if (mgr->flushPending) {
+            if (mgr->driver->renderMode() == DisplayDriver::RenderMode::Buffered) {
+                mgr->driver->present();
+            }
+            mgr->flushPending = false;
+        }
         
         mgr->unlock();
         
-        // LVGL recommends 5-10ms update interval
-        vTaskDelay(pdMS_TO_TICKS(5));
+        // Sleep based on LVGL's suggested next timer deadline.
+        // Clamp to keep UI responsive while avoiding busy looping on static screens.
+        if (delayMs < 1) delayMs = 1;
+        if (delayMs > 10) delayMs = 10;
+        vTaskDelay(pdMS_TO_TICKS(delayMs));
     }
 }
 

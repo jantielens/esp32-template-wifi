@@ -30,7 +30,14 @@
 // The ESP32-C3 does not have the same default SPI pins as the classic ESP32.
 
 #define HAS_DISPLAY true
+
+// ============================================================================
+// Driver Selection (HAL)
+// ============================================================================
+// Display backend: ST7789V2 native SPI driver
+// Touch backend:   none
 #define DISPLAY_DRIVER DISPLAY_DRIVER_ST7789V2
+#define HAS_TOUCH false
 
 // Display dimensions (physical panel is 240x280 in portrait)
 #define DISPLAY_WIDTH 240

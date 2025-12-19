@@ -8,7 +8,7 @@
  * To add a new touch controller:
  * 1. Create a new driver class implementing this interface
  * 2. Add driver selection in board_config.h
- * 3. Include the driver header in touch_manager.cpp
+ * 3. Include the driver implementation in src/app/touch_drivers.cpp
  */
 
 #ifndef TOUCH_DRIVER_H

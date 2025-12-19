@@ -14,13 +14,15 @@ ESP32 Arduino development template using `arduino-cli` for headless builds. Desi
   - Build system automatically detects and applies overrides when present
   - Application uses `#if HAS_xxx` conditional compilation for board-specific logic
 - **Display & Touch Subsystem**: HAL-based architecture with LVGL integration (see `docs/display-touch-architecture.md`)
-  - `display_driver.h` - DisplayDriver HAL interface with `configureLVGL()` hook
+  - `display_driver.h` - DisplayDriver HAL interface (`RenderMode`, `present()`, `configureLVGL()`)
   - `display_manager.cpp/h` - Hardware lifecycle, LVGL init, FreeRTOS rendering task
   - `touch_driver.h` - TouchDriver HAL interface
   - `touch_manager.cpp/h` - Touch input registration and calibration
-  - `drivers/` - Driver implementations (TFT_eSPI, ST7789V2, XPT2046)
+  - `display_drivers.cpp` - Sketch-root “translation unit” that conditionally includes exactly one selected display driver `.cpp`
+  - `touch_drivers.cpp` - Sketch-root “translation unit” that conditionally includes exactly one selected touch driver `.cpp`
+  - `drivers/` - Driver implementations (TFT_eSPI, ST7789V2, Arduino_GFX, XPT2046, AXS15231B)
   - `screens/` - Screen base class and implementations (splash, info, test)
-  - Conditional compilation: Only selected drivers compiled via `display_manager.cpp`
+  - Conditional compilation: Only selected drivers are compiled via `display_drivers.cpp` / `touch_drivers.cpp` (Arduino doesn’t auto-compile subdir `.cpp`)
 - **Web Portal**: Multi-page async web server with captive portal support
   - `web_portal.cpp/h` - Server and REST API implementation
   - `web_assets.cpp/h` - Embedded HTML/CSS/JS (from `src/app/web/`)
@@ -167,9 +169,14 @@ See `docs/wsl-development.md` for complete USB/IP setup guide.
 - `src/app/display_manager.cpp/h` - Display lifecycle, LVGL init, FreeRTOS rendering task
 - `src/app/touch_driver.h` - Touch HAL interface
 - `src/app/touch_manager.cpp/h` - Touch input device registration and calibration
+- `src/app/display_drivers.cpp` - Display driver compilation unit (selected driver `.cpp` includes live here)
+- `src/app/touch_drivers.cpp` - Touch driver compilation unit (selected driver `.cpp` includes live here)
 - `src/app/drivers/tft_espi_driver.cpp/h` - TFT_eSPI display driver (hardware rotation)
 - `src/app/drivers/st7789v2_driver.cpp/h` - ST7789V2 native SPI driver (software rotation)
 - `src/app/drivers/xpt2046_driver.cpp/h` - XPT2046 resistive touch driver
+- `src/app/drivers/arduino_gfx_driver.cpp/h` - Arduino_GFX display backend (AXS15231B QSPI)
+- `src/app/drivers/axs15231b_touch_driver.cpp/h` - AXS15231B touch backend wrapper
+- `src/app/drivers/README.md` - Driver selection conventions + generated board→drivers table
 - `src/app/screens/screen.h` - Screen base class interface
 - `src/app/screens/splash_screen.cpp/h` - Boot splash with animated spinner
 - `src/app/screens/info_screen.cpp/h` - Device info and real-time stats
@@ -191,6 +198,9 @@ See `docs/wsl-development.md` for complete USB/IP setup guide.
   - Minifies CSS and JavaScript
   - Gzips all assets for efficient storage
   - Excludes template fragments (files starting with `_`)
+
+- `tools/generate-board-driver-table.py` - Generates the board→drivers table from `src/boards/*/board_overrides.h`
+  - `python3 tools/generate-board-driver-table.py --update-drivers-readme`
 
 ### Configuration
 - `config.sh` - Project paths, FQBN_TARGETS array, and helper functions
@@ -395,3 +405,16 @@ If the build fails:
 - Review and fix compilation errors
 - Check library dependencies in `arduino-libraries.txt`
 - Verify Arduino code syntax and ESP32 compatibility
+
+## Display/Touch Driver Conventions (v1)
+
+- **Single source of defaults**: default `DISPLAY_DRIVER` / `TOUCH_DRIVER` live in `src/app/board_config.h`.
+- **Per-board selection**: each board override should have a clear **Driver Selection (HAL)** block that explicitly sets the HAL selectors:
+  - `#define DISPLAY_DRIVER DISPLAY_DRIVER_...`
+  - `#define TOUCH_DRIVER TOUCH_DRIVER_...` (or `#define HAS_TOUCH false`)
+- **Direct vs Buffered**:
+  - Direct drivers push pixels during the LVGL flush callback.
+  - Buffered drivers return `renderMode() == Buffered` and implement `present()`.
+- **Arduino build limitation**: do not include driver `.cpp` files in manager files; add conditional includes to `src/app/display_drivers.cpp` or `src/app/touch_drivers.cpp` instead.
+- **Board→driver visibility**: after editing board overrides, regenerate the table in `src/app/drivers/README.md`:
+  - `python3 tools/generate-board-driver-table.py --update-drivers-readme`

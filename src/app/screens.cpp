@@ -24,18 +24,6 @@
 #endif // HAS_DISPLAY
 
 // ============================================================================
-// Touch Compilation Unit
+// Touch Driver Implementations
 // ============================================================================
-#if HAS_TOUCH
-
-// Include touch driver implementations (conditional based on selection)
-#if TOUCH_DRIVER == TOUCH_DRIVER_XPT2046
-#include "drivers/xpt2046_driver.cpp"
-#elif TOUCH_DRIVER == TOUCH_DRIVER_FT6236
-// Future: FT6236 capacitive touch driver
-#endif
-
-// Note: touch_manager.cpp is compiled separately by Arduino build system
-// (just like display_manager.cpp)
-
-#endif // HAS_TOUCH
+// Touch driver implementations are compiled via src/app/touch_drivers.cpp.

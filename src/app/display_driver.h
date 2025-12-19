@@ -12,20 +12,20 @@
  *    - drivers/your_driver.h (interface)
  *    - drivers/your_driver.cpp (implementation)
  * 
- * 2. Register in display_manager.cpp:
- *    Arduino build system only compiles .cpp files in sketch root directory,
- *    not subdirectories. Driver .cpp files MUST be included in display_manager.cpp:
- * 
- *      #if DISPLAY_DRIVER == DISPLAY_DRIVER_YOUR_DRIVER
- *      #include "drivers/your_driver.h"
- *      #include "drivers/your_driver.cpp"  // Required for compilation!
- *      #endif
+ * 2. Register implementation include in src/app/display_drivers.cpp:
+ *    Arduino build system only compiles .cpp files in the sketch root directory.
+ *    Driver implementations under src/app/drivers/ are compiled by including the
+ *    selected driver .cpp from display_drivers.cpp.
  * 
  * 3. Add driver constant to board_config.h:
  *    #define DISPLAY_DRIVER_YOUR_DRIVER 3  // Next available number
  * 
  * 4. Configure in board override file:
  *    #define DISPLAY_DRIVER DISPLAY_DRIVER_YOUR_DRIVER
+ *
+ * 5. Choose render mode:
+ *    - Direct: driver pushes pixels to panel in LVGL flush callback
+ *    - Buffered: driver accumulates into a buffer and implements present()
  */
 
 #ifndef DISPLAY_DRIVER_H
@@ -43,6 +43,14 @@
 class DisplayDriver {
 public:
     virtual ~DisplayDriver() = default;
+
+    enum class RenderMode : uint8_t {
+        // Driver pushes pixels to the panel during the LVGL flush callback.
+        Direct = 0,
+        // Driver accumulates LVGL flush data into an intermediate buffer/framebuffer.
+        // DisplayManager must call present() to push that buffer to the panel.
+        Buffered = 1,
+    };
     
     // Hardware initialization
     virtual void init() = 0;
@@ -64,11 +72,17 @@ public:
     virtual void endWrite() = 0;
     virtual void setAddrWindow(int16_t x, int16_t y, uint16_t w, uint16_t h) = 0;
     virtual void pushColors(uint16_t* data, uint32_t len, bool swap_bytes = true) = 0;
-    
-    // Canvas/buffer flush (called after LVGL rendering to push buffered data to display)
-    // Default implementation: no-op (for direct rendering drivers like TFT_eSPI)
-    virtual void flush() {
-        // Override in canvas-based drivers (e.g., Arduino_GFX)
+
+    // Declare whether the driver is Direct or Buffered.
+    // Default: Direct (most SPI/QSPI drivers push pixels immediately in flush callback).
+    virtual RenderMode renderMode() const {
+        return RenderMode::Direct;
+    }
+
+    // For buffered drivers, push the accumulated framebuffer/canvas to the panel.
+    // Default: no-op (Direct drivers do not need an explicit present).
+    virtual void present() {
+        // Override in buffered drivers (e.g., Arduino_GFX canvas)
     }
     
     // LVGL configuration hook (override to customize LVGL driver settings)

@@ -45,7 +45,9 @@ public:
     void endWrite() override;
     void setAddrWindow(int16_t x, int16_t y, uint16_t w, uint16_t h) override;
     void pushColors(uint16_t* data, uint32_t len, bool swap_bytes = true) override;
-    void flush() override;  // Flush canvas buffer to physical display
+
+    RenderMode renderMode() const override;
+    void present() override;  // Flush canvas buffer to physical display
     
     // Override LVGL configuration to use software rotation
     void configureLVGL(lv_disp_drv_t* drv, uint8_t rotation) override;

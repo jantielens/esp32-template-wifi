@@ -14,7 +14,7 @@ This document captures research performed while adding support for the **JC3248W
 ### JC3248W535 (ESP32-S3, 320×480)
 - Display controller: **AXS15231B**
 - Bus: **QSPI** (ESP32-S3 QSPI)
-- Current approach in this repo: **Arduino_GFX + Arduino_Canvas**, with an explicit `DisplayDriver::flush()` called after `lv_timer_handler()`.
+- Current approach in this repo: **Arduino_GFX + Arduino_Canvas** as a buffered backend (`renderMode() == Buffered`), with `present()` called after `lv_timer_handler()` when LVGL produced draw data.
 
 ### CYD v2 / v3 (ESP32-2432S028R, 320×240)
 - Display controller: **ILI9341-class** (SPI)
@@ -41,9 +41,9 @@ Using one graphics library can reduce “library surface area”, but you still 
 
 In other words: unifying the *library* doesn’t remove the need for *board-specific behavior*; it mostly changes where that behavior lives.
 
-## LVGL Flush Models
+## LVGL Flush Callback Models
 
-### Model A — Direct/Streaming Flush (typical for SPI)
+### Model A — Direct/Streaming (typical for SPI)
 - LVGL flush callback immediately:
   - sets window
   - streams pixels
@@ -54,9 +54,9 @@ In other words: unifying the *library* doesn’t remove the need for *board-spec
 - Cons:
   - LVGL may flush many small rectangles; overhead depends on bus/driver
 
-### Model B — Buffered/Canvas + Periodic Flush
+### Model B — Buffered/Canvas + Present Step
 - LVGL flush callback writes into a framebuffer/canvas.
-- A separate `flush()` step pushes the buffered result to the display.
+- A separate `present()` step pushes the buffered result to the display.
 - Pros:
   - can match vendor/sample recommended flows
   - can reduce flicker/tearing depending on panel stack
@@ -64,7 +64,7 @@ In other words: unifying the *library* doesn’t remove the need for *board-spec
   - higher RAM usage
   - extra copy/flush overhead
 
-## Verification: Does Arduino_GFX Support “Direct Flush” for AXS15231B QSPI?
+## Verification: Does Arduino_GFX Support Direct LVGL Flush for AXS15231B QSPI?
 
 We inspected Arduino_GFX v1.6.2 sources for the AXS15231B panel and the ESP32 QSPI databus.
 
@@ -81,7 +81,7 @@ We inspected Arduino_GFX v1.6.2 sources for the AXS15231B panel and the ESP32 QS
 
 ### What this means
 
-- AXS15231B QSPI is **not fundamentally incompatible** with a direct/windowed LVGL flush.
+- AXS15231B QSPI is **not fundamentally incompatible** with a direct/windowed LVGL flush callback.
 - A direct flush driver is **technically feasible** using:
   - `writeAddrWindow()` (panel)
   - `writePixels()` (bus)
@@ -91,7 +91,7 @@ We inspected Arduino_GFX v1.6.2 sources for the AXS15231B panel and the ESP32 QS
 Even though direct flush is possible, it may not be the best default:
 - LVGL’s small-rectangle flush cadence can amplify overhead.
 - QSPI `writePixels()` repacks into a DMA buffer each chunk; many small flushes can cost CPU.
-- The canvas approach centralizes flushing to a controlled cadence (after `lv_timer_handler()`), matching sample/vendor patterns.
+- The canvas approach centralizes presenting to a controlled cadence (after `lv_timer_handler()`), matching sample/vendor patterns.
 
 ## “Clean” Architecture Recommendation
 
@@ -103,12 +103,12 @@ If we decide to pursue Arduino_GFX unification, the cleanest structure is:
    - **Arduino_GFX SPI (direct/streaming)**
      - Targets: ILI9341 (CYD), ST7789 (ESP32-C3)
      - Implements LVGL flush by streaming pixels directly.
-     - Keeps `flush()` as a no-op.
+     - Uses `renderMode() == Direct` and keeps `present()` as a no-op.
      - Re-implements CYD gamma/inversion and ST7789 offset quirks in `applyDisplayFixes()` and/or panel setup.
 
    - **Arduino_GFX QSPI (buffered/canvas)**
      - Targets: AXS15231B (JC3248W535)
-     - Uses canvas/framebuffer-like behavior and a real `flush()`.
+     - Uses canvas/framebuffer-like behavior (`renderMode() == Buffered`) and a real `present()`.
 
 This avoids forcing all boards into a higher-RAM buffered model, while still allowing Arduino_GFX to be the common library.
 

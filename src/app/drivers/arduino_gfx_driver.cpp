@@ -145,9 +145,13 @@ void Arduino_GFX_Driver::pushColors(uint16_t* data, uint32_t len, bool swap_byte
     }
 }
 
-void Arduino_GFX_Driver::flush() {
-    // Flush canvas buffer to physical display
-    // Called by LVGL rendering task after lv_timer_handler()
+DisplayDriver::RenderMode Arduino_GFX_Driver::renderMode() const {
+    return RenderMode::Buffered;
+}
+
+void Arduino_GFX_Driver::present() {
+    // Push canvas buffer to physical display.
+    // Called by DisplayManager only when LVGL produced draw data.
     if (canvas) {
         canvas->flush();
     }

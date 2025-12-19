@@ -96,6 +96,26 @@ build/
 
 ---
 
+## tools/generate-board-driver-table.py
+
+**Purpose:** Generate a markdown table mapping **board → selected display/touch backends → basic hardware**.
+
+**Source of truth:** `src/boards/<board>/board_overrides.h` (see the "Driver Selection (HAL)" block).
+
+**Usage:**
+```bash
+# Print the table to stdout
+python3 tools/generate-board-driver-table.py
+
+# Update src/app/drivers/README.md between markers
+python3 tools/generate-board-driver-table.py --update-drivers-readme
+
+# Update an arbitrary markdown file (path relative to repo root)
+python3 tools/generate-board-driver-table.py --update-file path/to/file.md
+```
+
+---
+
 ## tools/install-custom-partitions.sh
 
 **Purpose:** Install/register template-provided custom partition tables into the Arduino ESP32 core.

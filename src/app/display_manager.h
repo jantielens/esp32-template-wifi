@@ -91,6 +91,10 @@ private:
     
     // LVGL flush callback (static, accesses instance via user_data)
     static void flushCallback(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p);
+
+    // Buffered render-mode drivers (e.g., Arduino_GFX canvas) need an explicit
+    // present() step, but only after LVGL has actually rendered something.
+    bool flushPending;
     
     // FreeRTOS task for LVGL rendering
     static void lvglTask(void* pvParameter);
