@@ -133,12 +133,21 @@ static int calculate_cpu_usage() {
 
     if (total_delta == 0) return 0;
 
-    // On multi-core systems, total_runtime is sum across all tasks,
-    // but we have multiple IDLE tasks (one per core).
-    // Multiply total_delta by number of IDLE tasks to get equivalent "total possible idle time"
+    // FreeRTOS uxTaskGetSystemState:
+    // - total_runtime = elapsed wall-clock time (in timer ticks) since boot
+    // - Each task's ulRunTimeCounter = time that task has been running
+    // 
+    // On dual-core ESP32:
+    // - 2 IDLE tasks (IDLE0, IDLE1), one per core
+    // - Maximum possible idle time = total_delta * number_of_cores
+    // - idle_delta = combined idle time from both cores
+    //
+    // CPU usage = 100 - (idle_time / max_possible_idle_time * 100)
     uint32_t max_idle_time = total_delta * idle_task_count;
-    float idle_percent = ((float)idle_delta / max_idle_time) * 100.0;
-    int cpu_usage = (int)(100.0 - idle_percent);
+    if (max_idle_time == 0) return 0;
+    
+    float idle_percent = ((float)idle_delta / max_idle_time) * 100.0f;
+    int cpu_usage = (int)(100.0f - idle_percent);
     
     if (cpu_usage < 0) cpu_usage = 0;
     if (cpu_usage > 100) cpu_usage = 100;

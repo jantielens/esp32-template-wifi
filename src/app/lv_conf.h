@@ -191,6 +191,13 @@
 /* Logging */
 #define LV_USE_LOG 0
 
+/*-------------
+ * Performance monitor
+ *-----------*/
+/* 1: Show CPU usage and FPS count in the right bottom corner
+ * Note: We use a custom FPS overlay controlled via config instead */
+#define LV_USE_PERF_MONITOR 1
+
 /* Enable asserts */
 #define LV_USE_ASSERT_NULL          1   /*Check if the parameter is NULL*/
 #define LV_USE_ASSERT_MALLOC        1   /*Checks is the memory is successfully allocated*/
