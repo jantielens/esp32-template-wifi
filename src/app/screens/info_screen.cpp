@@ -119,19 +119,12 @@ void InfoScreen::destroy() {
 }
 
 void InfoScreen::show() {
-    Logger.logBegin("InfoScreen::show");
     if (screen) {
-        Logger.logLine("Calling lv_scr_load");
         lv_scr_load(screen);
-        Logger.logLine("Screen loaded");
-    } else {
-        Logger.logLine("ERROR: Screen is NULL!");
     }
-    Logger.logEnd();
 }
 
 void InfoScreen::hide() {
-    Logger.logLine("InfoScreen::hide");
     // Nothing to do - LVGL handles screen switching
 }
 

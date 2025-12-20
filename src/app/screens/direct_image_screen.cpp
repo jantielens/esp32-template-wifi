@@ -79,9 +79,6 @@ void DirectImageScreen::show() {
         create();
     }
     
-    Logger.logBegin("DirectImageScreen Show");
-    
-    // Load this screen (blank black screen)
     lv_scr_load(screen_obj);
     visible = true;
     
@@ -90,13 +87,10 @@ void DirectImageScreen::show() {
         display_start_time = millis();
     }
     
-    Logger.logLinef("Timeout: %lu ms, Start: %lu", display_timeout_ms, display_start_time);
-    Logger.logEnd();
+    Logger.logMessagef("DirectImageScreen", "Show (timeout: %lums)", display_timeout_ms);
 }
 
 void DirectImageScreen::hide() {
-    Logger.logBegin("DirectImageScreen Hide");
-    
     visible = false;
     
     // End any active strip session
@@ -106,25 +100,24 @@ void DirectImageScreen::hide() {
     
     // Reset timeout
     display_start_time = 0;
-    
-    Logger.logEnd();
 }
 
 void DirectImageScreen::begin_strip_session(int width, int height) {
     Logger.logBegin("Strip Session");
     Logger.logLinef("Image: %dx%d", width, height);
     
-    // Get LCD dimensions from board config
-    #ifdef DISPLAY_WIDTH
-    const int lcd_width = DISPLAY_WIDTH;
-    #else
-    const int lcd_width = 240;  // Fallback default
-    #endif
-    
-    #ifdef DISPLAY_HEIGHT
-    const int lcd_height = DISPLAY_HEIGHT;
-    #else
-    const int lcd_height = 320;  // Fallback default
+    // Use the *visible* LCD dimensions (match LVGL rotation)
+    int lcd_width = 240;
+    int lcd_height = 320;
+
+    #if defined(DISPLAY_WIDTH) && defined(DISPLAY_HEIGHT)
+        #if defined(DISPLAY_ROTATION) && (DISPLAY_ROTATION == 1 || DISPLAY_ROTATION == 3)
+            lcd_width = DISPLAY_HEIGHT;
+            lcd_height = DISPLAY_WIDTH;
+        #else
+            lcd_width = DISPLAY_WIDTH;
+            lcd_height = DISPLAY_HEIGHT;
+        #endif
     #endif
     
     // Initialize decoder

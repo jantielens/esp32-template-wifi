@@ -58,19 +58,12 @@ void SplashScreen::destroy() {
 }
 
 void SplashScreen::show() {
-    Logger.logBegin("SplashScreen::show");
     if (screen) {
-        Logger.logLine("Calling lv_scr_load");
         lv_scr_load(screen);
-        Logger.logLine("Screen loaded");
-    } else {
-        Logger.logLine("ERROR: Screen is NULL!");
     }
-    Logger.logEnd();
 }
 
 void SplashScreen::hide() {
-    Logger.logLine("SplashScreen::hide");
     // Nothing to do - LVGL handles screen switching
 }
 

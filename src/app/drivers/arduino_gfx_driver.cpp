@@ -9,7 +9,7 @@
 #include "../log_manager.h"
 
 Arduino_GFX_Driver::Arduino_GFX_Driver() 
-    : bus(nullptr), gfx(nullptr), canvas(nullptr), currentBrightness(100),
+    : bus(nullptr), gfx(nullptr), canvas(nullptr), currentBrightness(100), backlightPwmAttached(false),
       displayWidth(DISPLAY_WIDTH), displayHeight(DISPLAY_HEIGHT), displayRotation(DISPLAY_ROTATION),
       currentX(0), currentY(0), currentW(0), currentH(0) {
 }
@@ -26,8 +26,29 @@ void Arduino_GFX_Driver::init() {
     // Initialize backlight pin first
     #ifdef LCD_BL_PIN
     pinMode(LCD_BL_PIN, OUTPUT);
-    digitalWrite(LCD_BL_PIN, HIGH);  // Turn on backlight immediately
+
+    #if HAS_BACKLIGHT
+    // Configure PWM for smooth brightness control
+    #if ESP_ARDUINO_VERSION_MAJOR >= 3
+    double actualFreq = ledcAttach(LCD_BL_PIN, 5000, 8);  // pin, freq (5kHz), resolution (8-bit)
+    Logger.logLinef("Arduino_GFX: PWM attached on GPIO%d, actual freq: %.1f Hz", LCD_BL_PIN, actualFreq);
+    #else
+    ledcSetup(TFT_BACKLIGHT_PWM_CHANNEL, 5000, 8);
+    ledcAttachPin(LCD_BL_PIN, TFT_BACKLIGHT_PWM_CHANNEL);
+    Logger.logLinef("Arduino_GFX: PWM setup complete on GPIO%d (channel %d)", LCD_BL_PIN, TFT_BACKLIGHT_PWM_CHANNEL);
+    #endif
+    backlightPwmAttached = true;
+
+    setBacklightBrightness(currentBrightness);
+    #else
+    // Simple on/off
+    #ifdef TFT_BACKLIGHT_ON
+    digitalWrite(LCD_BL_PIN, TFT_BACKLIGHT_ON);
+    #else
+    digitalWrite(LCD_BL_PIN, HIGH);
+    #endif
     Logger.logLinef("Arduino_GFX: Backlight enabled on GPIO%d", LCD_BL_PIN);
+    #endif
     #endif
     
     // Create QSPI bus (from sample: Arduino_ESP32QSPI)
@@ -82,21 +103,44 @@ void Arduino_GFX_Driver::setRotation(uint8_t rotation) {
 
 void Arduino_GFX_Driver::setBacklight(bool on) {
     #ifdef LCD_BL_PIN
+    #if HAS_BACKLIGHT
+    setBacklightBrightness(on ? 100 : 0);
+    #else
+    #ifdef TFT_BACKLIGHT_ON
+    digitalWrite(LCD_BL_PIN, on ? TFT_BACKLIGHT_ON : !TFT_BACKLIGHT_ON);
+    #else
     digitalWrite(LCD_BL_PIN, on ? HIGH : LOW);
+    #endif
+    #endif
     #endif
 }
 
 void Arduino_GFX_Driver::setBacklightBrightness(uint8_t brightness) {
     #ifdef LCD_BL_PIN
+    if (brightness > 100) brightness = 100;
     currentBrightness = brightness;
-    
-    #ifdef TFT_BACKLIGHT_PWM_CHANNEL
-    // Use PWM for smooth brightness control
+
+    #if HAS_BACKLIGHT
     uint32_t duty = (brightness * 255) / 100;
-    ledcWrite(TFT_BACKLIGHT_PWM_CHANNEL, duty);
+
+    // Handle active low vs active high backlight
+    #ifdef TFT_BACKLIGHT_ON
+    if (!TFT_BACKLIGHT_ON) {
+        duty = 255 - duty;
+    }
+    #endif
+
+    #if ESP_ARDUINO_VERSION_MAJOR >= 3
+    ledcWrite(LCD_BL_PIN, duty);  // New API: write to pin directly
     #else
-    // No PWM - simple on/off
+    ledcWrite(TFT_BACKLIGHT_PWM_CHANNEL, duty);  // Old API: write to channel
+    #endif
+    #else
+    #ifdef TFT_BACKLIGHT_ON
+    digitalWrite(LCD_BL_PIN, brightness > 0 ? TFT_BACKLIGHT_ON : !TFT_BACKLIGHT_ON);
+    #else
     digitalWrite(LCD_BL_PIN, brightness > 0 ? HIGH : LOW);
+    #endif
     #endif
     #endif
 }

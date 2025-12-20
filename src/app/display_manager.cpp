@@ -302,62 +302,45 @@ void DisplayManager::init() {
 }
 
 void DisplayManager::showSplash() {
-    Logger.logBegin("Show Splash");
     lock();
     if (currentScreen) {
-        Logger.logLine("Hiding current screen");
         currentScreen->hide();
     }
     currentScreen = &splashScreen;
-    Logger.logLine("Loading splash screen");
     currentScreen->show();
     unlock();
-    Logger.logEnd();
+    Logger.logMessage("Display", "Switched to SplashScreen");
 }
 
 void DisplayManager::showInfo() {
-    Logger.logBegin("Show Info");
-    // Note: Don't lock if called from LVGL callback (already locked by task)
-    // Just perform the screen change directly
     bool didLock = false;
     lockIfNeeded(didLock);
     if (currentScreen) {
-        Logger.logLine("Hiding current screen");
         currentScreen->hide();
     }
     currentScreen = &infoScreen;
-    Logger.logLine("Loading info screen");
     currentScreen->show();
     unlockIfNeeded(didLock);
-    Logger.logEnd();
+    Logger.logMessage("Display", "Switched to InfoScreen");
 }
 
 void DisplayManager::showTest() {
-    Logger.logBegin("Show Test");
-    // Note: Don't lock if called from LVGL callback (already locked by task)
-    // Just perform the screen change directly
     bool didLock = false;
     lockIfNeeded(didLock);
     if (currentScreen) {
-        Logger.logLine("Hiding current screen");
         currentScreen->hide();
     }
     currentScreen = &testScreen;
-    Logger.logLine("Loading test screen");
     currentScreen->show();
     unlockIfNeeded(didLock);
-    Logger.logEnd();
+    Logger.logMessage("Display", "Switched to TestScreen");
 }
 
 #if HAS_IMAGE_API
 void DisplayManager::showDirectImage() {
-    Logger.logBegin("Show Direct Image");
-    // Note: Don't lock if called from LVGL callback (already locked by task)
-    // Just perform the screen change directly
     bool didLock = false;
     lockIfNeeded(didLock);
     if (currentScreen) {
-        Logger.logLine("Hiding current screen");
         // Save current screen so we can return to it after timeout.
         // If we're already on DirectImageScreen (e.g., a second upload arrives before timeout),
         // do NOT overwrite previousScreen; we still want to return to the screen that was
@@ -368,15 +351,12 @@ void DisplayManager::showDirectImage() {
         currentScreen->hide();
     }
     currentScreen = &directImageScreen;
-    Logger.logLine("Loading direct image screen");
     currentScreen->show();
     unlockIfNeeded(didLock);
-    Logger.logEnd();
+    Logger.logMessage("Display", "Switched to DirectImageScreen");
 }
 
 void DisplayManager::returnToPreviousScreen() {
-    Logger.logBegin("Return to Previous Screen");
-
     bool didLock = false;
     lockIfNeeded(didLock);
     
@@ -392,8 +372,7 @@ void DisplayManager::returnToPreviousScreen() {
     previousScreen = nullptr;  // Clear previous screen reference
 
     unlockIfNeeded(didLock);
-    
-    Logger.logEnd();
+    Logger.logMessage("Display", "Returned to previous screen");
 }
 #endif
 

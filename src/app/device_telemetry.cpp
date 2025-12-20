@@ -1,5 +1,7 @@
 #include "device_telemetry.h"
 
+#include "log_manager.h"
+
 #include <Arduino.h>
 #include <WiFi.h>
 #include "soc/soc_caps.h"
@@ -176,7 +178,7 @@ void device_telemetry_start_cpu_monitoring() {
     
     cpu_mutex = xSemaphoreCreateMutex();
     if (cpu_mutex == nullptr) {
-        Serial.println("[CPU Monitor] Failed to create mutex");
+        Logger.logMessage("CPU Monitor", "Failed to create mutex");
         return;
     }
     
@@ -190,7 +192,7 @@ void device_telemetry_start_cpu_monitoring() {
     );
     
     if (result != pdPASS) {
-        Serial.println("[CPU Monitor] Failed to create task");
+        Logger.logMessage("CPU Monitor", "Failed to create task");
         vSemaphoreDelete(cpu_mutex);
         cpu_mutex = nullptr;
     }

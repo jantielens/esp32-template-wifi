@@ -757,17 +757,20 @@ void web_portal_init(DeviceConfig *config) {
     
     // Setup configuration
     ImageApiConfig image_cfg;
-    
-    #ifdef DISPLAY_WIDTH
-    image_cfg.lcd_width = DISPLAY_WIDTH;
+
+    // Use the *visible* resolution. LVGL rotates the UI when DISPLAY_ROTATION is 1/3,
+    // and direct-image uploads should target what the user sees (e.g., 480x320).
+    #if defined(DISPLAY_WIDTH) && defined(DISPLAY_HEIGHT)
+        #if defined(DISPLAY_ROTATION) && (DISPLAY_ROTATION == 1 || DISPLAY_ROTATION == 3)
+            image_cfg.lcd_width = DISPLAY_HEIGHT;
+            image_cfg.lcd_height = DISPLAY_WIDTH;
+        #else
+            image_cfg.lcd_width = DISPLAY_WIDTH;
+            image_cfg.lcd_height = DISPLAY_HEIGHT;
+        #endif
     #else
-    image_cfg.lcd_width = 240;  // Fallback default
-    #endif
-    
-    #ifdef DISPLAY_HEIGHT
-    image_cfg.lcd_height = DISPLAY_HEIGHT;
-    #else
-    image_cfg.lcd_height = 320;  // Fallback default
+        image_cfg.lcd_width = 240;  // Fallback default
+        image_cfg.lcd_height = 320;  // Fallback default
     #endif
     
     image_cfg.max_image_size_bytes = IMAGE_API_MAX_SIZE_BYTES;

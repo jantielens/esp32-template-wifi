@@ -129,19 +129,12 @@ void TestScreen::destroy() {
 }
 
 void TestScreen::show() {
-    Logger.logBegin("TestScreen::show");
     if (screen) {
-        Logger.logLine("Calling lv_scr_load");
         lv_scr_load(screen);
-        Logger.logLine("Screen loaded");
-    } else {
-        Logger.logLine("ERROR: Screen is NULL!");
     }
-    Logger.logEnd();
 }
 
 void TestScreen::hide() {
-    Logger.logLine("TestScreen::hide");
     // Nothing to do - LVGL handles screen switching
 }
 
@@ -153,7 +146,6 @@ void TestScreen::update() {
 void TestScreen::touchEventCallback(lv_event_t* e) {
     TestScreen* instance = (TestScreen*)lv_event_get_user_data(e);
     if (instance && instance->displayMgr) {
-        Logger.logLine("TestScreen: Touch detected, navigating to InfoScreen");
         instance->displayMgr->showInfo();
     }
 }

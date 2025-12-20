@@ -21,6 +21,7 @@ private:
     Arduino_GFX* gfx;
     Arduino_Canvas* canvas;
     uint8_t currentBrightness;  // Current brightness level (0-100%)
+    bool backlightPwmAttached;
     uint16_t displayWidth;
     uint16_t displayHeight;
     uint8_t displayRotation;
