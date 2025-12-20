@@ -13,6 +13,8 @@
 #include "drivers/st7789v2_driver.h"
 #elif DISPLAY_DRIVER == DISPLAY_DRIVER_ARDUINO_GFX
 #include "drivers/arduino_gfx_driver.h"
+#elif DISPLAY_DRIVER == DISPLAY_DRIVER_ESP_PANEL
+#include "drivers/esp_panel_st77916_driver.h"
 #endif
 
 #include <SPI.h>
@@ -34,6 +36,8 @@ DisplayManager::DisplayManager(DeviceConfig* cfg)
     driver = new ST7789V2_Driver();
     #elif DISPLAY_DRIVER == DISPLAY_DRIVER_ARDUINO_GFX
     driver = new Arduino_GFX_Driver();
+    #elif DISPLAY_DRIVER == DISPLAY_DRIVER_ESP_PANEL
+    driver = new ESPPanel_ST77916_Driver();
     #else
     #error "No display driver selected or unknown driver type"
     #endif
@@ -233,12 +237,21 @@ void DisplayManager::initLVGL() {
     
     lv_init();
     
-    // Allocate LVGL buffer from PSRAM (ESP32-S3 has 8MB PSRAM)
-    // Try PSRAM first (SPIRAM), fallback to internal RAM if not available
-    buf = (lv_color_t*)heap_caps_malloc(LVGL_BUFFER_SIZE * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
-    if (!buf) {
-        Logger.logLine("PSRAM allocation failed, trying internal RAM...");
+    // Allocate LVGL draw buffer.
+    // Some QSPI panels/drivers require internal RAM for flush reliability.
+    if (LVGL_BUFFER_PREFER_INTERNAL) {
         buf = (lv_color_t*)heap_caps_malloc(LVGL_BUFFER_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        if (!buf) {
+            Logger.logLine("Internal RAM allocation failed, trying PSRAM...");
+            buf = (lv_color_t*)heap_caps_malloc(LVGL_BUFFER_SIZE * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
+        }
+    } else {
+        // Default: PSRAM first, fallback to internal.
+        buf = (lv_color_t*)heap_caps_malloc(LVGL_BUFFER_SIZE * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
+        if (!buf) {
+            Logger.logLine("PSRAM allocation failed, trying internal RAM...");
+            buf = (lv_color_t*)heap_caps_malloc(LVGL_BUFFER_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        }
     }
     if (!buf) {
         Logger.logLine("ERROR: Failed to allocate LVGL buffer!");

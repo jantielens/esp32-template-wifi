@@ -105,6 +105,12 @@ void DirectImageScreen::hide() {
 void DirectImageScreen::begin_strip_session(int width, int height) {
     Logger.logBegin("Strip Session");
     Logger.logLinef("Image: %dx%d", width, height);
+
+    // Ensure the strip decoder has a display driver even if the caller starts
+    // decoding before this screen has been shown/created.
+    if (manager) {
+        decoder.setDisplayDriver(manager->getDriver());
+    }
     
     // Use the *visible* LCD dimensions (match LVGL rotation)
     int lcd_width = 240;

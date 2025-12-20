@@ -190,8 +190,8 @@ void loop() {
 
 **Build Detection**: The build script automatically:
 1. Checks if `src/boards/[board-name]/` directory exists
-2. Adds it to the compiler include path with `-I` flag
-3. Defines `BOARD_<BOARDNAME>` (uppercased, e.g., `BOARD_ESP32C3`) and `BOARD_HAS_OVERRIDE=1`
+2. Adds it to the compiler include path with `-I` flag (for both C++ and C compilation units)
+3. Defines `BOARD_<BOARDNAME>` (uppercased, e.g., `BOARD_ESP32C3`) and `BOARD_HAS_OVERRIDE=1` (for both C++ and C compilation units)
 4. `src/app/board_config.h` includes `board_overrides.h` first (Phase 1)
 5. Default values are defined with `#ifndef` guards so overrides take precedence (Phase 2)
 6. If no override directory exists, uses defaults only

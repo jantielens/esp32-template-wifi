@@ -59,6 +59,7 @@ declare -A FQBN_TARGETS=(
     ["cyd-v3"]="esp32:esp32:esp32:PartitionScheme=min_spiffs"
     ["esp32c3"]="esp32:esp32:nologo_esp32c3_super_mini:PartitionScheme=ota_1_9mb,CDCOnBoot=default"
     ["jc3248w535"]="esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB,USBMode=hwcdc,CDCOnBoot=cdc"
+    ["jc3636w518"]="esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB,USBMode=hwcdc,CDCOnBoot=cdc"
 )
 
 # Default board (used when only one board is configured)
@@ -82,15 +83,48 @@ BUILD_PATH="$SCRIPT_DIR/build"
 # Find arduino-cli executable
 # Checks for local installation first, then falls back to system-wide
 find_arduino_cli() {
-    if [ -f "$SCRIPT_DIR/bin/arduino-cli" ]; then
-        echo "$SCRIPT_DIR/bin/arduino-cli"
-    elif command -v arduino-cli &> /dev/null; then
-        echo "arduino-cli"
-    else
-        echo "Error: arduino-cli is not found" >&2
-        echo "Please run setup.sh or install arduino-cli system-wide" >&2
-        exit 1
+    # Allow explicit override
+    if [[ -n "${ARDUINO_CLI:-}" ]]; then
+        if command -v "$ARDUINO_CLI" >/dev/null 2>&1; then
+            command -v "$ARDUINO_CLI"
+            return 0
+        fi
+
+        if [[ -x "$ARDUINO_CLI" ]]; then
+            echo "$ARDUINO_CLI"
+            return 0
+        fi
     fi
+
+    # Prefer local toolchain installation
+    if [[ -x "$SCRIPT_DIR/bin/arduino-cli" ]]; then
+        echo "$SCRIPT_DIR/bin/arduino-cli"
+        return 0
+    fi
+
+    # Global install (PATH)
+    if command -v arduino-cli >/dev/null 2>&1; then
+        command -v arduino-cli
+        return 0
+    fi
+
+    # Common global locations (covers some distros/snap)
+    for candidate in \
+        /usr/local/bin/arduino-cli \
+        /usr/bin/arduino-cli \
+        /snap/bin/arduino-cli \
+        "$HOME/.local/bin/arduino-cli"; do
+        if [[ -x "$candidate" ]]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+
+    echo "Error: arduino-cli is not found" >&2
+    echo "Tried: \"$SCRIPT_DIR/bin/arduino-cli\", PATH lookup, and common locations" >&2
+    echo "PATH=\"$PATH\"" >&2
+    echo "Please run ./setup.sh or install arduino-cli system-wide" >&2
+    exit 1
 }
 
 # Auto-detect serial port

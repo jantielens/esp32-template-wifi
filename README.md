@@ -242,6 +242,7 @@ This template includes an optional custom partition table to increase OTA app pa
 - If `src/boards/<board>/` exists, `build.sh` adds it to the include path and defines:
   - `BOARD_<BOARDNAME>` (uppercased, e.g., `BOARD_ESP32C3`)
   - `BOARD_HAS_OVERRIDE` (allows `src/app/board_config.h` to include `board_overrides.h`)
+- These flags are applied to both C++ and C compilation units (LVGL is built as C), so LVGL config can also react to board overrides.
 - No changes needed in `app.ino`; overrides are pulled automatically.
 
 **Examples:**
@@ -311,7 +312,7 @@ void setup() {
 
 **Defaults**: Boards without overrides use defaults from `src/app/board_config.h`. See that file for available options and usage examples.
 
-**Build System**: Automatically detects board override directories and sets `-DBOARD_HAS_OVERRIDE=1` during compilation.
+**Build System**: Automatically detects board override directories and sets `-DBOARD_HAS_OVERRIDE=1` during compilation for both C++ and C sources.
 
 ### Serial Port
 

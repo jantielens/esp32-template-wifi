@@ -13,6 +13,10 @@
 #include "display_driver.h"
 #include "log_manager.h"
 
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP32)
+    #include <esp_heap_caps.h>
+#endif
+
 // Use the ESP-ROM TJpgDec types/signatures. This matches the ROM-provided jd_prepare/jd_decomp
 // symbols used by the ESP32 Arduino core.
 //
@@ -95,6 +99,12 @@ struct JpegOutputContext {
     int lcd_width;
     int lcd_height;
     bool output_bgr565;     // true=BGR565, false=RGB565
+
+    // Optional batch buffer to reduce LCD transactions.
+    // Holds a small rectangle (typically 8-16 rows) of converted RGB565 pixels.
+    uint16_t* batch_buffer;
+    int batch_capacity_pixels;
+    int batch_max_rows;
 };
 
 // TJpgDec uses a single opaque device pointer for the entire decode session.
@@ -138,57 +148,83 @@ static UINT jpeg_output_func(JDEC* jd, void* bitmap, JRECT* rect) {
         return 0;
     }
     
-    // Process each line in the MCU block
-    for (int y = rect->top; y <= rect->bottom; y++) {
-        int line_width = rect->right - rect->left + 1;
-        
-        // Bounds check
-        if (line_width > ctx->buffer_width) {
-            Logger.logMessagef("StripDecoder", "ERROR: line_width %d > buffer_width %d", line_width, ctx->buffer_width);
-            return 0;
+    const int rect_w = rect->right - rect->left + 1;
+    const int rect_h = rect->bottom - rect->top + 1;
+
+    // Bounds check
+    if (rect_w <= 0 || rect_h <= 0 || rect_w > ctx->buffer_width) {
+        Logger.logMessagef("StripDecoder", "ERROR: Invalid rect (w=%d h=%d, buffer_width=%d)", rect_w, rect_h, ctx->buffer_width);
+        return 0;
+    }
+
+    // Target LCD coordinates for the whole rect
+    const int lcd_x = rect->left;
+    const int lcd_y = ctx->strip_y_offset + rect->top;
+    if (lcd_x < 0 || lcd_y < 0 || lcd_x + rect_w > ctx->lcd_width || lcd_y + rect_h > ctx->lcd_height) {
+        Logger.logMessagef("StripDecoder", "ERROR: Invalid LCD rect: x=%d y=%d w=%d h=%d (LCD: %dx%d)",
+                          lcd_x, lcd_y, rect_w, rect_h, ctx->lcd_width, ctx->lcd_height);
+        return 0;
+    }
+
+    const int rect_pixels = rect_w * rect_h;
+    const bool can_batch = ctx->batch_buffer &&
+                           (ctx->batch_max_rows > 1) &&
+                           (rect_h <= ctx->batch_max_rows) &&
+                           (rect_pixels <= ctx->batch_capacity_pixels);
+
+    if (can_batch) {
+        // Convert entire rect into contiguous RGB565 pixels
+        uint16_t* dst = ctx->batch_buffer;
+        for (int row = 0; row < rect_h; row++) {
+            for (int col = 0; col < rect_w; col++) {
+                uint8_t r = *src++;
+                uint8_t g = *src++;
+                uint8_t b = *src++;
+
+                if (ctx->output_bgr565) {
+                    dst[row * rect_w + col] = ((b & 0xF8) << 8) | ((g & 0xFC) << 3) | (r >> 3);
+                } else {
+                    dst[row * rect_w + col] = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
+                }
+            }
         }
-        
+
+        // Single LCD transaction for the whole rect
+        ctx->driver->startWrite();
+        ctx->driver->setAddrWindow(lcd_x, lcd_y, rect_w, rect_h);
+        ctx->driver->pushColors(dst, rect_pixels, true);
+        ctx->driver->endWrite();
+
+        // Yield periodically to prevent watchdog timeouts.
+        if ((lcd_y & 0x03) == 0) {
+            taskYIELD();
+        }
+
+        return 1;
+    }
+
+    // Fallback: process each line (higher overhead but lower RAM).
+    for (int y = rect->top; y <= rect->bottom; y++) {
         // Convert RGB888 to BGR565 or RGB565 for this line
-        for (int x = 0; x < line_width; x++) {
+        for (int x = 0; x < rect_w; x++) {
             uint8_t r = *src++;
             uint8_t g = *src++;
             uint8_t b = *src++;
 
             if (ctx->output_bgr565) {
-                // RGB888 → BGR565 conversion
-                // BGR565: BBBB BGGG GGGR RRRR
-                ctx->line_buffer[x] = ((b & 0xF8) << 8) |   // Blue in high bits
-                                      ((g & 0xFC) << 3) |   // Green in middle
-                                      (r >> 3);             // Red in low bits
+                ctx->line_buffer[x] = ((b & 0xF8) << 8) | ((g & 0xFC) << 3) | (r >> 3);
             } else {
-                // RGB888 → RGB565 conversion
-                // RGB565: RRRR RGGG GGGB BBBB
-                ctx->line_buffer[x] = ((r & 0xF8) << 8) |   // Red in high bits
-                                      ((g & 0xFC) << 3) |   // Green in middle
-                                      (b >> 3);             // Blue in low bits
+                ctx->line_buffer[x] = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
             }
         }
-        
-        // Write line to LCD at correct position
-        int lcd_x = rect->left;
-        int lcd_y = ctx->strip_y_offset + y;
-        
-        // Bounds check for LCD coordinates
-        if (lcd_x < 0 || lcd_y < 0 || lcd_x + line_width > ctx->lcd_width || lcd_y >= ctx->lcd_height) {
-            Logger.logMessagef("StripDecoder", "ERROR: Invalid LCD coords: x=%d y=%d w=%d (LCD: %dx%d)", 
-                              lcd_x, lcd_y, line_width, ctx->lcd_width, ctx->lcd_height);
-            return 0;
-        }
-        
-        // Push pixels to LCD via display driver
+
+        const int line_lcd_y = ctx->strip_y_offset + y;
         ctx->driver->startWrite();
-        ctx->driver->setAddrWindow(lcd_x, lcd_y, line_width, 1);
-        ctx->driver->pushColors(ctx->line_buffer, line_width, true);
+        ctx->driver->setAddrWindow(lcd_x, line_lcd_y, rect_w, 1);
+        ctx->driver->pushColors(ctx->line_buffer, rect_w, true);
         ctx->driver->endWrite();
-        
-        // Yield periodically to prevent watchdog timeouts during long decodes.
-        // Yielding every line can be unnecessarily expensive.
-        if ((lcd_y & 0x03) == 0) {
+
+        if ((line_lcd_y & 0x03) == 0) {
             taskYIELD();
         }
     }
@@ -238,12 +274,30 @@ bool StripDecoder::decode_strip(const uint8_t* jpeg_data, size_t jpeg_size, int 
         return false;
     }
     
-    // Allocate line buffer for pixel conversion
+    // Allocate line buffer for pixel conversion (fallback path)
     uint16_t* line_buffer = (uint16_t*)malloc(width * sizeof(uint16_t));
     if (!line_buffer) {
         free(work);
         Logger.logEnd("ERROR: Failed to allocate line buffer");
         return false;
+    }
+
+    // Optional batch buffer to reduce LCD transactions.
+    // Most JPEG strip encoders output MCU blocks of 8 or 16 rows.
+    const int kBatchMaxRows = (int)IMAGE_STRIP_BATCH_MAX_ROWS;
+    uint16_t* batch_buffer = nullptr;
+    if (kBatchMaxRows > 1) {
+        const size_t batch_bytes = (size_t)width * (size_t)kBatchMaxRows * sizeof(uint16_t);
+
+        #if defined(ARDUINO_ARCH_ESP32) || defined(ESP32)
+            // Prefer PSRAM when available to avoid pressuring internal RAM.
+            batch_buffer = (uint16_t*)heap_caps_malloc(batch_bytes, MALLOC_CAP_SPIRAM);
+            if (!batch_buffer) {
+                batch_buffer = (uint16_t*)heap_caps_malloc(batch_bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+            }
+        #else
+            batch_buffer = (uint16_t*)malloc(batch_bytes);
+        #endif
     }
     
     JDEC jdec;
@@ -263,6 +317,9 @@ bool StripDecoder::decode_strip(const uint8_t* jpeg_data, size_t jpeg_size, int 
     session_ctx.output.lcd_width = lcd_width;
     session_ctx.output.lcd_height = lcd_height;
     session_ctx.output.output_bgr565 = output_bgr565;
+    session_ctx.output.batch_buffer = batch_buffer;
+    session_ctx.output.batch_capacity_pixels = batch_buffer ? (width * kBatchMaxRows) : 0;
+    session_ctx.output.batch_max_rows = batch_buffer ? kBatchMaxRows : 0;
     
     // Prepare decoder
     res = jd_prepare(&jdec, jpeg_input_func, work, work_size, &session_ctx);
@@ -270,6 +327,13 @@ bool StripDecoder::decode_strip(const uint8_t* jpeg_data, size_t jpeg_size, int 
     if (res != JDR_OK) {
         Logger.logLinef("ERROR: jd_prepare failed: %d", res);
         Logger.logEnd();
+        if (batch_buffer) {
+            #if defined(ARDUINO_ARCH_ESP32) || defined(ESP32)
+                heap_caps_free(batch_buffer);
+            #else
+                free(batch_buffer);
+            #endif
+        }
         free(line_buffer);
         free(work);
         return false;
@@ -281,6 +345,13 @@ bool StripDecoder::decode_strip(const uint8_t* jpeg_data, size_t jpeg_size, int 
     if (res != JDR_OK) {
         Logger.logLinef("ERROR: jd_decomp failed: %d", res);
         Logger.logEnd();
+        if (batch_buffer) {
+            #if defined(ARDUINO_ARCH_ESP32) || defined(ESP32)
+                heap_caps_free(batch_buffer);
+            #else
+                free(batch_buffer);
+            #endif
+        }
         free(line_buffer);
         free(work);
         return false;
@@ -296,6 +367,13 @@ bool StripDecoder::decode_strip(const uint8_t* jpeg_data, size_t jpeg_size, int 
     current_y += jdec.height;
     
     // Cleanup
+    if (batch_buffer) {
+        #if defined(ARDUINO_ARCH_ESP32) || defined(ESP32)
+            heap_caps_free(batch_buffer);
+        #else
+            free(batch_buffer);
+        #endif
+    }
     free(line_buffer);
     free(work);
     

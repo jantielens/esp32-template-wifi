@@ -38,10 +38,12 @@ build_board() {
     if [[ -d "$board_override_dir" ]]; then
         echo -e "${YELLOW}Config:    Using board-specific overrides from src/boards/$board_name/${NC}"
         # Add include path and define BOARD_HAS_OVERRIDE to trigger board_overrides.h inclusion
+        # Important: apply to BOTH C++ and C compilation units (LVGL is built as C).
         # Sanitize board name for valid C++ macro (alphanumeric + underscore only)
         board_macro="BOARD_${board_name^^}"
         board_macro="${board_macro//[^A-Z0-9_]/_}"
         EXTRA_FLAGS+=(--build-property "compiler.cpp.extra_flags=-I$board_override_dir -D$board_macro -DBOARD_HAS_OVERRIDE=1")
+        EXTRA_FLAGS+=(--build-property "compiler.c.extra_flags=-I$board_override_dir -D$board_macro -DBOARD_HAS_OVERRIDE=1")
     else
         echo "Config:    Using default configuration"
     fi

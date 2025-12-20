@@ -8,6 +8,12 @@
 
 #include <stdint.h>
 
+// Allow LVGL config to react to board-specific overrides.
+// build.sh defines BOARD_HAS_OVERRIDE and adds the override include path.
+#ifdef BOARD_HAS_OVERRIDE
+#include "board_overrides.h"
+#endif
+
 /*====================
    COLOR SETTINGS
  *====================*/
@@ -197,6 +203,12 @@
 /* 1: Show CPU usage and FPS count in the right bottom corner
  * Note: We use a custom FPS overlay controlled via config instead */
 #define LV_USE_PERF_MONITOR 1
+
+#if LV_USE_PERF_MONITOR
+  #ifndef LV_USE_PERF_MONITOR_POS
+    #define LV_USE_PERF_MONITOR_POS LV_ALIGN_BOTTOM_RIGHT
+  #endif
+#endif
 
 /* Enable asserts */
 #define LV_USE_ASSERT_NULL          1   /*Check if the parameter is NULL*/

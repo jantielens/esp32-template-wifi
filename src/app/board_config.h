@@ -124,6 +124,7 @@
 #define DISPLAY_DRIVER_ST7789V2 2
 #define DISPLAY_DRIVER_LOVYANGFX 3
 #define DISPLAY_DRIVER_ARDUINO_GFX 4
+#define DISPLAY_DRIVER_ESP_PANEL 5
 
 #ifndef DISPLAY_DRIVER
 #define DISPLAY_DRIVER DISPLAY_DRIVER_TFT_ESPI  // Default to TFT_eSPI
@@ -166,6 +167,13 @@
 #define TOUCH_DRIVER_XPT2046 1
 #define TOUCH_DRIVER_FT6236 2
 #define TOUCH_DRIVER_AXS15231B 3
+#define TOUCH_DRIVER_CST816S_ESP_PANEL 4
+
+// Prefer allocating LVGL draw buffer in internal RAM before PSRAM.
+// Default: false (keeps historical PSRAM-first behavior; boards can override).
+#ifndef LVGL_BUFFER_PREFER_INTERNAL
+#define LVGL_BUFFER_PREFER_INTERNAL false
+#endif
 
 #ifndef TOUCH_DRIVER
 #define TOUCH_DRIVER TOUCH_DRIVER_XPT2046  // Default to XPT2046
@@ -199,6 +207,14 @@
 
 #ifndef IMAGE_API_MAX_TIMEOUT_MS
 #define IMAGE_API_MAX_TIMEOUT_MS (86400UL * 1000UL)  // 24 hours max timeout
+#endif
+
+// Image API performance tuning
+// Controls how many rows the strip decoder batches into one LCD transaction.
+// Higher = fewer LCD transactions (faster) but more temporary RAM.
+// Set to 1 to disable batching.
+#ifndef IMAGE_STRIP_BATCH_MAX_ROWS
+#define IMAGE_STRIP_BATCH_MAX_ROWS 16
 #endif
 
 #endif // BOARD_CONFIG_H

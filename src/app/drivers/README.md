@@ -26,6 +26,7 @@ python3 tools/generate-board-driver-table.py --update-drivers-readme
 | cyd-v3 | TFT_eSPI | ILI9341 | SPI | 320×240 | 1 | XPT2046 | inversion off, gamma fix |
 | esp32c3 | ST7789V2 (native) | ST7789V2 | SPI | 240×280 | 1 | none |  |
 | jc3248w535 | Arduino_GFX | AXS15231B | QSPI | 320×480 | 1 | AXS15231B |  |
+| jc3636w518 | ESP_Panel | ST77916 | QSPI | 360×360 | 0 | CST816S |  |
 
 <!-- BOARD_DRIVER_TABLE_END -->
 

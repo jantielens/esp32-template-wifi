@@ -78,6 +78,7 @@ BOARD_PROFILE=psram ./build.sh esp32  # Optional build profile (if defined in co
     - `BOARD_<BOARDNAME>` - Board name sanitized to valid C++ macro (alphanumeric + underscore only)
       - Examples: `cyd-v2` → `BOARD_CYD_V2`, `esp32c3` → `BOARD_ESP32C3`
     - `BOARD_HAS_OVERRIDE` (triggers inclusion of `board_overrides.h`)
+    - Note: these flags are applied to both C++ and C compilation units (LVGL is built as C), so LVGL config can also react to board overrides.
 
 **Build Output Structure:**
 ```

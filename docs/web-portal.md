@@ -618,6 +618,7 @@ Upload JPEG image strips for memory-efficient display (async decode).
 - Use for large images or memory-constrained devices
 - Client must send strips in sequential order (0, 1, 2, ...)
 - Flow control: returns HTTP 409 if a previous strip is still being processed
+- Performance: the strip decoder batches small rectangles into fewer LCD transactions for speed. You can tune this per-board with `IMAGE_STRIP_BATCH_MAX_ROWS` (default: 16). Higher values are usually faster but require more temporary RAM.
 
 **Example Client:**
 ```bash

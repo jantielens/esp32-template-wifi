@@ -58,6 +58,8 @@ def _map_display_backend(token: str) -> str:
         return "ST7789V2 (native)"
     if token == "DISPLAY_DRIVER_ARDUINO_GFX":
         return "Arduino_GFX"
+    if token == "DISPLAY_DRIVER_ESP_PANEL":
+        return "ESP_Panel"
     if token == "DISPLAY_DRIVER_LOVYANGFX":
         return "LovyanGFX"
     return token
@@ -73,11 +75,16 @@ def _map_touch_backend(token: str) -> Tuple[str, str]:
         return "AXS15231B", "AXS15231B"
     if token == "TOUCH_DRIVER_FT6236":
         return "FT6236", "FT6236"
+    if token == "TOUCH_DRIVER_CST816S_ESP_PANEL":
+        return "CST816S", "CST816S"
     return token, token
 
 
 def _detect_bus(defines: Dict[str, str]) -> str:
     if "LCD_QSPI_CS" in defines or "LCD_QSPI_PCLK" in defines:
+        return "QSPI"
+    # ESP_Panel QSPI boards in this repo use TFT_SDA0..3 naming.
+    if any(k in defines for k in ("TFT_SDA0", "TFT_SDA1", "TFT_SDA2", "TFT_SDA3")):
         return "QSPI"
     if any(k.startswith("TFT_") for k in defines.keys()) or "LCD_SCK_PIN" in defines:
         return "SPI"
@@ -87,6 +94,10 @@ def _detect_bus(defines: Dict[str, str]) -> str:
 def _detect_panel(defines: Dict[str, str], display_backend_token: str) -> str:
     if display_backend_token == "DISPLAY_DRIVER_ARDUINO_GFX":
         return "AXS15231B"
+
+    # Current ESP_Panel driver in this repo targets ST77916 (JC3636W518).
+    if display_backend_token == "DISPLAY_DRIVER_ESP_PANEL":
+        return "ST77916"
 
     # TFT_eSPI boards often declare a controller selection macro.
     if "DISPLAY_DRIVER_ILI9341_2" in defines:
