@@ -64,6 +64,7 @@ private:
     // Screen management
     Screen* currentScreen;
     Screen* previousScreen;  // Track previous screen for return navigation
+    Screen* pendingScreen;   // Deferred screen switch (processed in lvglTask)
 
     // Helpers: avoid taking the LVGL mutex when already inside the LVGL task
     bool isInLvglTask() const;

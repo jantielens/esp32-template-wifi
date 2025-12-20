@@ -21,7 +21,7 @@
 DisplayManager* displayManager = nullptr;
 
 DisplayManager::DisplayManager(DeviceConfig* cfg) 
-    : driver(nullptr), config(cfg), currentScreen(nullptr), previousScreen(nullptr), 
+    : driver(nullptr), config(cfg), currentScreen(nullptr), previousScreen(nullptr), pendingScreen(nullptr), 
       infoScreen(cfg, this), testScreen(this),
       #if HAS_IMAGE_API
       directImageScreen(this),
@@ -163,6 +163,17 @@ void DisplayManager::lvglTask(void* pvParameter) {
     while (true) {
         mgr->lock();
         
+        // Process pending screen switch (deferred from external calls)
+        if (mgr->pendingScreen) {
+            if (mgr->currentScreen) {
+                mgr->currentScreen->hide();
+            }
+            mgr->previousScreen = mgr->currentScreen;
+            mgr->currentScreen = mgr->pendingScreen;
+            mgr->currentScreen->show();
+            mgr->pendingScreen = nullptr;
+        }
+        
         // Handle LVGL rendering (animations, timers, etc.)
         uint32_t delayMs = lv_timer_handler();
         
@@ -302,6 +313,7 @@ void DisplayManager::init() {
 }
 
 void DisplayManager::showSplash() {
+    // Splash shown during init - can switch immediately (no task running yet)
     lock();
     if (currentScreen) {
         currentScreen->hide();
@@ -313,66 +325,37 @@ void DisplayManager::showSplash() {
 }
 
 void DisplayManager::showInfo() {
-    bool didLock = false;
-    lockIfNeeded(didLock);
-    if (currentScreen) {
-        currentScreen->hide();
-    }
-    currentScreen = &infoScreen;
-    currentScreen->show();
-    unlockIfNeeded(didLock);
-    Logger.logMessage("Display", "Switched to InfoScreen");
+    // Defer screen switch to lvglTask (non-blocking)
+    pendingScreen = &infoScreen;
+    Logger.logMessage("Display", "Queued switch to InfoScreen");
 }
 
 void DisplayManager::showTest() {
-    bool didLock = false;
-    lockIfNeeded(didLock);
-    if (currentScreen) {
-        currentScreen->hide();
-    }
-    currentScreen = &testScreen;
-    currentScreen->show();
-    unlockIfNeeded(didLock);
-    Logger.logMessage("Display", "Switched to TestScreen");
+    // Defer screen switch to lvglTask (non-blocking)
+    pendingScreen = &testScreen;
+    Logger.logMessage("Display", "Queued switch to TestScreen");
 }
 
 #if HAS_IMAGE_API
 void DisplayManager::showDirectImage() {
-    bool didLock = false;
-    lockIfNeeded(didLock);
-    if (currentScreen) {
-        // Save current screen so we can return to it after timeout.
-        // If we're already on DirectImageScreen (e.g., a second upload arrives before timeout),
-        // do NOT overwrite previousScreen; we still want to return to the screen that was
-        // active before the first image was shown.
-        if (currentScreen != &directImageScreen) {
-            previousScreen = currentScreen;
-        }
-        currentScreen->hide();
+    // Save current screen so we can return to it after timeout
+    // If we're already on DirectImageScreen, don't overwrite previousScreen
+    if (currentScreen && currentScreen != &directImageScreen) {
+        previousScreen = currentScreen;
     }
-    currentScreen = &directImageScreen;
-    currentScreen->show();
-    unlockIfNeeded(didLock);
-    Logger.logMessage("Display", "Switched to DirectImageScreen");
+    
+    // Defer screen switch to lvglTask (non-blocking)
+    pendingScreen = &directImageScreen;
+    Logger.logMessage("Display", "Queued switch to DirectImageScreen");
 }
 
 void DisplayManager::returnToPreviousScreen() {
-    bool didLock = false;
-    lockIfNeeded(didLock);
-    
+    // Defer screen switch to lvglTask (non-blocking)
     // If no previous screen, default to info screen
     Screen* targetScreen = previousScreen ? previousScreen : &infoScreen;
-    
-    if (currentScreen) {
-        currentScreen->hide();
-    }
-    
-    currentScreen = targetScreen;
-    currentScreen->show();
+    pendingScreen = targetScreen;
     previousScreen = nullptr;  // Clear previous screen reference
-
-    unlockIfNeeded(didLock);
-    Logger.logMessage("Display", "Returned to previous screen");
+    Logger.logMessage("Display", "Queued return to previous screen");
 }
 #endif
 
@@ -388,17 +371,9 @@ bool DisplayManager::showScreen(const char* screen_id) {
     // Look up screen in registry
     for (size_t i = 0; i < screenCount; i++) {
         if (strcmp(availableScreens[i].id, screen_id) == 0) {
-            Logger.logMessagef("Display", "Switching to screen: %s", screen_id);
-            
-            // Lock - this method is called from web server task (external to LVGL)
-            lock();
-            if (currentScreen) {
-                currentScreen->hide();
-            }
-            currentScreen = availableScreens[i].instance;
-            currentScreen->show();
-            unlock();
-            
+            // Defer screen switch to lvglTask (non-blocking)
+            pendingScreen = availableScreens[i].instance;
+            Logger.logMessagef("Display", "Queued switch to screen: %s", screen_id);
             return true;
         }
     }

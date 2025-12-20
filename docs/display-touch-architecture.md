@@ -394,7 +394,16 @@ displayManager->lock();
 displayManager->unlock();
 ```
 
-DisplayManager API methods handle locking automatically (`showSplash()`, `showInfo()`, etc.).
+**Deferred Screen Switching:**
+
+DisplayManager uses a deferred pattern for screen navigation (`showSplash()`, `showInfo()`, `showTest()`, etc.):
+
+1. Navigation methods set `pendingScreen` flag (no mutex, returns instantly)
+2. LVGL rendering task checks flag and performs switch on next frame
+3. Avoids blocking rendering task during screen transitions (prevents FPS drops)
+4. Screens switch within 1 frame (~30ms), imperceptible to users
+
+Direct LVGL operations still require manual locking.
 
 ## Touch Driver HAL
 
@@ -849,13 +858,9 @@ void DisplayManager::init() {
 }
 
 void DisplayManager::showMyScreen() {
-    lock();
-    if (currentScreen) {
-        currentScreen->hide();
-    }
-    currentScreen = &myScreen;
-    currentScreen->show();
-    unlock();
+    // Deferred pattern - just set flag, no mutex needed
+    pendingScreen = &myScreen;
+    // Actual switch happens in lvglTask on next frame
 }
 ```
 
