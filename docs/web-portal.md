@@ -558,12 +558,10 @@ Upload a JPEG image for display on the device screen (full mode - deferred decod
 
 **Request:**
 - Content-Type: `multipart/form-data`
-- Required fields:
-  - `image`: JPEG file (max 50KB)
-  - `width`: Image width in pixels
-  - `height`: Image height in pixels
-- Optional fields:
-  - `timeout`: Display timeout in milliseconds (default: 10000)
+- File field:
+  - `file`: JPEG file
+- Query parameters:
+  - `timeout` (optional): Display timeout in seconds (`0` = permanent; defaults to firmware setting)
 
 **Response (Success):**
 ```json
@@ -586,7 +584,80 @@ Upload a JPEG image for display on the device screen (full mode - deferred decod
 - Device shows image on screen, then returns to previous screen after timeout
 - Use for single image uploads or testing
 - Requires enough heap memory to buffer entire JPEG
-- `width`/`height` must match the device's display coordinate-space resolution (see `GET /api/info` fields `display_coord_width`/`display_coord_height`)
+- The safest client behavior is to pre-size (and if needed, letterbox) the JPEG to the device's display coordinate-space resolution (see `GET /api/info` fields `display_coord_width`/`display_coord_height`)
+
+#### Home Assistant (AppDaemon): Send Camera Snapshots to ESP32
+
+You can display Home Assistant camera snapshots on the ESP32 by deploying the included AppDaemon app:
+
+- Script: `tools/camera_to_esp32.py`
+- Upload method: single-image upload (`POST /api/display/image`)
+- Resolution: auto-detected from the ESP32 (`GET /api/info` → `display_coord_width`/`display_coord_height`)
+
+**Prerequisites**
+- Firmware running on the ESP32 with `HAS_DISPLAY` and `HAS_IMAGE_API` enabled
+- Home Assistant OS (or Supervised) with the AppDaemon add-on
+- A camera entity available in Home Assistant
+
+**Step 1: Install AppDaemon**
+1. In Home Assistant: **Settings → Add-ons → Add-on Store**
+2. Install **AppDaemon 4**
+
+**Step 2: Install Pillow**
+In the AppDaemon add-on configuration, add:
+
+```yaml
+python_packages:
+  - Pillow
+```
+
+Restart the AppDaemon add-on after saving.
+
+**Step 3: Copy the Script**
+Copy `tools/camera_to_esp32.py` from this repository to AppDaemon’s apps folder:
+
+- Destination (typical for HA OS add-on):
+  - `/addon_configs/a0d7b954_appdaemon/apps/camera_to_esp32.py`
+
+**Step 4: Register the App**
+Edit AppDaemon’s `apps.yaml` and add:
+
+```yaml
+camera_to_esp32:
+  module: camera_to_esp32
+  class: CameraToESP32
+  # Optional: if you have one device
+  # default_esp32_ip: "192.168.1.111"
+  # Optional defaults
+  # jpeg_quality: 80
+  # rotate_degrees: null
+```
+
+Restart AppDaemon. In logs you should see `CameraToESP32 initialized`.
+
+**Step 5: Create an Automation (Fire Event)**
+Create an automation that fires an event (example action):
+
+```yaml
+action:
+  - event: camera_to_esp32
+    event_data:
+      camera_entity: camera.front_door
+      esp32_ip: "192.168.1.111"
+      timeout: 10
+      # rotate_degrees: null|0|90|180|270
+      # jpeg_quality: 60-95
+```
+
+**Optional: Dismiss the Image**
+
+```yaml
+action:
+  - event: camera_to_esp32
+    event_data:
+      esp32_ip: "192.168.1.111"
+      dismiss: true
+```
 
 #### `POST /api/display/image/strips`
 
