@@ -9,8 +9,9 @@
 
 InfoScreen::InfoScreen(DeviceConfig* deviceConfig, DisplayManager* manager) 
     : screen(nullptr), config(deviceConfig), displayMgr(manager),
-      deviceNameLabel(nullptr), mdnsLabel(nullptr), ssidLabel(nullptr), ipLabel(nullptr),
-      versionLabel(nullptr), uptimeLabel(nullptr), heapLabel(nullptr), chipLabel(nullptr) {}
+    lastUpdateMs(0),
+    deviceNameLabel(nullptr), mdnsLabel(nullptr), ssidLabel(nullptr), ipLabel(nullptr),
+    versionLabel(nullptr), uptimeLabel(nullptr), heapLabel(nullptr), chipLabel(nullptr) {}
 
 InfoScreen::~InfoScreen() {
     destroy();
@@ -130,6 +131,15 @@ void InfoScreen::hide() {
 
 void InfoScreen::update() {
     if (!screen) return;
+
+    // This method is called from the LVGL task loop, potentially every 1-10ms.
+    // Avoid constant label rewrites/invalidation: update at a modest cadence.
+    const uint32_t now = millis();
+    const uint32_t kUpdateIntervalMs = 500;
+    if (lastUpdateMs != 0 && (uint32_t)(now - lastUpdateMs) < kUpdateIntervalMs) {
+        return;
+    }
+    lastUpdateMs = now;
     
     // Update device name (from config)
     if (deviceNameLabel) {

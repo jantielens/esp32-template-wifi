@@ -172,7 +172,7 @@ The hostname is automatically set from the device name and includes the last 4 h
 
 | Method | Endpoint | Purpose |
 |--------|----------|----------|
-| GET | `/api/info` | Device info (firmware, chip, cores, flash, PSRAM, hostname, MAC) |
+| GET | `/api/info` | Device info (firmware, chip, cores, flash, PSRAM, hostname, MAC; plus `display_coord_width/height` when HAS_DISPLAY) |
 | GET | `/api/health` | Real-time health stats (CPU, memory, WiFi, uptime, hostname) |
 | GET | `/api/config` | Current configuration |
 | POST | `/api/config` | Save configuration (triggers reboot by default) |

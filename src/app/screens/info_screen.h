@@ -19,6 +19,8 @@ private:
     lv_obj_t* screen;
     DeviceConfig* config;
     DisplayManager* displayMgr;
+
+    uint32_t lastUpdateMs;
     
     // Labels (updated in real-time)
     lv_obj_t* deviceNameLabel;

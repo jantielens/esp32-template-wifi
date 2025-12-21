@@ -10,6 +10,7 @@
 #include "web_assets.h"
 #include "log_manager.h"
 #include <Preferences.h>
+#include <nvs_flash.h>
 
 // NVS namespace
 #define CONFIG_NAMESPACE "device_cfg"
@@ -36,7 +37,21 @@ static Preferences preferences;
 
 // Initialize NVS
 void config_manager_init() {
-    Logger.logMessage("Config", "NVS initialized");
+    Logger.logBegin("Config NVS Init");
+    esp_err_t err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        Logger.logLinef("NVS init error (%d) - erasing NVS", (int)err);
+        nvs_flash_erase();
+        err = nvs_flash_init();
+    }
+
+    if (err != ESP_OK) {
+        Logger.logLinef("NVS init FAILED (%d)", (int)err);
+        Logger.logEnd("FAILED");
+        return;
+    }
+
+    Logger.logEnd("OK");
 }
 
 // Get default device name with unique chip ID
@@ -90,8 +105,11 @@ bool config_manager_load(DeviceConfig *config) {
     }
     
     Logger.logBegin("Config Load");
-    
-    preferences.begin(CONFIG_NAMESPACE, true); // Read-only mode
+
+    if (!preferences.begin(CONFIG_NAMESPACE, true)) { // Read-only mode
+        Logger.logEnd("Preferences begin failed");
+        return false;
+    }
     
     // Check magic number first
     uint32_t magic = preferences.getUInt(KEY_MAGIC, 0);

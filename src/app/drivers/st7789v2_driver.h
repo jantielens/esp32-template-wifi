@@ -42,6 +42,8 @@ public:
     
     void init() override;
     void setRotation(uint8_t rotation) override;
+    int width() override { return (int)DISPLAY_WIDTH; }
+    int height() override { return (int)DISPLAY_HEIGHT; }
     void setBacklight(bool on) override;
     void setBacklightBrightness(uint8_t brightness) override;
     uint8_t getBacklightBrightness() override;

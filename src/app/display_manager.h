@@ -85,6 +85,11 @@ private:
     // Splash excluded from runtime selection (boot-specific only)
     ScreenInfo availableScreens[MAX_SCREENS];
     size_t screenCount;
+
+    // Internal helper: map a Screen instance to its logical screen id.
+    // Uses the registered screen list so adding new screens doesn't require
+    // updating logging code.
+    const char* getScreenIdForInstance(const Screen* screen) const;
     
     // Hardware initialization
     void initHardware();
@@ -96,6 +101,11 @@ private:
     // Buffered render-mode drivers (e.g., Arduino_GFX canvas) need an explicit
     // present() step, but only after LVGL has actually rendered something.
     bool flushPending;
+
+    // When true, LVGL flushes must not touch the panel.
+    // This is enabled as soon as DirectImageScreen is requested so that
+    // the JPEG decoder can safely write to the display without SPI contention.
+    volatile bool directImageActive;
     
     // FreeRTOS task for LVGL rendering
     static void lvglTask(void* pvParameter);
@@ -132,6 +142,11 @@ public:
     // Mutex helpers for external thread-safe access
     void lock();
     void unlock();
+
+    // Active LVGL logical resolution (post driver->configureLVGL()).
+    // Prefer using these instead of calling LVGL APIs from non-LVGL tasks.
+    int getActiveWidth() const { return (int)disp_drv.hor_res; }
+    int getActiveHeight() const { return (int)disp_drv.ver_res; }
     
     // Access to splash screen for status updates
     SplashScreen* getSplash() { return &splashScreen; }
@@ -163,6 +178,7 @@ void display_manager_set_backlight_brightness(uint8_t brightness);  // 0-100%
 // C-style interface for image API
 void display_manager_show_direct_image();
 DirectImageScreen* display_manager_get_direct_image_screen();
+void display_manager_return_to_previous_screen();
 #endif
 
 #endif // DISPLAY_MANAGER_H

@@ -109,6 +109,11 @@ public:
     
     // Display configuration
     virtual void setRotation(uint8_t rotation) = 0;
+
+    // Active coordinate space dimensions for setAddrWindow()/pushColors().
+    // Drivers should report the post-rotation width/height of their address space.
+    virtual int width() = 0;
+    virtual int height() = 0;
     virtual void setBacklight(bool on) = 0;
     virtual void applyDisplayFixes() = 0;
     

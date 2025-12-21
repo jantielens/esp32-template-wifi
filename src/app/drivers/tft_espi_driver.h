@@ -23,6 +23,8 @@ public:
     
     void init() override;
     void setRotation(uint8_t rotation) override;
+    int width() override;
+    int height() override;
     void setBacklight(bool on) override;
     void setBacklightBrightness(uint8_t brightness) override;  // 0-100%
     uint8_t getBacklightBrightness() override;

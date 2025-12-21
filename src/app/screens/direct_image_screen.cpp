@@ -66,11 +66,19 @@ void DirectImageScreen::update() {
     // Check timeout if visible
     if (visible && is_timeout_expired()) {
         Logger.logMessage("DirectImageScreen", "Timeout expired, returning to previous screen");
+
+        // Clean up our state while we're still running on the LVGL task.
+        // The actual screen switch is deferred in DisplayManager.
+        if (session_active) {
+            end_strip_session();
+        }
+        visible = false;
+        display_start_time = 0;
+
         // Return to previous screen (the one before image was shown)
         if (manager) {
             manager->returnToPreviousScreen();
         }
-        visible = false;
     }
 }
 
@@ -81,11 +89,12 @@ void DirectImageScreen::show() {
     
     lv_scr_load(screen_obj);
     visible = true;
-    
-    // Set timeout start time if not already set
-    if (display_start_time == 0) {
-        display_start_time = millis();
-    }
+
+    // Start the timeout when the screen is actually shown.
+    // Using an uploader-provided start time (captured earlier during HTTP upload)
+    // can cause rapid thrashing if the LVGL task is delayed and the timeout elapses
+    // before the screen becomes visible.
+    display_start_time = millis();
     
     Logger.logMessagef("DirectImageScreen", "Show (timeout: %lums)", display_timeout_ms);
 }
@@ -106,25 +115,25 @@ void DirectImageScreen::begin_strip_session(int width, int height) {
     Logger.logBegin("Strip Session");
     Logger.logLinef("Image: %dx%d", width, height);
 
+    // Each new upload should extend/restart the display timeout.
+    // This is especially important when a new upload starts while we're already
+    // on DirectImageScreen (show() won't be called again in that case).
+    display_start_time = millis();
+
     // Ensure the strip decoder has a display driver even if the caller starts
     // decoding before this screen has been shown/created.
     if (manager) {
         decoder.setDisplayDriver(manager->getDriver());
     }
     
-    // Use the *visible* LCD dimensions (match LVGL rotation)
-    int lcd_width = 240;
-    int lcd_height = 320;
-
-    #if defined(DISPLAY_WIDTH) && defined(DISPLAY_HEIGHT)
-        #if defined(DISPLAY_ROTATION) && (DISPLAY_ROTATION == 1 || DISPLAY_ROTATION == 3)
-            lcd_width = DISPLAY_HEIGHT;
-            lcd_height = DISPLAY_WIDTH;
-        #else
-            lcd_width = DISPLAY_WIDTH;
-            lcd_height = DISPLAY_HEIGHT;
-        #endif
-    #endif
+    // Use the display driver's coordinate space (what setAddrWindow expects).
+    // This is the fast-path contract for direct-image uploads.
+    int lcd_width = DISPLAY_WIDTH;
+    int lcd_height = DISPLAY_HEIGHT;
+    if (manager && manager->getDriver()) {
+        lcd_width = manager->getDriver()->width();
+        lcd_height = manager->getDriver()->height();
+    }
     
     // Initialize decoder
     decoder.begin(width, height, lcd_width, lcd_height);
@@ -173,9 +182,19 @@ bool DirectImageScreen::is_timeout_expired() {
     if (display_timeout_ms == 0) {
         return false;
     }
-    
+
+    const unsigned long now = millis();
+
+    // If start time is unset, or is slightly ahead of 'now' (possible when a
+    // different task updates start_time and the LVGL task checks it before the
+    // tick counter advances), rebase instead of underflowing.
+    if (display_start_time == 0 || display_start_time > now) {
+        display_start_time = now;
+        return false;
+    }
+
     // Check if timeout has elapsed
-    unsigned long elapsed = millis() - display_start_time;
+    unsigned long elapsed = now - display_start_time;
     return elapsed >= display_timeout_ms;
 }
 

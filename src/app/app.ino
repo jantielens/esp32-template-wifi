@@ -48,7 +48,7 @@ void onWiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info) {
 void onWiFiDisconnected(WiFiEvent_t event, WiFiEventInfo_t info) {
   uint8_t reason = info.wifi_sta_disconnected.reason;
   Logger.logMessagef("WiFi", "Disconnected - reason: %d", reason);
-  
+
   // Common disconnect reasons:
   // 2 = AUTH_EXPIRE, 3 = AUTH_LEAVE, 4 = ASSOC_EXPIRE
   // 8 = ASSOC_LEAVE, 15 = 4WAY_HANDSHAKE_TIMEOUT
@@ -66,7 +66,7 @@ void setup()
   WiFi.onEvent(onWiFiConnected, ARDUINO_EVENT_WIFI_STA_CONNECTED);
   WiFi.onEvent(onWiFiGotIP, ARDUINO_EVENT_WIFI_STA_GOT_IP);
   WiFi.onEvent(onWiFiDisconnected, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
-  
+
   Logger.logBegin("System Boot");
   Logger.logLinef("Firmware: v%s", FIRMWARE_VERSION);
   Logger.logLinef("Chip: %s (Rev %d)", ESP.getChipModel(), ESP.getChipRevision());
@@ -81,61 +81,67 @@ void setup()
   // Logger.logLinef("Board: %s", board_get_custom_identifier());
   // #endif
   Logger.logEnd();
-  
+
   // Initialize device_config with sensible defaults
   // (Important: must happen before display_manager_init uses the config)
   memset(&device_config, 0, sizeof(DeviceConfig));
   device_config.backlight_brightness = 100;  // Default to full brightness
   device_config.mqtt_port = 0;
   device_config.mqtt_interval_seconds = 0;
-  
+
   // Initialize board-specific hardware
   #if HAS_BUILTIN_LED
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LED_ACTIVE_HIGH ? LOW : HIGH); // LED off initially
   #endif
-  
+
   #if HAS_DISPLAY
   display_manager_init(&device_config);
   display_manager_set_splash_status("Loading config...");
   #endif
-  
+
   #if HAS_TOUCH
   // Initialize touch after display is ready
   touch_manager_init();
   #endif
-  
+
   // Initialize configuration manager
+  #if HAS_DISPLAY
+  display_manager_set_splash_status("Init NVS...");
+  #endif
   config_manager_init();
 
   // Cache flash/sketch metadata early to avoid concurrent access from different tasks later
   // (e.g., MQTT publish + web API calls).
   device_telemetry_init();
-  
+
   // Start CPU monitoring background task
   device_telemetry_start_cpu_monitoring();
-  
+
   // Try to load saved configuration
+  #if HAS_DISPLAY
+  display_manager_set_splash_status("Reading config...");
+  #endif
   config_loaded = config_manager_load(&device_config);
-  
+
   if (!config_loaded) {
     // No config found - set default device name
     String default_name = config_manager_get_default_device_name();
     strlcpy(device_config.device_name, default_name.c_str(), CONFIG_DEVICE_NAME_MAX_LEN);
     device_config.magic = CONFIG_MAGIC;
   }
-  
+
   // Re-apply brightness from loaded config (display was initialized before config load)
   #if HAS_DISPLAY && HAS_BACKLIGHT
   Logger.logLinef("Main: Applying loaded brightness: %d%%", device_config.backlight_brightness);
   display_manager_set_backlight_brightness(device_config.backlight_brightness);
   #endif
-  
+
   // Start WiFi BEFORE initializing web server (critical for ESP32-C3)
   #if HAS_DISPLAY
   display_manager_set_splash_status("Connecting WiFi...");
   #endif
-  
+
   if (!config_loaded) {
     Logger.logMessage("Main", "No config - starting AP mode");
     web_portal_start_ap();
@@ -152,7 +158,7 @@ void setup()
       WiFi.mode(WIFI_STA);
       delay(500);
       Logger.logEnd("Reset complete");
-      
+
       // One more attempt after hard reset
       if (connect_wifi()) {
         start_mdns();
@@ -162,7 +168,7 @@ void setup()
       }
     }
   }
-  
+
   // Initialize web portal AFTER WiFi is started
   web_portal_init(&device_config);
 
@@ -172,15 +178,15 @@ void setup()
   config_manager_sanitize_device_name(device_config.device_name, sanitized, sizeof(sanitized));
   mqtt_manager.begin(&device_config, device_config.device_name, sanitized);
   #endif
-  
+
   lastHeartbeat = millis();
   Logger.logMessage("Main", "Setup complete");
-  
+
   #if HAS_DISPLAY
   // Show splash for minimum duration to ensure visibility
   display_manager_set_splash_status("Ready!");
   delay(2000);  // 2 seconds to see splash + status updates
-  
+
   // Navigate to info screen
   display_manager_show_info();
   #endif
@@ -199,9 +205,9 @@ void loop()
   #if HAS_MQTT
   mqtt_manager.loop();
   #endif
-  
+
   unsigned long currentMillis = millis();
-  
+
   // WiFi watchdog - monitor connection and reconnect if needed
   // Only run if we're not in AP mode (AP mode is the fallback, should stay active)
   if (config_loaded && !web_portal_is_ap_mode() && currentMillis - lastWiFiCheck >= WIFI_CHECK_INTERVAL) {
@@ -213,21 +219,21 @@ void loop()
     }
     lastWiFiCheck = currentMillis;
   }
-  
+
   // Check if it's time for heartbeat
   if (currentMillis - lastHeartbeat >= HEARTBEAT_INTERVAL) {
     if (WiFi.status() == WL_CONNECTED) {
-      Logger.logQuickf("Heartbeat", "Up: %ds | Heap: %d | WiFi: %s (%s)", 
-        currentMillis / 1000, ESP.getFreeHeap(), 
+      Logger.logQuickf("Heartbeat", "Up: %ds | Heap: %d | WiFi: %s (%s)",
+        currentMillis / 1000, ESP.getFreeHeap(),
         WiFi.localIP().toString().c_str(), WiFi.getHostname());
     } else {
-      Logger.logQuickf("Heartbeat", "Up: %ds | Heap: %d | WiFi: Disconnected", 
+      Logger.logQuickf("Heartbeat", "Up: %ds | Heap: %d | WiFi: Disconnected",
         currentMillis / 1000, ESP.getFreeHeap());
     }
-    
+
     lastHeartbeat = currentMillis;
   }
-  
+
   delay(10);
 }
 
@@ -235,11 +241,11 @@ void loop()
 bool connect_wifi() {
   Logger.logBegin("WiFi Connection");
   Logger.logLinef("SSID: %s", device_config.wifi_ssid);
-  
+
   // === WiFi Hardware Reset Sequence ===
   // Disable persistent WiFi config (we manage our own via NVS)
   WiFi.persistent(false);
-  
+
   // Full WiFi reset to clear stale state and prevent hardware corruption
   WiFi.disconnect(true);  // Disconnect + erase stored credentials
   delay(100);
@@ -247,14 +253,14 @@ bool connect_wifi() {
   delay(500);             // Wait for hardware to settle
   WiFi.mode(WIFI_STA);    // Back to station mode
   delay(100);
-  
+
   // Enable auto-reconnect at WiFi stack level
   WiFi.setAutoReconnect(true);
-  
+
   // Prepare sanitized hostname
   char sanitized[CONFIG_DEVICE_NAME_MAX_LEN];
   config_manager_sanitize_device_name(device_config.device_name, sanitized, CONFIG_DEVICE_NAME_MAX_LEN);
-  
+
   // Set WiFi hostname for mDNS and internal use
   // NOTE: ESP32's lwIP stack has limited DHCP Option 12 (hostname) support
   // The hostname may not always appear in router DHCP tables due to ESP-IDF/lwIP limitations
@@ -263,71 +269,71 @@ bool connect_wifi() {
     // Set via WiFi library
     WiFi.setHostname(sanitized);
     Logger.logLinef("Hostname: %s", sanitized);
-    
+
     // Also set via esp_netif API (for compatibility)
     esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
     if (netif != NULL) {
       esp_netif_set_hostname(netif, sanitized);
     }
   }
-  
+
   // Configure fixed IP if provided
   if (strlen(device_config.fixed_ip) > 0) {
     Logger.logBegin("Fixed IP Config");
-    
+
     IPAddress local_ip, gateway, subnet, dns1, dns2;
-    
+
     if (!local_ip.fromString(device_config.fixed_ip)) {
       Logger.logEnd("Invalid IP address");
       Logger.logEnd("Connection failed");
       return false;
     }
-    
+
     if (!subnet.fromString(device_config.subnet_mask)) {
       Logger.logEnd("Invalid subnet mask");
       Logger.logEnd("Connection failed");
       return false;
     }
-    
+
     if (!gateway.fromString(device_config.gateway)) {
       Logger.logEnd("Invalid gateway");
       Logger.logEnd("Connection failed");
       return false;
     }
-    
+
     // DNS1: use provided, or default to gateway
     if (strlen(device_config.dns1) > 0) {
       dns1.fromString(device_config.dns1);
     } else {
       dns1 = gateway;
     }
-    
+
     // DNS2: optional
     if (strlen(device_config.dns2) > 0) {
       dns2.fromString(device_config.dns2);
     } else {
       dns2 = IPAddress(0, 0, 0, 0);
     }
-    
+
     if (!WiFi.config(local_ip, gateway, subnet, dns1, dns2)) {
       Logger.logEnd("Configuration failed");
       Logger.logEnd("Connection failed");
       return false;
     }
-    
+
     Logger.logLinef("IP: %s", device_config.fixed_ip);
     Logger.logEnd();
   }
-  
+
   WiFi.begin(device_config.wifi_ssid, device_config.wifi_password);
-  
+
   // Try to connect with exponential backoff
   for (int attempt = 0; attempt < WIFI_MAX_ATTEMPTS; attempt++) {
     unsigned long backoff = WIFI_BACKOFF_BASE * (attempt + 1);
     unsigned long start = millis();
-    
+
     Logger.logLinef("Attempt %d/%d (timeout %ds)", attempt + 1, WIFI_MAX_ATTEMPTS, backoff / 1000);
-    
+
     while (millis() - start < backoff) {
       wl_status_t status = WiFi.status();
       if (status == WL_CONNECTED) {
@@ -340,16 +346,16 @@ bool connect_wifi() {
         Logger.logLinef("  http://%s", WiFi.localIP().toString().c_str());
         Logger.logLinef("  http://%s.local", WiFi.getHostname());
         Logger.logEnd("Connected");
-        
+
         return true;
       }
       delay(100);
     }
-    
+
     // Log detailed failure reason for diagnostics
     wl_status_t status = WiFi.status();
     if (status != WL_CONNECTED) {
-      const char* reason = 
+      const char* reason =
         (status == WL_NO_SSID_AVAIL) ? "SSID not found" :
         (status == WL_CONNECT_FAILED) ? "Connect failed (wrong password?)" :
         (status == WL_CONNECTION_LOST) ? "Connection lost" :
@@ -358,7 +364,7 @@ bool connect_wifi() {
       Logger.logLinef("Status: %s (%d)", reason, status);
     }
   }
-  
+
   Logger.logEnd("All attempts failed");
   return false;
 }
@@ -366,50 +372,50 @@ bool connect_wifi() {
 // Start mDNS service with enhanced TXT records
 void start_mdns() {
   Logger.logBegin("mDNS");
-  
+
   char sanitized[CONFIG_DEVICE_NAME_MAX_LEN];
   config_manager_sanitize_device_name(device_config.device_name, sanitized, CONFIG_DEVICE_NAME_MAX_LEN);
-  
+
   if (strlen(sanitized) == 0) {
     Logger.logEnd("Empty hostname");
     return;
   }
-  
+
   if (MDNS.begin(sanitized)) {
     Logger.logLinef("Name: %s.local", sanitized);
-    
+
     // Add HTTP service
     MDNS.addService("http", "tcp", 80);
-    
+
     // Add TXT records with device metadata (per RFC 6763)
     // Keep keys ≤9 chars, total TXT record <400 bytes
-    
+
     // Core device identification
     MDNS.addServiceTxt("http", "tcp", "version", FIRMWARE_VERSION);
     MDNS.addServiceTxt("http", "tcp", "model", ESP.getChipModel());
-    
+
     // MAC address (last 4 hex digits for identification)
     String mac = WiFi.macAddress();
     mac.replace(":", "");
     String mac_short = mac.substring(mac.length() - 4);
     MDNS.addServiceTxt("http", "tcp", "mac", mac_short.c_str());
-    
+
     // Device type and manufacturer
     MDNS.addServiceTxt("http", "tcp", "ty", "iot-device");
     MDNS.addServiceTxt("http", "tcp", "mf", "ESP32-Tmpl");
-    
+
     // Capabilities
     MDNS.addServiceTxt("http", "tcp", "features", "wifi,http,api");
-    
+
     // User-friendly description
     MDNS.addServiceTxt("http", "tcp", "note", "WiFi Portal Device");
-    
+
     // Configuration URL
     String config_url = "http://";
     config_url += sanitized;
     config_url += ".local";
     MDNS.addServiceTxt("http", "tcp", "url", config_url.c_str());
-    
+
     Logger.logLine("TXT records: version, model, mac, ty, features");
     Logger.logEnd();
   } else {

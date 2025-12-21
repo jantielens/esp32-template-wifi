@@ -101,6 +101,20 @@ void Arduino_GFX_Driver::setRotation(uint8_t rotation) {
     }
 }
 
+int Arduino_GFX_Driver::width() {
+    if (displayRotation == 1 || displayRotation == 3) {
+        return (int)displayHeight;
+    }
+    return (int)displayWidth;
+}
+
+int Arduino_GFX_Driver::height() {
+    if (displayRotation == 1 || displayRotation == 3) {
+        return (int)displayWidth;
+    }
+    return (int)displayHeight;
+}
+
 void Arduino_GFX_Driver::setBacklight(bool on) {
     #ifdef LCD_BL_PIN
     #if HAS_BACKLIGHT

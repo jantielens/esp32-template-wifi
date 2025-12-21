@@ -66,6 +66,12 @@ static bool ota_in_progress = false;
 static size_t ota_progress = 0;
 static size_t ota_total = 0;
 
+#if HAS_IMAGE_API && HAS_DISPLAY
+// AsyncWebServer callbacks run on the AsyncTCP task; never touch LVGL/display from there.
+// Use this flag to defer "hide current image / return" operations to the main loop.
+static volatile bool pending_image_hide_request = false;
+#endif
+
 // ===== WEB SERVER HANDLERS =====
 
 // Handle root - redirect to network.html in AP mode, serve home in full mode
@@ -408,6 +414,18 @@ void handleGetVersion(AsyncWebServerRequest *request) {
     #if HAS_DISPLAY
     // Display screen information
     response->print(",\"has_display\":true");
+
+    // Display resolution (driver coordinate space for direct writes / image upload)
+    int display_coord_width = DISPLAY_WIDTH;
+    int display_coord_height = DISPLAY_HEIGHT;
+    if (displayManager && displayManager->getDriver()) {
+        display_coord_width = displayManager->getDriver()->width();
+        display_coord_height = displayManager->getDriver()->height();
+    }
+    response->print(",\"display_coord_width\":");
+    response->print(display_coord_width);
+    response->print(",\"display_coord_height\":");
+    response->print(display_coord_height);
     
     // Get available screens
     size_t screen_count = 0;
@@ -712,14 +730,15 @@ void web_portal_init(DeviceConfig *config) {
     ImageApiBackend backend;
     backend.hide_current_image = []() {
         #if HAS_DISPLAY
-        // Don't call screen->hide() here - it should only be called from LVGL task
-        // The screen transition will happen when showDirectImage() is called from main loop
-        // This callback is called from async HTTP handler (different task/no mutex)
+        // Called from AsyncTCP task and sometimes from the main loop.
+        // Always defer actual display/LVGL operations to the main loop.
+        pending_image_hide_request = true;
         #endif
     };
     
     backend.start_strip_session = [](int width, int height, unsigned long timeout_ms, unsigned long start_time) -> bool {
         #if HAS_DISPLAY
+        (void)start_time;
         DirectImageScreen* screen = display_manager_get_direct_image_screen();
         if (!screen) {
             Logger.logMessage("ImageAPI", "ERROR: No direct image screen");
@@ -732,7 +751,6 @@ void web_portal_init(DeviceConfig *config) {
         
         // Configure timeout and start session
         screen->set_timeout(timeout_ms);
-        screen->set_start_time(start_time);
         screen->begin_strip_session(width, height);
         return true;
         #else
@@ -758,19 +776,16 @@ void web_portal_init(DeviceConfig *config) {
     // Setup configuration
     ImageApiConfig image_cfg;
 
-    // Use the *visible* resolution. LVGL rotates the UI when DISPLAY_ROTATION is 1/3,
-    // and direct-image uploads should target what the user sees (e.g., 480x320).
-    #if defined(DISPLAY_WIDTH) && defined(DISPLAY_HEIGHT)
-        #if defined(DISPLAY_ROTATION) && (DISPLAY_ROTATION == 1 || DISPLAY_ROTATION == 3)
-            image_cfg.lcd_width = DISPLAY_HEIGHT;
-            image_cfg.lcd_height = DISPLAY_WIDTH;
-        #else
-            image_cfg.lcd_width = DISPLAY_WIDTH;
-            image_cfg.lcd_height = DISPLAY_HEIGHT;
-        #endif
-    #else
-        image_cfg.lcd_width = 240;  // Fallback default
-        image_cfg.lcd_height = 320;  // Fallback default
+    // Use the display driver's coordinate space (fast path for direct image writes).
+    // This intentionally avoids LVGL calls and any DISPLAY_ROTATION heuristics.
+    image_cfg.lcd_width = DISPLAY_WIDTH;
+    image_cfg.lcd_height = DISPLAY_HEIGHT;
+
+    #if HAS_DISPLAY
+        if (displayManager && displayManager->getDriver()) {
+            image_cfg.lcd_width = displayManager->getDriver()->width();
+            image_cfg.lcd_height = displayManager->getDriver()->height();
+        }
     #endif
     
     image_cfg.max_image_size_bytes = IMAGE_API_MAX_SIZE_BYTES;
@@ -867,6 +882,16 @@ bool web_portal_ota_in_progress() {
 #if HAS_IMAGE_API
 // Process pending image uploads (call from main loop)
 void web_portal_process_pending_images() {
+    // If the image API asked us to hide/dismiss the current image (or recover
+    // from a failure), do it from the main loop so DisplayManager can safely
+    // clear direct-image mode.
+    #if HAS_DISPLAY
+    if (pending_image_hide_request) {
+        pending_image_hide_request = false;
+        display_manager_return_to_previous_screen();
+    }
+    #endif
+
     image_api_process_pending(ota_in_progress);
 }
 #endif

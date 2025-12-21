@@ -115,11 +115,6 @@ static void handleImageUpload(AsyncWebServerRequest *request, String filename, s
             pending_image_op.size = 0;
         }
 
-        // Hide current image (backend decides what this means)
-        if (g_backend.hide_current_image) {
-            g_backend.hide_current_image();
-        }
-
         Logger.logLinef("Free heap after clear: %u bytes", ESP.getFreeHeap());
 
         // Check file size
@@ -501,6 +496,9 @@ void image_api_process_pending(bool ota_in_progress) {
         if (strip_index == 0) {
             if (!g_backend.start_strip_session) {
                 Logger.logMessage("Portal", "ERROR: No strip session handler");
+                if (g_backend.hide_current_image) {
+                    g_backend.hide_current_image();
+                }
                 free((void*)pending_strip_op.buffer);
                 pending_strip_op.buffer = nullptr;
                 upload_state = UPLOAD_IDLE;
@@ -510,6 +508,9 @@ void image_api_process_pending(bool ota_in_progress) {
             if (!g_backend.start_strip_session(pending_strip_op.image_width, pending_strip_op.image_height, 
                                                 pending_strip_op.timeout_ms, pending_strip_op.start_time)) {
                 Logger.logMessage("Portal", "ERROR: Failed to init strip session");
+                if (g_backend.hide_current_image) {
+                    g_backend.hide_current_image();
+                }
                 free((void*)pending_strip_op.buffer);
                 pending_strip_op.buffer = nullptr;
                 upload_state = UPLOAD_IDLE;
@@ -530,6 +531,9 @@ void image_api_process_pending(bool ota_in_progress) {
 
         if (!success) {
             Logger.logMessagef("Portal", "ERROR: Failed to decode strip %d", strip_index);
+            if (g_backend.hide_current_image) {
+                g_backend.hide_current_image();
+            }
         } else if (strip_index == total_strips - 1) {
             Logger.logMessagef("Portal", "\u2713 All %d strips decoded", total_strips);
         }
@@ -560,6 +564,9 @@ void image_api_process_pending(bool ota_in_progress) {
 
         if (!success) {
             Logger.logMessage("Portal", "ERROR: Failed to display image");
+            if (g_backend.hide_current_image) {
+                g_backend.hide_current_image();
+            }
         }
         return;
     }

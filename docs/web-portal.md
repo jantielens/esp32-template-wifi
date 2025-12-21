@@ -357,6 +357,8 @@ Returns comprehensive device information.
   "cpu_freq": 160,
   "flash_chip_size": 4194304,
   "psram_size": 0,
+  "display_coord_width": 320,
+  "display_coord_height": 240,
   "free_heap": 250000,
   "sketch_size": 1048576,
   "free_sketch_space": 2097152,
@@ -372,6 +374,9 @@ Returns comprehensive device information.
 - `wifi_hostname`: WiFi/DHCP hostname
 - `mdns_name`: Full mDNS name (hostname + `.local`)
 - `hostname`: Short hostname
+
+**Display Fields (when `HAS_DISPLAY` enabled):**
+- `display_coord_width`, `display_coord_height`: Display driver coordinate space dimensions (what direct pixel writes and the Image API target)
 
 ### Health Monitoring
 
@@ -497,8 +502,7 @@ Returns current portal operating mode.
 - `"full"`: WiFi connected mode
 
 ### System Control
-
-#### `POST /api/reboot`
+- `width`/`height` must match the device's display coordinate-space resolution (see `GET /api/info` fields `display_coord_width`/`display_coord_height`)
 
 Reboot the device without saving configuration changes.
 
@@ -582,6 +586,7 @@ Upload a JPEG image for display on the device screen (full mode - deferred decod
 - Device shows image on screen, then returns to previous screen after timeout
 - Use for single image uploads or testing
 - Requires enough heap memory to buffer entire JPEG
+- `width`/`height` must match the device's display coordinate-space resolution (see `GET /api/info` fields `display_coord_width`/`display_coord_height`)
 
 #### `POST /api/display/image/strips`
 
@@ -624,7 +629,7 @@ Upload JPEG image strips for memory-efficient display (async decode).
 ```bash
 # Python upload script included in tools/
 python3 tools/upload_image.py <device-ip> --image photo.jpg --mode strip --quality 85
-python3 tools/upload_image.py <device-ip> --generate 240x280 --mode full --timeout 5000
+python3 tools/upload_image.py <device-ip> --generate --mode full --timeout 5000
 ```
 
 #### `DELETE /api/display/image`

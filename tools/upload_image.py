@@ -301,6 +301,29 @@ def parse_resolution(res_str: str) -> Tuple[int, int]:
     return width, height
 
 
+def fetch_info_api(host: str, verbose: bool = False) -> dict:
+    """Fetch /api/info JSON from the device."""
+    url = f"http://{host}/api/info"
+    if verbose:
+        print_info(f"Fetching device info: {url}")
+    response = requests.get(url, timeout=10)
+    response.raise_for_status()
+    return response.json()
+
+
+def get_device_display_coord_resolution(host: str, verbose: bool = False) -> Tuple[int, int]:
+    """Resolve display coordinate-space resolution from /api/info."""
+    info = fetch_info_api(host, verbose=verbose)
+    width = info.get('display_coord_width')
+    height = info.get('display_coord_height')
+
+    if not isinstance(width, int) or not isinstance(height, int):
+        raise ValueError("Device /api/info did not return integer display_coord_width/display_coord_height")
+    if width <= 0 or height <= 0:
+        raise ValueError(f"Invalid device resolution from /api/info: {width}x{height}")
+    return width, height
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Upload and display JPEG images on ESP32 devices',
@@ -310,17 +333,24 @@ Examples:
   %(prog)s 192.168.1.100 --image photo.jpg
   %(prog)s 192.168.1.100 --image photo.jpg --mode strip --strip-height 16
   %(prog)s 192.168.1.100 --generate 320x240 --timeout 30
+    %(prog)s 192.168.1.100 --generate --timeout 30   # auto-detect from /api/info
   %(prog)s esp32-cyd.local --generate 240x240
   %(prog)s 192.168.1.100 --dismiss
         """
     )
     
-    parser.add_argument('host', nargs='?', help='Device IP address or mDNS hostname (not required with --save-only)')
+    parser.add_argument('host', nargs='?', help='Device IP address or mDNS hostname')
     
     # Image source (mutually exclusive)
     source_group = parser.add_mutually_exclusive_group(required=True)
     source_group.add_argument('--image', metavar='PATH', help='Path to JPEG image file')
-    source_group.add_argument('--generate', metavar='WxH', help='Generate test image with resolution (e.g., 320x240)')
+    source_group.add_argument(
+        '--generate',
+        nargs='?',
+        const='auto',
+        metavar='[WxH]',
+        help='Generate test image. Provide WxH (e.g., 320x240) or omit to auto-detect from /api/info'
+    )
     source_group.add_argument('--dismiss', action='store_true', help='Dismiss currently displayed image')
     
     # Upload options
@@ -337,6 +367,11 @@ Examples:
     parser.add_argument('--verbose', '-v', action='store_true', help='Show detailed HTTP responses')
     
     args = parser.parse_args()
+
+    # Host is required for all current operations.
+    if not args.host:
+        print_error("Host is required (device IP or mDNS hostname)")
+        sys.exit(1)
     
     # Validate parameters
     if args.strip_height < 1 or args.strip_height > 1000:
@@ -376,13 +411,21 @@ Examples:
     else:  # args.generate
         # Generate test image
         try:
-            width, height = parse_resolution(args.generate)
+            if args.generate is None:
+                raise ValueError("Missing value for --generate")
+
+            if args.generate == 'auto':
+                width, height = get_device_display_coord_resolution(args.host, verbose=args.verbose)
+                print_info(f"Auto-detected resolution from /api/info: {width}x{height}")
+            else:
+                width, height = parse_resolution(args.generate)
+
             jpeg_data = generate_test_image(width, height, args.quality)
             # Re-open to get PIL image for --save option
             if args.save:
                 jpeg_image = Image.open(io.BytesIO(jpeg_data))
-        except ValueError as e:
-            print_error(f"Invalid resolution: {e}")
+        except (ValueError, requests.exceptions.RequestException) as e:
+            print_error(f"Failed to determine resolution: {e}")
             sys.exit(1)
     
     # Save image to file if requested (before upload)

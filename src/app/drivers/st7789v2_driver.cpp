@@ -240,10 +240,35 @@ void ST7789V2_Driver::pushColors(uint16_t* data, uint32_t len, bool swap_bytes) 
     // Push pixel data
     digitalWrite(LCD_DC_PIN, HIGH);
     // CS already managed by startWrite/endWrite
-    
-    for (uint32_t i = 0; i < len; i++) {
-        spi->transfer((uint8_t)(data[i] >> 8));
-        spi->transfer((uint8_t)(data[i] & 0xFF));
+
+    if (!data || len == 0) {
+        return;
+    }
+
+    // LVGL typically provides RGB565 in CPU-endian order.
+    // The panel expects MSB-first bytes on the wire.
+    // To enable fast bulk SPI transfers, optionally swap bytes in-place,
+    // perform a single write, then swap back.
+    if (swap_bytes) {
+        uint8_t* b = (uint8_t*)data;
+        for (uint32_t i = 0; i < len; i++) {
+            uint8_t tmp = b[i * 2 + 0];
+            b[i * 2 + 0] = b[i * 2 + 1];
+            b[i * 2 + 1] = tmp;
+        }
+    }
+
+    // Bulk transfer is dramatically faster than per-byte spi->transfer() loops.
+    // SPIClass::writeBytes is provided by the ESP32 Arduino core.
+    spi->writeBytes((const uint8_t*)data, len * 2);
+
+    if (swap_bytes) {
+        uint8_t* b = (uint8_t*)data;
+        for (uint32_t i = 0; i < len; i++) {
+            uint8_t tmp = b[i * 2 + 0];
+            b[i * 2 + 0] = b[i * 2 + 1];
+            b[i * 2 + 1] = tmp;
+        }
     }
 }
 

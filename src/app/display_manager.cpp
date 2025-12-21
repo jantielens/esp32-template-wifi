@@ -28,7 +28,7 @@ DisplayManager::DisplayManager(DeviceConfig* cfg)
       #if HAS_IMAGE_API
       directImageScreen(this),
       #endif
-    lvglTaskHandle(nullptr), lvglMutex(nullptr), screenCount(0), buf(nullptr), flushPending(false) {
+        lvglTaskHandle(nullptr), lvglMutex(nullptr), screenCount(0), buf(nullptr), flushPending(false), directImageActive(false) {
     // Instantiate selected display driver
     #if DISPLAY_DRIVER == DISPLAY_DRIVER_TFT_ESPI
     driver = new TFT_eSPI_Driver();
@@ -94,6 +94,31 @@ DisplayManager::~DisplayManager() {
     }
 }
 
+const char* DisplayManager::getScreenIdForInstance(const Screen* screen) const {
+    if (!screen) return nullptr;
+
+    // Splash is boot-specific and intentionally not part of availableScreens.
+    if (screen == &splashScreen) {
+        return "splash";
+    }
+
+    #if HAS_IMAGE_API
+    // Direct image mode is API-driven and intentionally not part of availableScreens.
+    if (screen == &directImageScreen) {
+        return "direct_image";
+    }
+    #endif
+
+    // Registered runtime screens.
+    for (size_t i = 0; i < screenCount; i++) {
+        if (availableScreens[i].instance == screen) {
+            return availableScreens[i].id;
+        }
+    }
+
+    return nullptr;
+}
+
 // LVGL flush callback
 void DisplayManager::flushCallback(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p) {
     DisplayManager* mgr = (DisplayManager*)disp->user_data;
@@ -101,7 +126,7 @@ void DisplayManager::flushCallback(lv_disp_drv_t *disp, const lv_area_t *area, l
     // When DirectImageScreen is active, the JPEG decoder writes directly to the LCD.
     // Avoid concurrent SPI/TFT_eSPI access from LVGL flushes (can cause WDT/deadlocks).
     #if HAS_IMAGE_API
-    if (mgr && mgr->currentScreen == &mgr->directImageScreen) {
+    if (mgr && (mgr->directImageActive || mgr->currentScreen == &mgr->directImageScreen)) {
         lv_disp_flush_ready(disp);
         return;
     }
@@ -169,13 +194,32 @@ void DisplayManager::lvglTask(void* pvParameter) {
         
         // Process pending screen switch (deferred from external calls)
         if (mgr->pendingScreen) {
+            Screen* target = mgr->pendingScreen;
             if (mgr->currentScreen) {
                 mgr->currentScreen->hide();
             }
+
+            #if HAS_IMAGE_API
+            // DirectImageScreen return behavior uses previousScreen.
+            // Do not clobber it here for DirectImageScreen transitions; it's managed
+            // explicitly in showDirectImage()/returnToPreviousScreen().
+            if (mgr->pendingScreen != &mgr->directImageScreen) {
+                mgr->previousScreen = mgr->currentScreen;
+            }
+            #else
             mgr->previousScreen = mgr->currentScreen;
-            mgr->currentScreen = mgr->pendingScreen;
+            #endif
+            mgr->currentScreen = target;
             mgr->currentScreen->show();
             mgr->pendingScreen = nullptr;
+
+            #if HAS_IMAGE_API
+            // Keep the flush gate in sync with the active screen.
+            mgr->directImageActive = (mgr->currentScreen == &mgr->directImageScreen);
+            #endif
+
+            const char* screenId = mgr->getScreenIdForInstance(mgr->currentScreen);
+            Logger.logMessagef("Display", "Switched to %s", screenId ? screenId : "(unregistered)");
         }
         
         // Handle LVGL rendering (animations, timers, etc.)
@@ -199,7 +243,7 @@ void DisplayManager::lvglTask(void* pvParameter) {
         // Sleep based on LVGL's suggested next timer deadline.
         // Clamp to keep UI responsive while avoiding busy looping on static screens.
         if (delayMs < 1) delayMs = 1;
-        if (delayMs > 10) delayMs = 10;
+        if (delayMs > 20) delayMs = 20;
         vTaskDelay(pdMS_TO_TICKS(delayMs));
     }
 }
@@ -351,6 +395,14 @@ void DisplayManager::showTest() {
 
 #if HAS_IMAGE_API
 void DisplayManager::showDirectImage() {
+    // If we're already showing the DirectImageScreen, don't queue a redundant
+    // LVGL screen switch (it would also risk clobbering previousScreen).
+    if (currentScreen == &directImageScreen) {
+        directImageActive = true;
+        Logger.logMessage("Display", "Already on DirectImageScreen");
+        return;
+    }
+
     // Save current screen so we can return to it after timeout
     // If we're already on DirectImageScreen, don't overwrite previousScreen
     if (currentScreen && currentScreen != &directImageScreen) {
@@ -358,6 +410,9 @@ void DisplayManager::showDirectImage() {
     }
     
     // Defer screen switch to lvglTask (non-blocking)
+    // Immediately gate LVGL flushes so the decoder can safely write even before
+    // the screen switch is processed by the LVGL task.
+    directImageActive = true;
     pendingScreen = &directImageScreen;
     Logger.logMessage("Display", "Queued switch to DirectImageScreen");
 }
@@ -366,6 +421,7 @@ void DisplayManager::returnToPreviousScreen() {
     // Defer screen switch to lvglTask (non-blocking)
     // If no previous screen, default to info screen
     Screen* targetScreen = previousScreen ? previousScreen : &infoScreen;
+    directImageActive = false;
     pendingScreen = targetScreen;
     previousScreen = nullptr;  // Clear previous screen reference
     Logger.logMessage("Display", "Queued return to previous screen");
@@ -483,6 +539,12 @@ DirectImageScreen* display_manager_get_direct_image_screen() {
         return displayManager->getDirectImageScreen();
     }
     return nullptr;
+}
+
+void display_manager_return_to_previous_screen() {
+    if (displayManager) {
+        displayManager->returnToPreviousScreen();
+    }
 }
 #endif // HAS_IMAGE_API
 

@@ -34,6 +34,14 @@ void TFT_eSPI_Driver::setRotation(uint8_t rotation) {
     tft.setRotation(rotation);
 }
 
+int TFT_eSPI_Driver::width() {
+    return (int)tft.width();
+}
+
+int TFT_eSPI_Driver::height() {
+    return (int)tft.height();
+}
+
 void TFT_eSPI_Driver::setBacklight(bool on) {
     #if HAS_BACKLIGHT
     // When backlight control available, use brightness (on=100%, off=0%)
