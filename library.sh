@@ -40,11 +40,18 @@ EOF
 }
 
 check_arduino_cli() {
-    if [ ! -f "$ARDUINO_CLI" ]; then
-        echo -e "${RED}Error: arduino-cli not found at $ARDUINO_CLI${NC}"
-        echo "Please run ./setup.sh first"
-        exit 1
+    # ARDUINO_CLI may be an absolute path OR a command name.
+    if command -v "$ARDUINO_CLI" >/dev/null 2>&1; then
+        return 0
     fi
+    if [[ -x "$ARDUINO_CLI" ]]; then
+        return 0
+    fi
+
+    echo -e "${RED}Error: arduino-cli not found or not executable: $ARDUINO_CLI${NC}"
+    echo "PATH=\"$PATH\""
+    echo "Tip: run ./setup.sh (local install) or export ARDUINO_CLI=/full/path/to/arduino-cli"
+    exit 1
 }
 
 search_library() {

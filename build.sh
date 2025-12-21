@@ -34,13 +34,16 @@ build_board() {
     
     # Check for board-specific configuration overrides
     EXTRA_FLAGS=()
+    
     if [[ -d "$board_override_dir" ]]; then
         echo -e "${YELLOW}Config:    Using board-specific overrides from src/boards/$board_name/${NC}"
         # Add include path and define BOARD_HAS_OVERRIDE to trigger board_overrides.h inclusion
+        # Important: apply to BOTH C++ and C compilation units (LVGL is built as C).
         # Sanitize board name for valid C++ macro (alphanumeric + underscore only)
         board_macro="BOARD_${board_name^^}"
         board_macro="${board_macro//[^A-Z0-9_]/_}"
         EXTRA_FLAGS+=(--build-property "compiler.cpp.extra_flags=-I$board_override_dir -D$board_macro -DBOARD_HAS_OVERRIDE=1")
+        EXTRA_FLAGS+=(--build-property "compiler.c.extra_flags=-I$board_override_dir -D$board_macro -DBOARD_HAS_OVERRIDE=1")
     else
         echo "Config:    Using default configuration"
     fi
@@ -59,12 +62,49 @@ build_board() {
     fi
 
     # Compile the sketch with optional board-specific includes and build props
-    "$ARDUINO_CLI" compile \
+    # Run compile and capture exit code (disable set -e temporarily to capture output even on failure)
+    local build_output
+    local build_exit_code
+    set +e
+    build_output=$("$ARDUINO_CLI" compile \
         --fqbn "$fqbn" \
         "${EXTRA_FLAGS[@]}" \
         "${BUILD_PROPS_ARR[@]}" \
         --output-dir "$board_build_path" \
-        "$SKETCH_PATH"
+        "$SKETCH_PATH" 2>&1)
+    build_exit_code=$?
+    set -e
+    
+    # Always show the build output
+    echo "$build_output"
+    
+    # Check for build failure
+    if [[ $build_exit_code -ne 0 ]]; then
+        echo ""
+        echo -e "${RED}✗ Build failed for $board_name (exit code: $build_exit_code)${NC}"
+        return 1
+    fi
+    
+    # Check for undefined references (silent linker warnings)
+    if echo "$build_output" | grep -q "undefined reference to"; then
+        echo ""
+        echo -e "${RED}✗ Build completed but has undefined symbol errors:${NC}"
+        echo "$build_output" | grep "undefined reference to" | sed 's/^/  /'
+        echo ""
+        echo -e "${YELLOW}Common causes:${NC}"
+        echo "  - Missing driver .cpp inclusion in display_drivers.cpp or touch_drivers.cpp"
+        echo "  - Arduino doesn't compile subdirectory .cpp files automatically"
+        echo "  - Check that driver implementation files are included via #include"
+        return 1
+    fi
+    
+    # Check for other common warning patterns that indicate problems
+    if echo "$build_output" | grep -qE "(warning:.*will not be executed|error:|fatal error:)"; then
+        echo ""
+        echo -e "${YELLOW}⚠ Build completed with warnings/errors:${NC}"
+        echo "$build_output" | grep -E "(warning:.*will not be executed|error:|fatal error:)" | sed 's/^/  /'
+        echo ""
+    fi
     
     echo ""
     echo -e "${GREEN}✓ Build complete for $board_name${NC}"

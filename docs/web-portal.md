@@ -357,6 +357,8 @@ Returns comprehensive device information.
   "cpu_freq": 160,
   "flash_chip_size": 4194304,
   "psram_size": 0,
+  "display_coord_width": 320,
+  "display_coord_height": 240,
   "free_heap": 250000,
   "sketch_size": 1048576,
   "free_sketch_space": 2097152,
@@ -373,6 +375,9 @@ Returns comprehensive device information.
 - `mdns_name`: Full mDNS name (hostname + `.local`)
 - `hostname`: Short hostname
 
+**Display Fields (when `HAS_DISPLAY` enabled):**
+- `display_coord_width`, `display_coord_height`: Display driver coordinate space dimensions (what direct pixel writes and the Image API target)
+
 ### Health Monitoring
 
 #### `GET /api/health`
@@ -385,6 +390,8 @@ Returns real-time device health statistics.
   "uptime_seconds": 3600,
   "reset_reason": "Power On",
   "cpu_usage": 15,
+  "cpu_usage_min": 8,
+  "cpu_usage_max": 32,
   "cpu_freq": 160,
   "temperature": 42,
   "heap_free": 250000,
@@ -401,6 +408,7 @@ Returns real-time device health statistics.
 ```
 
 **Notes:**
+- `cpu_usage_min`, `cpu_usage_max`: Minimum and maximum CPU usage over the last 60 seconds
 - `temperature`: `null` on chips without internal sensor (original ESP32)
 - `wifi_rssi`, `wifi_channel`, `ip_address`, `hostname`: `null` when not connected
 
@@ -494,8 +502,7 @@ Returns current portal operating mode.
 - `"full"`: WiFi connected mode
 
 ### System Control
-
-#### `POST /api/reboot`
+- `width`/`height` must match the device's display coordinate-space resolution (see `GET /api/info` fields `display_coord_width`/`display_coord_height`)
 
 Reboot the device without saving configuration changes.
 
@@ -543,6 +550,175 @@ Upload new firmware binary for over-the-air update.
 - Progress logged to serial monitor
 - Web portal shows upload progress bar, then automatically polls for reconnection (see [Automatic Reconnection](#automatic-reconnection-after-reboot))
 
+### Image Display (HAS_DISPLAY enabled)
+
+#### `POST /api/display/image`
+
+Upload a JPEG image for display on the device screen (full mode - deferred decode).
+
+**Request:**
+- Content-Type: `multipart/form-data`
+- File field:
+  - `file`: JPEG file
+- Query parameters:
+  - `timeout` (optional): Display timeout in seconds (`0` = permanent; defaults to firmware setting)
+
+**Response (Success):**
+```json
+{
+  "success": true,
+  "message": "Image queued for display"
+}
+```
+
+**Response (Error):**
+```json
+{
+  "success": false,
+  "message": "Error description"
+}
+```
+
+**Notes:**
+- Image is queued and decoded asynchronously by main loop
+- Device shows image on screen, then returns to previous screen after timeout
+- Use for single image uploads or testing
+- Requires enough heap memory to buffer entire JPEG
+- The safest client behavior is to pre-size (and if needed, letterbox) the JPEG to the device's display coordinate-space resolution (see `GET /api/info` fields `display_coord_width`/`display_coord_height`)
+
+#### Home Assistant (AppDaemon): Send Camera Snapshots to ESP32
+
+You can display Home Assistant camera snapshots on the ESP32 by deploying the included AppDaemon app:
+
+- Script: `tools/camera_to_esp32.py`
+- Upload method: single-image upload (`POST /api/display/image`)
+- Resolution: auto-detected from the ESP32 (`GET /api/info` → `display_coord_width`/`display_coord_height`)
+
+**Prerequisites**
+- Firmware running on the ESP32 with `HAS_DISPLAY` and `HAS_IMAGE_API` enabled
+- Home Assistant OS (or Supervised) with the AppDaemon add-on
+- A camera entity available in Home Assistant
+
+**Step 1: Install AppDaemon**
+1. In Home Assistant: **Settings → Add-ons → Add-on Store**
+2. Install **AppDaemon 4**
+
+**Step 2: Install Pillow**
+In the AppDaemon add-on configuration, add:
+
+```yaml
+python_packages:
+  - Pillow
+```
+
+Restart the AppDaemon add-on after saving.
+
+**Step 3: Copy the Script**
+Copy `tools/camera_to_esp32.py` from this repository to AppDaemon’s apps folder:
+
+- Destination (typical for HA OS add-on):
+  - `/addon_configs/a0d7b954_appdaemon/apps/camera_to_esp32.py`
+
+**Step 4: Register the App**
+Edit AppDaemon’s `apps.yaml` and add:
+
+```yaml
+camera_to_esp32:
+  module: camera_to_esp32
+  class: CameraToESP32
+  # Optional: if you have one device
+  # default_esp32_ip: "192.168.1.111"
+  # Optional defaults
+  # jpeg_quality: 80
+  # rotate_degrees: null
+```
+
+Restart AppDaemon. In logs you should see `CameraToESP32 initialized`.
+
+**Step 5: Create an Automation (Fire Event)**
+Create an automation that fires an event (example action):
+
+```yaml
+action:
+  - event: camera_to_esp32
+    event_data:
+      camera_entity: camera.front_door
+      esp32_ip: "192.168.1.111"
+      timeout: 10
+      # rotate_degrees: null|0|90|180|270
+      # jpeg_quality: 60-95
+```
+
+**Optional: Dismiss the Image**
+
+```yaml
+action:
+  - event: camera_to_esp32
+    event_data:
+      esp32_ip: "192.168.1.111"
+      dismiss: true
+```
+
+#### `POST /api/display/image/strips`
+
+Upload JPEG image strips for memory-efficient display (async decode).
+
+**Request:**
+- Content-Type: `application/octet-stream`
+- Query parameters:
+  - `strip_index`: Strip number (0-based)
+  - `strip_count`: Total number of strips
+  - `width`: Full image width
+  - `height`: Full image height
+  - `timeout` (optional): Display timeout in seconds (defaults to firmware setting)
+- Body: Raw JPEG strip data
+
+**Response (Success):**
+```json
+{
+  "success": true
+}
+```
+
+**Response (Error - HTTP 409):**
+```json
+{
+  "success": false,
+  "message": "Upload in progress, try again"
+}
+```
+
+**Notes:**
+- Strips are queued and decoded by the main loop (HTTP handler does not decode)
+- Memory efficient: only one strip in memory at a time
+- Use for large images or memory-constrained devices
+- Client must send strips in sequential order (0, 1, 2, ...)
+- Flow control: returns HTTP 409 if a previous strip is still being processed
+- Performance: the strip decoder batches small rectangles into fewer LCD transactions for speed. You can tune this per-board with `IMAGE_STRIP_BATCH_MAX_ROWS` (default: 16). Higher values are usually faster but require more temporary RAM.
+
+**Example Client:**
+```bash
+# Python upload script included in tools/
+python3 tools/upload_image.py <device-ip> --image photo.jpg --mode strip --quality 85
+python3 tools/upload_image.py <device-ip> --generate --mode full --timeout 5000
+```
+
+#### `DELETE /api/display/image`
+
+Dismiss the currently displayed image and return to previous screen.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Image dismissed"
+}
+```
+
+**Notes:**
+- Returns to the screen that was active before image was displayed
+- Safe to call even if no image is currently shown
+
 ## Implementation Details
 
 ### Architecture
@@ -550,7 +726,8 @@ Upload new firmware binary for over-the-air update.
 **Backend (C++):**
 - `web_portal.cpp/h` - ESPAsyncWebServer with REST endpoints
 - `config_manager.cpp/h` - NVS (Non-Volatile Storage) for configuration
-- `web_assets.cpp/h` - PROGMEM embedded HTML/CSS/JS (gzip compressed)
+- `web_assets.h` - PROGMEM embedded HTML/CSS/JS (gzip compressed) (auto-generated)
+- `project_branding.h` - `PROJECT_NAME` / `PROJECT_DISPLAY_NAME` defines (auto-generated)
 - `log_manager.cpp/h` - Print-compatible logging with nested blocks (serial output only)
 
 **Frontend (HTML/CSS/JS):**
@@ -644,7 +821,8 @@ DNS server redirects all requests to device IP in AP mode:
    - Minifies CSS using `csscompressor`
    - Minifies JavaScript using `rjsmin`
    - Gzip compresses all assets (level 9)
-   - Generates `web_assets.h` with embedded byte arrays
+  - Generates `src/app/web_assets.h` with embedded byte arrays
+  - Generates `src/app/project_branding.h` with `PROJECT_NAME` / `PROJECT_DISPLAY_NAME` defines
    
    The build script shows compression statistics:
    ```

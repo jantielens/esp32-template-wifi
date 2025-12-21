@@ -13,19 +13,30 @@ ESP32 Arduino development template using `arduino-cli` for headless builds. Desi
   - `src/boards/[board-name]/board_overrides.h` - Optional board-specific compile-time defines
   - Build system automatically detects and applies overrides when present
   - Application uses `#if HAS_xxx` conditional compilation for board-specific logic
+- **Display & Touch Subsystem**: HAL-based architecture with LVGL integration (see `docs/display-touch-architecture.md`)
+  - `display_driver.h` - DisplayDriver HAL interface (`RenderMode`, `present()`, `configureLVGL()`)
+  - `display_manager.cpp/h` - Hardware lifecycle, LVGL init, FreeRTOS rendering task
+  - `touch_driver.h` - TouchDriver HAL interface
+  - `touch_manager.cpp/h` - Touch input registration and calibration
+  - `display_drivers.cpp` - Sketch-root “translation unit” that conditionally includes exactly one selected display driver `.cpp`
+  - `touch_drivers.cpp` - Sketch-root “translation unit” that conditionally includes exactly one selected touch driver `.cpp`
+  - `drivers/` - Driver implementations (TFT_eSPI, ST7789V2, Arduino_GFX, XPT2046, AXS15231B)
+  - `screens/` - Screen base class and implementations (splash, info, test)
+  - Conditional compilation: Only selected drivers are compiled via `display_drivers.cpp` / `touch_drivers.cpp` (Arduino doesn’t auto-compile subdir `.cpp`)
 - **Web Portal**: Multi-page async web server with captive portal support
   - `web_portal.cpp/h` - Server and REST API implementation
-  - `web_assets.cpp/h` - Embedded HTML/CSS/JS (from `src/app/web/`)
+  - `web_assets.h` - Embedded HTML/CSS/JS (from `src/app/web/`) (auto-generated)
+  - `project_branding.h` - Project branding defines (`PROJECT_NAME`, `PROJECT_DISPLAY_NAME`) (auto-generated)
   - `config_manager.cpp/h` - NVS configuration storage
   - Multi-page architecture: Home, Network, Firmware
   - Template system: `_header.html`, `_nav.html`, `_footer.html` for DRY
 - **Output**: Compiled binaries in `./build/<board-name>/` directories
 - **Board Targets**: Multi-board support via `FQBN_TARGETS` associative array in `config.sh`
   - Board name → FQBN mapping allows multiple board variants with same FQBN
-  - `["esp32"]="esp32:esp32:esp32"` → `build/esp32/` (ESP32 Dev Module)
-  - `["esp32c3"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"` → `build/esp32c3/` (ESP32-C3 Super Mini)
+  - `["esp32-nodisplay"]="esp32:esp32:esp32"` → `build/esp32-nodisplay/` (ESP32 Dev Module, no display)
+  - `["esp32c3-waveshare-169-st7789v2"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"` → `build/esp32c3-waveshare-169-st7789v2/` (ESP32-C3 Super Mini + Waveshare 1.69" ST7789V2 240x280)
   - `["esp32c6"]="esp32:esp32:esp32c6:CDCOnBoot=cdc"` → `build/esp32c6/` (ESP32-C6 Dev Module)
-  - `["cyd2usb-v2"]="esp32:esp32:esp32"` → `build/cyd2usb-v2/` (CYD v2 - same FQBN as esp32, different config)
+  - `["cyd-v2"]="esp32:esp32:esp32"` → `build/cyd-v2/` (CYD v2 - same FQBN as esp32, different config)
 
 ## Critical Developer Workflows
 
@@ -40,20 +51,20 @@ ESP32 Arduino development template using `arduino-cli` for headless builds. Desi
 ./build.sh
 
 # Or build specific board
-./build.sh esp32        # Compile for ESP32 Dev Module
-./build.sh esp32c3      # Compile for ESP32-C3 Super Mini
+./build.sh esp32-nodisplay                   # Compile for ESP32 Dev Module (no display)
+./build.sh esp32c3-waveshare-169-st7789v2    # Compile for ESP32-C3 Super Mini + Waveshare 1.69" ST7789V2
 ./build.sh esp32c6      # Compile for ESP32-C6 Dev Module
 
 # Upload (board name required when multiple boards configured)
-./upload.sh esp32       # Auto-detects /dev/ttyUSB0 or /dev/ttyACM0
-./upload.sh esp32c3     # Auto-detects /dev/ttyUSB0 or /dev/ttyACM0
+./upload.sh esp32-nodisplay                   # Auto-detects /dev/ttyUSB0 or /dev/ttyACM0
+./upload.sh esp32c3-waveshare-169-st7789v2    # Auto-detects /dev/ttyUSB0 or /dev/ttyACM0
 
 # Monitor
 ./monitor.sh            # Serial monitor at 115200 baud
 
 # Convenience scripts
-./bum.sh esp32          # Build + Upload + Monitor
-./um.sh esp32c3         # Upload + Monitor
+./bum.sh esp32-nodisplay                   # Build + Upload + Monitor
+./um.sh esp32c3-waveshare-169-st7789v2    # Upload + Monitor
 ```
 
 All scripts use absolute paths via `SCRIPT_DIR` resolution - they work from any directory.
@@ -153,8 +164,27 @@ See `docs/wsl-development.md` for complete USB/IP setup guide.
 - `src/app/board_config.h` - Default board configuration (LED pins, WiFi settings)
 - `src/boards/[board-name]/board_overrides.h` - Optional board-specific compile-time configuration
 - `src/app/web_portal.cpp/h` - Async web server and REST API endpoints
-- `src/app/web_assets.cpp/h` - Embedded HTML/CSS/JS from `web/` directory
+- `src/app/web_assets.h` - Embedded HTML/CSS/JS from `src/app/web/` (auto-generated)
+- `src/app/project_branding.h` - Project branding defines (`PROJECT_NAME`, `PROJECT_DISPLAY_NAME`) (auto-generated)
 - `src/app/config_manager.cpp/h` - NVS-based configuration storage
+- `src/app/display_driver.h` - Display HAL interface with configureLVGL() hook
+- `src/app/display_manager.cpp/h` - Display lifecycle, LVGL init, FreeRTOS rendering task
+- `src/app/touch_driver.h` - Touch HAL interface
+- `src/app/touch_manager.cpp/h` - Touch input device registration and calibration
+- `src/app/display_drivers.cpp` - Display driver compilation unit (selected driver `.cpp` includes live here)
+- `src/app/touch_drivers.cpp` - Touch driver compilation unit (selected driver `.cpp` includes live here)
+- `src/app/drivers/tft_espi_driver.cpp/h` - TFT_eSPI display driver (hardware rotation)
+- `src/app/drivers/st7789v2_driver.cpp/h` - ST7789V2 native SPI driver (software rotation)
+- `src/app/drivers/xpt2046_driver.cpp/h` - XPT2046 resistive touch driver
+- `src/app/drivers/arduino_gfx_driver.cpp/h` - Arduino_GFX display backend (AXS15231B QSPI)
+- `src/app/drivers/axs15231b_touch_driver.cpp/h` - AXS15231B touch backend wrapper
+- `src/app/drivers/axs15231b/vendor/AXS15231B_touch.cpp/h` - Vendored AXS15231B touch implementation (driver-scoped vendor code)
+- `src/app/drivers/README.md` - Driver selection conventions + generated board→drivers table
+- `src/app/screens/screen.h` - Screen base class interface
+- `src/app/screens/splash_screen.cpp/h` - Boot splash with animated spinner
+- `src/app/screens/info_screen.cpp/h` - Device info and real-time stats
+- `src/app/screens/test_screen.cpp/h` - Display calibration and color testing
+- `src/app/screens.cpp` - Screen compilation unit (includes all screen .cpp files)
 - `src/app/web/_header.html` - Common HTML head template
 - `src/app/web/_nav.html` - Navigation tabs and loading overlay wrapper
 - `src/app/web/_footer.html` - Form buttons template
@@ -171,6 +201,11 @@ See `docs/wsl-development.md` for complete USB/IP setup guide.
   - Minifies CSS and JavaScript
   - Gzips all assets for efficient storage
   - Excludes template fragments (files starting with `_`)
+
+- `tools/generate-board-driver-table.py` - Generates the board→drivers table from `src/boards/*/board_overrides.h`
+- `tools/generate-board-driver-table.py` - Generates the board→drivers table from `src/boards/*/board_overrides.h`
+  - Auto-discovers available display/touch backends from `src/app/display_drivers.cpp` and `src/app/touch_drivers.cpp`
+  - `python3 tools/generate-board-driver-table.py --update-drivers-readme`
 
 ### Configuration
 - `config.sh` - Project paths, FQBN_TARGETS array, and helper functions
@@ -324,6 +359,7 @@ After every significant change, the agent must:
 2. **Check if documentation needs updates** by reviewing:
    - `README.md` - Main project documentation
    - `docs/web-portal.md` - Web portal and REST API guide
+   - `docs/display-touch-architecture.md` - Display/touch HAL and screen architecture
    - `docs/scripts.md` - Script usage guide
    - `docs/library-management.md` - Library management guide
    - `docs/build-and-release-process.md` - Project branding, build system, and release workflow guide
@@ -357,6 +393,8 @@ After every significant change, the agent must:
 - New requirement added → Update `README.md` prerequisites
 - REST API endpoint added/changed → Update `docs/web-portal.md` and `README.md` API table
 - Web UI feature changed → Update `docs/web-portal.md` features section
+- Display/touch driver added/changed → Update `docs/display-touch-architecture.md` driver sections
+- Screen management changed → Update `docs/display-touch-architecture.md` screen lifecycle
 - New version released → Update `CHANGELOG.md` with changes, update `src/version.h` with new version number
 - Release process changed → Update `docs/build-and-release-process.md` with new workflow
 
@@ -372,3 +410,17 @@ If the build fails:
 - Review and fix compilation errors
 - Check library dependencies in `arduino-libraries.txt`
 - Verify Arduino code syntax and ESP32 compatibility
+
+## Display/Touch Driver Conventions (v1)
+
+- **Single source of defaults**: default `DISPLAY_DRIVER` / `TOUCH_DRIVER` live in `src/app/board_config.h`.
+- **Per-board selection**: each board override should have a clear **Driver Selection (HAL)** block that explicitly sets the HAL selectors:
+  - `#define DISPLAY_DRIVER DISPLAY_DRIVER_...`
+  - `#define TOUCH_DRIVER TOUCH_DRIVER_...` (or `#define HAS_TOUCH false`)
+- **Direct vs Buffered**:
+  - Direct drivers push pixels during the LVGL flush callback.
+  - Buffered drivers return `renderMode() == Buffered` and implement `present()`.
+- **Arduino build limitation**: do not include driver `.cpp` files in manager files; add conditional includes to `src/app/display_drivers.cpp` or `src/app/touch_drivers.cpp` instead.
+- **Board→driver visibility**: after editing board overrides, regenerate the table in `src/app/drivers/README.md`:
+  - `python3 tools/generate-board-driver-table.py --update-drivers-readme`
+- **Vendored code placement**: third-party source that is not an Arduino library should live under the driver that uses it (driver-scoped vendor code), not in a shared `drivers/vendor/` bucket.

@@ -18,4 +18,15 @@ void device_telemetry_fill_api(JsonDocument &doc);
 // Intentionally excludes volatile/low-value fields like IP address.
 void device_telemetry_fill_mqtt(JsonDocument &doc);
 
+// Get current CPU usage percentage (0-100).
+// Thread-safe - reads cached value updated by background task.
+int device_telemetry_get_cpu_usage();
+
+// Get CPU usage min/max over the last 60 seconds.
+void device_telemetry_get_cpu_minmax(int* out_min, int* out_max);
+
+// Initialize CPU monitoring background task.
+// Must be called once during setup.
+void device_telemetry_start_cpu_monitoring();
+
 #endif // DEVICE_TELEMETRY_H

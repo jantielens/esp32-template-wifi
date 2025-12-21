@@ -38,12 +38,11 @@ const char* LogManager::indent() {
     return indents[level];
 }
 
-// Begin a log block
+// Begin a log block - atomic write
 void LogManager::logBegin(const char* module) {
-    print(indent());
-    print("[");
-    print(module);
-    println("] Starting...");
+    char line[128];
+    snprintf(line, sizeof(line), "%s[%s] Starting...\n", indent(), module);
+    Serial.print(line);
     
     // Save start time if we haven't exceeded max depth
     if (nestLevel < 3) {
@@ -56,25 +55,27 @@ void LogManager::logBegin(const char* module) {
     }
 }
 
-// Add a line to current block
+// Add a line to current block - atomic write
 void LogManager::logLine(const char* message) {
-    print(indent());
-    println(message);
+    char line[160];
+    snprintf(line, sizeof(line), "%s%s\n", indent(), message);
+    Serial.print(line);
 }
 
-// Add a formatted line (printf-style)
+// Add a formatted line (printf-style) - atomic write
 void LogManager::logLinef(const char* format, ...) {
-    char buffer[128];
+    char msgbuf[128];
     va_list args;
     va_start(args, format);
-    vsnprintf(buffer, sizeof(buffer), format, args);
+    vsnprintf(msgbuf, sizeof(msgbuf), format, args);
     va_end(args);
     
-    print(indent());
-    println(buffer);
+    char line[160];
+    snprintf(line, sizeof(line), "%s%s\n", indent(), msgbuf);
+    Serial.print(line);
 }
 
-// End a log block
+// End a log block - atomic write
 void LogManager::logEnd(const char* message) {
     // Decrement nesting level first (but don't underflow)
     if (nestLevel > 0) {
@@ -90,45 +91,33 @@ void LogManager::logEnd(const char* message) {
         elapsed = millis() - startTimes[nestLevel];
     }
     
-    // Print end message with timing
+    // Print end message with timing - atomic
     const char* msg = (message && strlen(message) > 0) ? message : "Done";
-    print(indent());
-    print(msg);
-    print(" (");
-    print(elapsed);
-    println("ms)");
+    char line[128];
+    snprintf(line, sizeof(line), "%s%s (%lums)\n", indent(), msg, elapsed);
+    Serial.print(line);
 }
 
-// Single-line logging with timing
+// Single-line logging with timing - atomic write to prevent interleaving
 void LogManager::logMessage(const char* module, const char* msg) {
     unsigned long start = millis();
-    print(indent());
-    print("[");
-    print(module);
-    print("] ");
-    print(msg);
-    print(" (");
-    print(millis() - start);
-    println("ms)");
+    char line[192];
+    snprintf(line, sizeof(line), "%s[%s] %s (%lums)\n", indent(), module, msg, millis() - start);
+    Serial.print(line);
 }
 
 void LogManager::logMessagef(const char* module, const char* format, ...) {
     unsigned long start = millis();
     
-    char buffer[128];
+    char msgbuf[128];
     va_list args;
     va_start(args, format);
-    vsnprintf(buffer, sizeof(buffer), format, args);
+    vsnprintf(msgbuf, sizeof(msgbuf), format, args);
     va_end(args);
     
-    print(indent());
-    print("[");
-    print(module);
-    print("] ");
-    print(buffer);
-    print(" (");
-    print(millis() - start);
-    println("ms)");
+    char line[192];
+    snprintf(line, sizeof(line), "%s[%s] %s (%lums)\n", indent(), module, msgbuf, millis() - start);
+    Serial.print(line);
 }
 
 // Aliases for logMessage (for backward compatibility)

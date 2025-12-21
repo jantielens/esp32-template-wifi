@@ -35,9 +35,9 @@ Used for technical identifiers and filenames:
 
 | Location | Usage | Example |
 |----------|-------|---------|
-| **Build artifacts** | Local build output | `build/esp32/app.ino.bin` |
-| **CI/CD artifacts** | GitHub Actions artifact names | `esp32-template-esp32` |
-| **Release files** | GitHub Release download files | `esp32-template-esp32-v0.0.5.bin` |
+| **Build artifacts** | Local build output | `build/esp32-nodisplay/app.ino.bin` |
+| **CI/CD artifacts** | GitHub Actions artifact names | `esp32-template-esp32-nodisplay` |
+| **Release files** | GitHub Release download files | `esp32-template-esp32-nodisplay-v0.0.5.bin` |
 | **AP SSID** | WiFi Access Point name (uppercase) | `ESP32-TEMPLATE-1A2B3C4D` |
 | **API response** | `/api/info` endpoint | `{"project_name": "esp32-template"}` |
 
@@ -84,7 +84,7 @@ The build system automatically applies project branding during compilation:
 
 1. `build.sh` sources `config.sh` to get `PROJECT_NAME` and `PROJECT_DISPLAY_NAME`
 2. `tools/minify-web-assets.sh` performs template substitution in HTML files
-3. C++ `#define` statements are generated in `web_assets.h`
+3. Branding C++ `#define` statements are generated in `src/app/project_branding.h` (and `web_assets.h` includes it)
 4. Firmware compiles with branded values embedded
 
 ### Board-Specific Configuration
@@ -108,8 +108,8 @@ The build system supports optional board-specific configuration using compile-ti
 
 ```bash
 # Example: ESP32 with built-in LED and button
-mkdir -p src/boards/esp32
-cat > src/boards/esp32/board_overrides.h << 'EOF'
+mkdir -p src/boards/esp32-nodisplay
+cat > src/boards/esp32-nodisplay/board_overrides.h << 'EOF'
 #ifndef BOARD_OVERRIDES_ESP32_H
 #define BOARD_OVERRIDES_ESP32_H
 
@@ -153,45 +153,45 @@ void loop() {
 }
 ```
 
-**Advanced Example - Different Display Drivers:**
+**Advanced Example - Different Display Backends (HAL):**
+
+This project selects display backends via a single selector macro in `board_overrides.h`:
 
 ```cpp
-// Board A override
+// Board A override (example: native ST7789V2 SPI)
 #define HAS_DISPLAY true
-#define DISPLAY_DRIVER_ST7789
+#define DISPLAY_DRIVER DISPLAY_DRIVER_ST7789V2
 #define DISPLAY_WIDTH 240
-#define DISPLAY_HEIGHT 135
+#define DISPLAY_HEIGHT 280
 
-// Board B override
+// Board B override (example: TFT_eSPI backend, controller configured separately)
 #define HAS_DISPLAY true
-#define DISPLAY_DRIVER_ILI9341
+#define DISPLAY_DRIVER DISPLAY_DRIVER_TFT_ESPI
 #define DISPLAY_WIDTH 320
 #define DISPLAY_HEIGHT 240
+```
 
-// Application code
+Application code typically does **not** include display library headers directly. Instead it talks to the HAL (`DisplayDriver`) and/or the `DisplayManager`.
+If you need compile-time backend-specific logic, use the selector value:
+
+```cpp
+#include "board_config.h"
+
 #if HAS_DISPLAY
-  #if defined(DISPLAY_DRIVER_ST7789)
-    #include <Adafruit_ST7789.h>
-    Adafruit_ST7789 tft(CS_PIN, DC_PIN);
-  #elif defined(DISPLAY_DRIVER_ILI9341)
-    #include <Adafruit_ILI9341.h>
-    Adafruit_ILI9341 tft(CS_PIN, DC_PIN);
+  #if DISPLAY_DRIVER == DISPLAY_DRIVER_ST7789V2
+    // Native ST7789V2-specific compile-time tweaks
+  #elif DISPLAY_DRIVER == DISPLAY_DRIVER_TFT_ESPI
+    // TFT_eSPI-specific compile-time tweaks
   #endif
-
-  void displayInit() {
-    #if defined(DISPLAY_DRIVER_ST7789)
-      tft.init(DISPLAY_WIDTH, DISPLAY_HEIGHT);
-    #elif defined(DISPLAY_DRIVER_ILI9341)
-      tft.begin();
-    #endif
-  }
 #endif
 ```
 
+Driver implementations are conditionally compiled via the sketch-root translation unit `src/app/display_drivers.cpp`.
+
 **Build Detection**: The build script automatically:
 1. Checks if `src/boards/[board-name]/` directory exists
-2. Adds it to the compiler include path with `-I` flag
-3. Defines `BOARD_<BOARDNAME>` (uppercased, e.g., `BOARD_ESP32C3`) and `BOARD_HAS_OVERRIDE=1`
+2. Adds it to the compiler include path with `-I` flag (for both C++ and C compilation units)
+3. Defines `BOARD_<BOARDNAME>` (uppercased, e.g., `BOARD_ESP32C3_WAVESHARE_169_ST7789V2`) and `BOARD_HAS_OVERRIDE=1` (for both C++ and C compilation units)
 4. `src/app/board_config.h` includes `board_overrides.h` first (Phase 1)
 5. Default values are defined with `#ifndef` guards so overrides take precedence (Phase 2)
 6. If no override directory exists, uses defaults only
@@ -213,8 +213,8 @@ void loop() {
 
 **Usage Examples:**
 ```bash
-BOARD_PROFILE=psram ./build.sh esp32
-PROFILE=16m ./build.sh esp32c3
+BOARD_PROFILE=psram ./build.sh esp32-nodisplay
+PROFILE=16m ./build.sh esp32c3-waveshare-169-st7789v2
 ```
 
 **Example Implementation:**
@@ -225,13 +225,13 @@ get_build_props_for_board() {
     local profile="$2"
     
     case "$board:$profile" in
-        esp32:psram)
+      esp32-nodisplay:psram)
             echo "--build-property"
             echo "build.extra_flags=-DBOARD_HAS_PSRAM -DCONFIG_SPIRAM_SUPPORT=1"
             echo "--build-property"
             echo "compiler.cpp.extra_flags=-mfix-esp32-psram-cache-issue"
             ;;
-        esp32c3:16m)
+      esp32c3-waveshare-169-st7789v2:16m)
             echo "--build-property"
             echo "build.flash_size=16MB"
             ;;
@@ -356,11 +356,11 @@ git push origin v0.0.5
 ```
 
 **What happens automatically**:
-- GitHub Actions builds firmware for all boards (esp32, esp32c3, esp32c6)
+- GitHub Actions builds firmware for all boards (e.g., esp32-nodisplay, esp32c3-waveshare-169-st7789v2, cyd-v2)
 - Extracts changelog section for v0.0.5
 - Creates GitHub Release with:
-  - `esp32-firmware-v0.0.5.bin`
-  - `esp32c3-firmware-v0.0.5.bin`
+  - `esp32-nodisplay-firmware-v0.0.5.bin`
+  - `esp32c3-waveshare-169-st7789v2-firmware-v0.0.5.bin`
   - `esp32c6-firmware-v0.0.5.bin`
   - `SHA256SUMS.txt`
 - Release notes populated from CHANGELOG.md

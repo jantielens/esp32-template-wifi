@@ -118,64 +118,6 @@
         </form>
     </div>
 
-    <!-- Floating Health Widget Overlay (Expanded View) -->
-    <div style="position: fixed; top: 24px; right: 24px; z-index: 1000;">
-        <div class="health-widget-expanded" id="health-expanded" style="display:none;">
-            <div class="health-header">
-                <div class="health-status-dot" id="health-status-dot-expanded"></div>
-                <span>Device Health</span>
-                <button id="health-close" class="health-close-btn">✕</button>
-            </div>
-            <div class="health-stats">
-                <!-- System -->
-                <div class="health-stat">
-                    <span class="health-label">Uptime</span>
-                    <span class="health-value" id="health-uptime">--</span>
-                </div>
-                <div class="health-stat">
-                    <span class="health-label">Reset Reason</span>
-                    <span class="health-value" id="health-reset">--</span>
-                </div>
-                <!-- CPU -->
-                <div class="health-stat">
-                    <span class="health-label">CPU Usage</span>
-                    <span class="health-value" id="health-cpu-full">--</span>
-                </div>
-                <div class="health-stat">
-                    <span class="health-label">Core Temp</span>
-                    <span class="health-value" id="health-temp">--</span>
-                </div>
-                <!-- Memory -->
-                <div class="health-stat">
-                    <span class="health-label">Free Heap</span>
-                    <span class="health-value" id="health-heap">--</span>
-                </div>
-                <div class="health-stat">
-                    <span class="health-label">Min Free Heap</span>
-                    <span class="health-value" id="health-heap-min">--</span>
-                </div>
-                <div class="health-stat">
-                    <span class="health-label">Heap Fragmentation</span>
-                    <span class="health-value" id="health-heap-frag">--</span>
-                </div>
-                <!-- Storage -->
-                <div class="health-stat">
-                    <span class="health-label">Flash Usage</span>
-                    <span class="health-value" id="health-flash">--</span>
-                </div>
-                <!-- Network -->
-                <div class="health-stat">
-                    <span class="health-label">WiFi RSSI</span>
-                    <span class="health-value" id="health-rssi">--</span>
-                </div>
-                <div class="health-stat">
-                    <span class="health-label">IP Address</span>
-                    <span class="health-value" id="health-ip">--</span>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <div id="captive-portal-warning" class="reboot-overlay" style="display:none;">
         <div class="reboot-modal">
             <h2>Reconnection Required</h2>

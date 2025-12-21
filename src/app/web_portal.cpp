@@ -16,6 +16,15 @@
 #include "board_config.h"
 #include "device_telemetry.h"
 #include "../version.h"
+
+#if HAS_DISPLAY
+#include "display_manager.h"
+#endif
+
+#if HAS_IMAGE_API
+#include "image_api.h"
+#endif
+
 #include <ESPAsyncWebServer.h>
 #include <DNSServer.h>
 #include <WiFi.h>
@@ -33,6 +42,7 @@ void handleJS(AsyncWebServerRequest *request);
 void handleGetConfig(AsyncWebServerRequest *request);
 void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total);
 void handleDeleteConfig(AsyncWebServerRequest *request);
+void handleSetDisplayBrightness(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total);
 void handleGetVersion(AsyncWebServerRequest *request);
 void handleGetMode(AsyncWebServerRequest *request);
 void handleGetHealth(AsyncWebServerRequest *request);
@@ -55,6 +65,12 @@ static DeviceConfig *current_config = nullptr;
 static bool ota_in_progress = false;
 static size_t ota_progress = 0;
 static size_t ota_total = 0;
+
+#if HAS_IMAGE_API && HAS_DISPLAY
+// AsyncWebServer callbacks run on the AsyncTCP task; never touch LVGL/display from there.
+// Use this flag to defer "hide current image / return" operations to the main loop.
+static volatile bool pending_image_hide_request = false;
+#endif
 
 // ===== WEB SERVER HANDLERS =====
 
@@ -176,6 +192,9 @@ void handleGetConfig(AsyncWebServerRequest *request) {
     doc["mqtt_password"] = "";
     doc["mqtt_interval_seconds"] = current_config->mqtt_interval_seconds;
     
+    // Display settings
+    doc["backlight_brightness"] = current_config->backlight_brightness;
+    
     String response;
     serializeJson(doc, response);
     
@@ -284,6 +303,31 @@ void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len,
         }
     }
     
+    // Display settings - backlight brightness (0-100%)
+    if (doc.containsKey("backlight_brightness")) {
+        uint8_t brightness;
+        // Handle both string and integer values from form
+        if (doc["backlight_brightness"].is<const char*>()) {
+            const char* brightness_str = doc["backlight_brightness"];
+            brightness = (uint8_t)atoi(brightness_str ? brightness_str : "100");
+            Logger.logLinef("Config: Brightness from string '%s' -> %d", brightness_str, brightness);
+        } else {
+            brightness = (uint8_t)(doc["backlight_brightness"] | 100);
+            Logger.logLinef("Config: Brightness from int -> %d", brightness);
+        }
+        
+        if (brightness > 100) brightness = 100;
+        current_config->backlight_brightness = brightness;
+        
+        Logger.logLinef("Config: Backlight brightness set to %d%% (current_config->backlight_brightness = %d)", 
+                        brightness, current_config->backlight_brightness);
+        
+        // Apply brightness immediately (will also be persisted when config saved)
+        #if HAS_DISPLAY
+        display_manager_set_backlight_brightness(brightness);
+        #endif
+    }
+    
     current_config->magic = CONFIG_MAGIC;
     
     // Validate config
@@ -364,7 +408,54 @@ void handleGetVersion(AsyncWebServerRequest *request) {
     response->print("\",\"project_display_name\":\"");
     response->print(PROJECT_DISPLAY_NAME);
     response->print("\",\"has_mqtt\":");
-    response->print(HAS_MQTT ? "true" : "false");
+    response->print(HAS_MQTT ? "true" : "false");    response->print(",\"has_backlight\":");
+    response->print(HAS_BACKLIGHT ? "true" : "false");
+    
+    #if HAS_DISPLAY
+    // Display screen information
+    response->print(",\"has_display\":true");
+
+    // Display resolution (driver coordinate space for direct writes / image upload)
+    int display_coord_width = DISPLAY_WIDTH;
+    int display_coord_height = DISPLAY_HEIGHT;
+    if (displayManager && displayManager->getDriver()) {
+        display_coord_width = displayManager->getDriver()->width();
+        display_coord_height = displayManager->getDriver()->height();
+    }
+    response->print(",\"display_coord_width\":");
+    response->print(display_coord_width);
+    response->print(",\"display_coord_height\":");
+    response->print(display_coord_height);
+    
+    // Get available screens
+    size_t screen_count = 0;
+    const ScreenInfo* screens = display_manager_get_available_screens(&screen_count);
+    
+    response->print(",\"available_screens\":[");
+    for (size_t i = 0; i < screen_count; i++) {
+        if (i > 0) response->print(",");
+        response->print("{\"id\":\"");
+        response->print(screens[i].id);
+        response->print("\",\"name\":\"");
+        response->print(screens[i].display_name);
+        response->print("\"}");
+    }
+    response->print("]");
+    
+    // Get current screen
+    const char* current_screen = display_manager_get_current_screen_id();
+    response->print(",\"current_screen\":");
+    if (current_screen) {
+        response->print("\"");
+        response->print(current_screen);
+        response->print("\"");
+    } else {
+        response->print("null");
+    }
+    #else
+    response->print(",\"has_display\":false");
+    #endif
+    
     response->print("}");
     request->send(response);
 }
@@ -392,6 +483,90 @@ void handleReboot(AsyncWebServerRequest *request) {
     Logger.logMessage("Portal", "Rebooting");
     ESP.restart();
 }
+
+// PUT /api/display/brightness - Set backlight brightness immediately (no persist)
+void handleSetDisplayBrightness(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+    // Only handle the complete request (index == 0 && index + len == total)
+    if (index != 0 || index + len != total) {
+        return;
+    }
+    
+    // Parse JSON body
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, data, len);
+    
+    if (error) {
+        request->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid JSON\"}");
+        return;
+    }
+    
+    // Get brightness value (0-100)
+    if (!doc.containsKey("brightness")) {
+        request->send(400, "application/json", "{\"success\":false,\"message\":\"Missing brightness value\"}");
+        return;
+    }
+    
+    uint8_t brightness = (uint8_t)(doc["brightness"] | 100);
+    if (brightness > 100) brightness = 100;
+    
+    // Apply brightness immediately (does not persist to NVS)
+    #if HAS_DISPLAY
+    display_manager_set_backlight_brightness(brightness);
+    Logger.logLinef("Display brightness: %d%%", brightness);
+    #endif
+    
+    // Return success
+    char response[64];
+    snprintf(response, sizeof(response), "{\"success\":true,\"brightness\":%d}", brightness);
+    request->send(200, "application/json", response);
+}
+
+#if HAS_DISPLAY
+// PUT /api/display/screen - Switch to a different screen (runtime only, no persist)
+void handleSetDisplayScreen(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+    // Only handle the complete request (index == 0 && index + len == total)
+    if (index != 0 || index + len != total) {
+        return;
+    }
+    
+    // Parse JSON body
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, data, len);
+    
+    if (error) {
+        request->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid JSON\"}");
+        return;
+    }
+    
+    // Get screen ID
+    if (!doc.containsKey("screen")) {
+        request->send(400, "application/json", "{\"success\":false,\"message\":\"Missing screen ID\"}");
+        return;
+    }
+    
+    const char* screen_id = doc["screen"];
+    if (!screen_id || strlen(screen_id) == 0) {
+        request->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid screen ID\"}");
+        return;
+    }
+    
+    Logger.logMessagef("API", "PUT /api/display/screen: %s", screen_id);
+    
+    // Switch to requested screen
+    bool success = false;
+    display_manager_show_screen(screen_id, &success);
+    
+    if (success) {
+        // Build success response with new screen ID
+        String response = "{\"success\":true,\"screen\":\"";
+        response += screen_id;
+        response += "\"}";
+        request->send(200, "application/json", response);
+    } else {
+        request->send(404, "application/json", "{\"success\":false,\"message\":\"Screen not found\"}");
+    }
+}
+#endif
 
 // POST /api/update - Handle OTA firmware upload
 void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
@@ -487,6 +662,8 @@ void web_portal_init(DeviceConfig *config) {
     Logger.logBegin("Portal Init");
     
     current_config = config;
+    Logger.logLinef("Portal config pointer: %p, backlight_brightness: %d", 
+                    current_config, current_config->backlight_brightness);
     
     // Create web server instance (avoid global constructor issues)
     if (server == nullptr) {
@@ -524,11 +701,105 @@ void web_portal_init(DeviceConfig *config) {
     server->on("/api/health", HTTP_GET, handleGetHealth);
     server->on("/api/reboot", HTTP_POST, handleReboot);
     
+    // Display API endpoints
+    server->on("/api/display/brightness", HTTP_PUT,
+        [](AsyncWebServerRequest *request) {},
+        NULL,
+        handleSetDisplayBrightness
+    );
+    
+    #if HAS_DISPLAY
+    server->on("/api/display/screen", HTTP_PUT,
+        [](AsyncWebServerRequest *request) {},
+        NULL,
+        handleSetDisplayScreen
+    );
+    #endif
+    
     // OTA upload endpoint
     server->on("/api/update", HTTP_POST,
         [](AsyncWebServerRequest *request) {},
         handleOTAUpload
     );
+    
+    // Image API integration (if enabled)
+    #if HAS_IMAGE_API && HAS_DISPLAY
+    Logger.logMessage("Portal", "Initializing image API");
+    
+    // Setup backend adapter
+    ImageApiBackend backend;
+    backend.hide_current_image = []() {
+        #if HAS_DISPLAY
+        // Called from AsyncTCP task and sometimes from the main loop.
+        // Always defer actual display/LVGL operations to the main loop.
+        pending_image_hide_request = true;
+        #endif
+    };
+    
+    backend.start_strip_session = [](int width, int height, unsigned long timeout_ms, unsigned long start_time) -> bool {
+        #if HAS_DISPLAY
+        (void)start_time;
+        DirectImageScreen* screen = display_manager_get_direct_image_screen();
+        if (!screen) {
+            Logger.logMessage("ImageAPI", "ERROR: No direct image screen");
+            return false;
+        }
+        
+        // Now called from main loop with proper task context
+        // Show the DirectImageScreen first
+        display_manager_show_direct_image();
+        
+        // Configure timeout and start session
+        screen->set_timeout(timeout_ms);
+        screen->begin_strip_session(width, height);
+        return true;
+        #else
+        return false;
+        #endif
+    };
+    
+    backend.decode_strip = [](const uint8_t* jpeg_data, size_t jpeg_size, uint8_t strip_index, bool output_bgr565) -> bool {
+        #if HAS_DISPLAY
+        DirectImageScreen* screen = display_manager_get_direct_image_screen();
+        if (!screen) {
+            Logger.logMessage("ImageAPI", "ERROR: No direct image screen");
+            return false;
+        }
+        
+        // Now called from main loop - safe to decode
+        return screen->decode_strip(jpeg_data, jpeg_size, strip_index, output_bgr565);
+        #else
+        return false;
+        #endif
+    };
+    
+    // Setup configuration
+    ImageApiConfig image_cfg;
+
+    // Use the display driver's coordinate space (fast path for direct image writes).
+    // This intentionally avoids LVGL calls and any DISPLAY_ROTATION heuristics.
+    image_cfg.lcd_width = DISPLAY_WIDTH;
+    image_cfg.lcd_height = DISPLAY_HEIGHT;
+
+    #if HAS_DISPLAY
+        if (displayManager && displayManager->getDriver()) {
+            image_cfg.lcd_width = displayManager->getDriver()->width();
+            image_cfg.lcd_height = displayManager->getDriver()->height();
+        }
+    #endif
+    
+    image_cfg.max_image_size_bytes = IMAGE_API_MAX_SIZE_BYTES;
+    image_cfg.decode_headroom_bytes = IMAGE_API_DECODE_HEADROOM_BYTES;
+    image_cfg.default_timeout_ms = IMAGE_API_DEFAULT_TIMEOUT_MS;
+    image_cfg.max_timeout_ms = IMAGE_API_MAX_TIMEOUT_MS;
+    
+    // Initialize and register routes
+    Logger.logMessage("Portal", "Calling image_api_init...");
+    image_api_init(image_cfg, backend);
+    Logger.logMessage("Portal", "Calling image_api_register_routes...");
+    image_api_register_routes(server);
+    Logger.logMessage("Portal", "Image API initialized");
+    #endif // HAS_IMAGE_API && HAS_DISPLAY
     
     // 404 handler
     server->onNotFound([](AsyncWebServerRequest *request) {
@@ -607,3 +878,20 @@ bool web_portal_is_ap_mode() {
 bool web_portal_ota_in_progress() {
     return ota_in_progress;
 }
+
+#if HAS_IMAGE_API
+// Process pending image uploads (call from main loop)
+void web_portal_process_pending_images() {
+    // If the image API asked us to hide/dismiss the current image (or recover
+    // from a failure), do it from the main loop so DisplayManager can safely
+    // clear direct-image mode.
+    #if HAS_DISPLAY
+    if (pending_image_hide_request) {
+        pending_image_hide_request = false;
+        display_manager_return_to_previous_screen();
+    }
+    #endif
+
+    image_api_process_pending(ota_in_progress);
+}
+#endif

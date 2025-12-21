@@ -72,7 +72,7 @@ h1 {
 }
 
 #chip-info {
-    min-width: 140px;
+    min-width: 200px;
 }
 
 #cpu-cores {
@@ -281,12 +281,13 @@ label {
 input[type="text"],
 input[type="password"],
 input[type="number"],
-input[type="file"] {
+input[type="file"],
+select {
     width: 100%;
     padding: 12px 16px;
     font-size: 16px;
     color: #1d1d1f;
-    background: white;
+    background-color: white;
     border: 2px solid #d2d2d7;
     border-radius: 10px;
     outline: none;
@@ -294,16 +295,23 @@ input[type="file"] {
     font-family: inherit;
 }
 
+/* Select-specific styling */
+select {
+    cursor: pointer;
+}
+
 input[type="text"]:focus,
 input[type="password"]:focus,
-input[type="number"]:focus {
+input[type="number"]:focus,
+select:focus {
     border-color: #007aff;
     box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.1);
 }
 
 input[type="text"]:hover:not(:focus),
 input[type="password"]:hover:not(:focus),
-input[type="number"]:hover:not(:focus) {
+input[type="number"]:hover:not(:focus),
+select:hover:not(:focus) {
     border-color: #86868b;
 }
 
@@ -387,6 +395,11 @@ small {
     border-radius: 16px 16px 0 0;
     box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.15);
     z-index: 999;
+}
+
+/* Hide footer buttons on firmware page (no form to submit) */
+body[data-page="firmware"] .floating-action-footer {
+    display: none;
 }
 
 .floating-action-footer .button-group {
@@ -708,14 +721,14 @@ footer {
 .health-stats {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
 }
 
 .health-stat {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 4px 0;
+    padding: 2px 0;
 }
 
 .health-label {

@@ -4,6 +4,7 @@ bin/arduino-cli
 
 # Auto-generated web assets
 src/app/web_assets.h
+src/app/project_branding.h
 
 # Arduino CLI configuration
 .arduino15/
@@ -23,3 +24,7 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Python
+__pycache__/
+*.pyc

@@ -398,6 +398,43 @@ async function loadVersion() {
             });
         }
 
+        // Hide/disable display settings if firmware was built without backlight support
+        const displaySection = document.getElementById('display-settings-section');
+        if (displaySection) {
+            if (version.has_backlight === true || version.has_display === true) {
+                displaySection.style.display = 'block';
+            } else {
+                displaySection.style.display = 'none';
+                displaySection.querySelectorAll('input').forEach(el => {
+                    el.disabled = true;
+                });
+            }
+        }
+        
+        // Populate screen selection dropdown if device has display
+        const screenSelect = document.getElementById('screen_selection');
+        const screenGroup = document.getElementById('screen-selection-group');
+        if (screenSelect && screenGroup && version.has_display === true && version.available_screens) {
+            // Clear existing options
+            screenSelect.innerHTML = '';
+            
+            // Add option for each available screen
+            version.available_screens.forEach(screen => {
+                const option = document.createElement('option');
+                option.value = screen.id;
+                option.textContent = screen.name;
+                if (screen.id === version.current_screen) {
+                    option.selected = true;
+                }
+                screenSelect.appendChild(option);
+            });
+            
+            // Show screen selection group
+            screenGroup.style.display = 'block';
+        } else if (screenGroup) {
+            screenGroup.style.display = 'none';
+        }
+
         document.getElementById('firmware-version').textContent = `Firmware v${version.version}`;
         document.getElementById('chip-info').textContent = 
             `${version.chip_model} rev ${version.chip_revision}`;
@@ -477,6 +514,12 @@ async function loadConfig() {
             mqttPwdField.placeholder = hasConfig ? '(saved - leave blank to keep)' : '';
         }
         
+        // Display settings - backlight brightness
+        const brightness = config.backlight_brightness !== undefined ? config.backlight_brightness : 100;
+        setValueIfExists('backlight_brightness', brightness);
+        setTextIfExists('brightness-value', brightness);
+        updateBrightnessSliderBackground(brightness);
+        
         // Hide loading overlay (silent load)
         const overlay = document.getElementById('form-loading-overlay');
         if (overlay) overlay.style.display = 'none';
@@ -505,7 +548,8 @@ function extractFormFields(formData) {
     const config = {};
     const fields = ['wifi_ssid', 'wifi_password', 'device_name', 'fixed_ip', 
                     'subnet_mask', 'gateway', 'dns1', 'dns2', 'dummy_setting',
-                    'mqtt_host', 'mqtt_port', 'mqtt_username', 'mqtt_password', 'mqtt_interval_seconds'];
+                    'mqtt_host', 'mqtt_port', 'mqtt_username', 'mqtt_password', 'mqtt_interval_seconds',
+                    'backlight_brightness'];
     
     fields.forEach(field => {
         const value = getFieldValue(field);
@@ -888,6 +932,85 @@ async function uploadFirmware() {
 
 
 /**
+ * Update brightness slider background gradient based on value
+ * @param {number} brightness - Brightness value (0-100)
+ */
+function updateBrightnessSliderBackground(brightness) {
+    const slider = document.getElementById('backlight_brightness');
+    if (slider) {
+        const percentage = brightness;
+        slider.style.background = `linear-gradient(to right, #007aff 0%, #007aff ${percentage}%, #e5e5e5 ${percentage}%, #e5e5e5 100%)`;
+    }
+}
+
+/**
+ * Handle brightness slider changes - update device immediately
+ * @param {Event} event - Input event from slider
+ */
+async function handleBrightnessChange(event) {
+    const brightness = parseInt(event.target.value);
+    
+    // Update displayed value
+    const valueDisplay = document.getElementById('brightness-value');
+    if (valueDisplay) {
+        valueDisplay.textContent = brightness;
+    }
+    
+    // Update slider background
+    updateBrightnessSliderBackground(brightness);
+    
+    // Send brightness update to device immediately (no persist)
+    try {
+        const response = await fetch('/api/display/brightness', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ brightness: brightness })
+        });
+        
+        if (!response.ok) {
+            console.error('Failed to update brightness:', response.statusText);
+        }
+    } catch (error) {
+        console.error('Error updating brightness:', error);
+    }
+}
+
+/**
+ * Handle screen selection change - switch screens immediately
+ * @param {Event} event - Change event from select dropdown
+ */
+async function handleScreenChange(event) {
+    const screenId = event.target.value;
+    
+    if (!screenId) return;
+    
+    try {
+        const response = await fetch('/api/display/screen', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ screen: screenId })
+        });
+        
+        if (!response.ok) {
+            console.error('Failed to switch screen:', response.statusText);
+            showMessage('Failed to switch screen', 'error');
+            // Revert dropdown to previous value
+            loadVersion(); // Refresh to get current screen
+        }
+        // Success - dropdown already shows new value
+    } catch (error) {
+        console.error('Error switching screen:', error);
+        showMessage('Error switching screen: ' + error.message, 'error');
+        // Revert dropdown to previous value
+        loadVersion(); // Refresh to get current screen
+    }
+}
+
+/**
  * Initialize page on DOM ready
  */
 document.addEventListener('DOMContentLoaded', () => {
@@ -935,6 +1058,18 @@ document.addEventListener('DOMContentLoaded', () => {
     inputs.forEach(input => {
         input.addEventListener('focus', handleInputFocus);
     });
+    
+    // Add brightness slider event handler
+    const brightnessSlider = document.getElementById('backlight_brightness');
+    if (brightnessSlider) {
+        brightnessSlider.addEventListener('input', handleBrightnessChange);
+    }
+    
+    // Add screen selection dropdown event handler
+    const screenSelect = document.getElementById('screen_selection');
+    if (screenSelect) {
+        screenSelect.addEventListener('change', handleScreenChange);
+    }
     
     // Load initial data
     loadMode();
@@ -1025,6 +1160,7 @@ async function updateHealth() {
         
         // CPU
         document.getElementById('health-cpu-full').textContent = `${health.cpu_usage}%`;
+        document.getElementById('health-cpu-minmax').textContent = `${health.cpu_usage_min}% / ${health.cpu_usage_max}%`;
         document.getElementById('health-temp').textContent = health.cpu_temperature !== null ? 
             `${health.cpu_temperature}°C` : 'N/A';
         
