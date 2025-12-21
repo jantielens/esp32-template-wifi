@@ -15,6 +15,11 @@ Skip the boilerplate and start building. ESP32 Arduino template with automated b
   - **REST API**: Full `/api/*` endpoints for device control and monitoring
   - **OTA Updates**: Upload new firmware over WiFi without USB cable
 
+- **🖥️ Optional Display + Touch Support**
+  - **Works With or Without a Display**: Devices without displays build and run normally
+  - **Display/Touch HAL**: Unified `DisplayDriver` / `TouchDriver` interfaces with `DisplayManager` / `TouchManager` lifecycle
+  - **LVGL UI Framework**: Multi-screen UI support (when `HAS_DISPLAY` is enabled for a board)
+
 - **🎯 Multi-Board Made Easy**
   - **Flexible Build System**: Add ESP32 variants with single config line
   - **Board-Specific Code**: Optional overrides for different GPIO pins and hardware
@@ -56,14 +61,14 @@ This updates web portal titles, device names, AP SSID, and release artifacts. Se
 
 ```bash
 ./build.sh              # Compile firmware for all boards
-./build.sh esp32        # Compile for specific board
-BOARD_PROFILE=psram ./build.sh esp32  # Optional build profile (if defined in config.sh)
-./upload.sh esp32       # Upload to ESP32 (board name required if multiple boards)
+./build.sh esp32-nodisplay        # Compile for specific board
+BOARD_PROFILE=psram ./build.sh esp32-nodisplay  # Optional build profile (if defined in config.sh)
+./upload.sh esp32-nodisplay       # Upload to ESP32 (board name required if multiple boards)
 ./monitor.sh            # View serial output
 
 # Or use convenience scripts:
-./bum.sh esp32          # Build + Upload + Monitor
-./um.sh esp32           # Upload + Monitor
+./bum.sh esp32-nodisplay          # Build + Upload + Monitor
+./um.sh esp32-nodisplay           # Upload + Monitor
 ```
 
 ### 4. Start Developing
@@ -76,8 +81,8 @@ Edit `src/app/app.ino` with your code and repeat step 2.
 esp32-template-wifi/
 ├── bin/                           # Local arduino-cli installation
 ├── build/                         # Compiled firmware binaries
-│   ├── esp32/                     # ESP32 Dev Module builds
-│   └── esp32c3/                   # ESP32-C3 Super Mini builds
+│   ├── esp32-nodisplay/           # ESP32 Dev Module builds (no display)
+│   └── esp32c3-waveshare-169-st7789v2/  # ESP32-C3 + Waveshare 1.69\" ST7789V2 builds
 ├── docs/                          # Documentation
 │   ├── scripts.md                 # Script usage guide
 │   ├── web-portal.md              # Web portal guide
@@ -101,7 +106,7 @@ esp32-template-wifi/
 │   │       ├── portal.css         # Styles
 │   │       └── portal.js          # Client logic
 │   ├── boards/                    # Board-specific overrides (optional)
-│   │   └── esp32c3/               # ESP32-C3 Super Mini config example
+│   │   └── esp32c3-waveshare-169-st7789v2/  # ESP32-C3 + Waveshare 1.69\" ST7789V2 config example
 │   │       └── board_overrides.h  # Board-specific defines (LED on GPIO8)
 │   └── version.h                  # Firmware version tracking
 ├── partitions/                    # Optional custom partition tables (see docs)
@@ -214,8 +219,8 @@ The project supports multiple ESP32 board variants configured in `config.sh`:
 ```bash
 # Default configuration includes:
 declare -A FQBN_TARGETS=(
-    ["esp32"]="esp32:esp32:esp32"                                        # ESP32 Dev Module
-    ["esp32c3"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"  # ESP32-C3 Super Mini
+  ["esp32-nodisplay"]="esp32:esp32:esp32"  # ESP32 Dev Module (no display)
+  ["esp32c3-waveshare-169-st7789v2"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"  # ESP32-C3 + Waveshare 1.69\" ST7789V2
     ["esp32c3_ota_1_9mb"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb"  # ESP32-C3 Super Mini (custom partitions)
 )
 ```
@@ -241,7 +246,7 @@ This template includes an optional custom partition table to increase OTA app pa
 
 **Board Override Macros & Includes:**
 - If `src/boards/<board>/` exists, `build.sh` adds it to the include path and defines:
-  - `BOARD_<BOARDNAME>` (uppercased, e.g., `BOARD_ESP32C3`)
+  - `BOARD_<BOARDNAME>` (uppercased, e.g., `BOARD_ESP32C3_WAVESHARE_169_ST7789V2`)
   - `BOARD_HAS_OVERRIDE` (allows `src/app/board_config.h` to include `board_overrides.h`)
 - These flags are applied to both C++ and C compilation units (LVGL is built as C), so LVGL config can also react to board overrides.
 - No changes needed in `app.ino`; overrides are pulled automatically.
@@ -252,12 +257,12 @@ This template includes an optional custom partition table to increase OTA app pa
 ./build.sh
 
 # Build specific board
-./build.sh esp32
-./build.sh esp32c3
+./build.sh esp32-nodisplay
+./build.sh esp32c3-waveshare-169-st7789v2
 
 # Upload to specific board
-./upload.sh esp32
-./upload.sh esp32c3 /dev/ttyACM0  # With explicit port
+./upload.sh esp32-nodisplay
+./upload.sh esp32c3-waveshare-169-st7789v2 /dev/ttyACM0  # With explicit port
 ```
 
 ### Board-Specific Configuration
@@ -274,8 +279,8 @@ The project uses a flexible board configuration system for hardware-specific cus
 
 ```bash
 # Create board-specific configuration
-mkdir -p src/boards/esp32
-cat > src/boards/esp32/board_overrides.h << 'EOF'
+mkdir -p src/boards/esp32-nodisplay
+cat > src/boards/esp32-nodisplay/board_overrides.h << 'EOF'
 #ifndef BOARD_OVERRIDES_ESP32_H
 #define BOARD_OVERRIDES_ESP32_H
 

@@ -972,7 +972,7 @@ The build system automatically detects board-specific display configurations:
 
 ```bash
 ./build.sh cyd-v2  # Builds with CYD display config
-./build.sh esp32       # Builds without display (HAS_DISPLAY=false)
+./build.sh esp32-nodisplay       # Builds without display (HAS_DISPLAY=false)
 ```
 
 Each board compiles with its own display driver and settings.

@@ -29,8 +29,7 @@ python3 tools/generate-board-driver-table.py --update-drivers-readme
 | Board | Display backend | Panel | Bus | Res | Rot | Touch backend | Notes |
 |---|---|---|---:|---:|---:|---|---|
 | cyd-v2 | TFT_ESPI | ILI9341 | SPI | 320×240 | 1 | XPT2046 | inversion on, gamma fix |
-| cyd-v3 | TFT_ESPI | ILI9341 | SPI | 320×240 | 1 | XPT2046 | inversion off, gamma fix |
-| esp32c3 | ST7789V2 | ST7789V2 | SPI | 240×280 | 1 | none |  |
+| esp32c3-waveshare-169-st7789v2 | ST7789V2 | ST7789V2 | SPI | 240×280 | 1 | none |  |
 | jc3248w535 | ARDUINO_GFX | AXS15231B | QSPI | 320×480 | 1 | AXS15231B |  |
 | jc3636w518 | ESP_PANEL | ST77916 | QSPI | 360×360 | 0 | CST816S |  |
 

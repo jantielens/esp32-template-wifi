@@ -14,7 +14,7 @@
 // The build system will automatically detect and include board-specific overrides.
 //
 // Example board-specific override:
-//   src/boards/esp32c3/board_overrides.h
+//   src/boards/esp32c3-waveshare-169-st7789v2/board_overrides.h
 
 // ============================================================================
 // Phase 1: Load Board-Specific Overrides

@@ -20,8 +20,8 @@ This project includes several bash scripts to streamline ESP32 development workf
 **Multi-Board Configuration:**
 ```bash
 declare -A FQBN_TARGETS=(
-    ["esp32"]="esp32:esp32:esp32"                                        # ESP32 Dev Module
-    ["esp32c3"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"  # ESP32-C3 Super Mini
+  ["esp32-nodisplay"]="esp32:esp32:esp32"  # ESP32 Dev Module (no display)
+  ["esp32c3-waveshare-169-st7789v2"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"  # ESP32-C3 + Waveshare 1.69\" ST7789V2
     ["esp32c3_ota_1_9mb"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb"  # ESP32-C3 w/ custom partitions
     ["cyd-v2"]="esp32:esp32:esp32"                                   # CYD v2 (same FQBN, different board_overrides.h)
 )
@@ -58,16 +58,16 @@ declare -A FQBN_TARGETS=(
 **Usage:**
 ```bash
 ./build.sh              # Build all configured boards
-./build.sh esp32        # Build only ESP32 Dev Module
-./build.sh esp32c3      # Build only ESP32-C3 Super Mini
+./build.sh esp32-nodisplay        # Build only ESP32 Dev Module (no display)
+./build.sh esp32c3-waveshare-169-st7789v2  # Build ESP32-C3 + Waveshare 1.69\" ST7789V2
 ./build.sh esp32c3_ota_1_9mb  # Build ESP32-C3 using custom partitions (example)
-BOARD_PROFILE=psram ./build.sh esp32  # Optional build profile (if defined in config.sh)
+BOARD_PROFILE=psram ./build.sh esp32-nodisplay  # Optional build profile (if defined in config.sh)
 ```
 
 **What it does:**
 - Generates minified web assets (once for all builds)
 - Compiles `src/app/app.ino` for specified board(s)
-- Creates board-specific directories: `./build/esp32/`, `./build/esp32c3/`, etc.
+- Creates board-specific directories: `./build/esp32-nodisplay/`, `./build/esp32c3-waveshare-169-st7789v2/`, etc.
 - Generates `.bin`, `.bootloader.bin`, `.merged.bin`, and `.partitions.bin` files per board
 - Detects build errors including:
   - Compilation failures (exit code ≠ 0)
@@ -76,19 +76,19 @@ BOARD_PROFILE=psram ./build.sh esp32  # Optional build profile (if defined in co
   - Provides helpful diagnostics for Arduino build system limitations
 - If `src/boards/<board>/` exists, adds it to include path and defines:
     - `BOARD_<BOARDNAME>` - Board name sanitized to valid C++ macro (alphanumeric + underscore only)
-      - Examples: `cyd-v2` → `BOARD_CYD_V2`, `esp32c3` → `BOARD_ESP32C3`
+      - Examples: `cyd-v2` → `BOARD_CYD_V2`, `esp32c3-waveshare-169-st7789v2` → `BOARD_ESP32C3_WAVESHARE_169_ST7789V2`
     - `BOARD_HAS_OVERRIDE` (triggers inclusion of `board_overrides.h`)
     - Note: these flags are applied to both C++ and C compilation units (LVGL is built as C), so LVGL config can also react to board overrides.
 
 **Build Output Structure:**
 ```
 build/
-├── esp32/
+├── esp32-nodisplay/
 │   ├── app.ino.bin
 │   ├── app.ino.bootloader.bin
 │   ├── app.ino.merged.bin
 │   └── app.ino.partitions.bin
-└── esp32c3/
+└── esp32c3-waveshare-169-st7789v2/
     ├── app.ino.bin
     └── ...
 ```
@@ -152,10 +152,10 @@ This script automates both steps.
 
 **Multiple Boards Configuration:**
 ```bash
-./upload.sh esp32              # Upload ESP32 build, auto-detect port
-./upload.sh esp32c3            # Upload ESP32-C3 build, auto-detect port
+./upload.sh esp32-nodisplay              # Upload ESP32 build, auto-detect port
+./upload.sh esp32c3-waveshare-169-st7789v2  # Upload ESP32-C3 + Waveshare display build, auto-detect port
 ./upload.sh esp32c3_ota_1_9mb   # Upload ESP32-C3 build using custom partitions
-./upload.sh esp32 /dev/ttyUSB0 # Upload ESP32 build to specific port
+./upload.sh esp32-nodisplay /dev/ttyUSB0 # Upload ESP32 build to specific port
 ```
 
 **What it does:**
@@ -226,9 +226,9 @@ This script automates both steps.
 
 **Multiple Boards Configuration:**
 ```bash
-./upload-erase.sh esp32              # Erase ESP32, auto-detect port
-./upload-erase.sh esp32c3            # Erase ESP32-C3, auto-detect port
-./upload-erase.sh esp32 /dev/ttyUSB0 # Erase ESP32 on specific port
+./upload-erase.sh esp32-nodisplay              # Erase ESP32, auto-detect port
+./upload-erase.sh esp32c3-waveshare-169-st7789v2            # Erase ESP32-C3 + Waveshare display board, auto-detect port
+./upload-erase.sh esp32-nodisplay /dev/ttyUSB0 # Erase ESP32 on specific port
 ```
 
 **What it does:**
@@ -309,18 +309,18 @@ This script automates both steps.
 ./build.sh
 
 # Or build specific board
-./build.sh esp32
-./build.sh esp32c3
+./build.sh esp32-nodisplay
+./build.sh esp32c3-waveshare-169-st7789v2
 ./build.sh esp32c3_ota_1_9mb
 
 # Upload to specific board
-./upload.sh esp32       # Auto-detects port
-./upload.sh esp32c3     # Auto-detects port
+./upload.sh esp32-nodisplay       # Auto-detects port
+./upload.sh esp32c3-waveshare-169-st7789v2     # Auto-detects port
 ./upload.sh esp32c3_ota_1_9mb
 
 # Full cycle for specific board
-./bum.sh esp32          # Build + Upload + Monitor
-./um.sh esp32c3         # Upload + Monitor
+./bum.sh esp32-nodisplay          # Build + Upload + Monitor
+./um.sh esp32c3-waveshare-169-st7789v2         # Upload + Monitor
 
 # Clean all board builds
 ./clean.sh
@@ -347,7 +347,7 @@ sudo usermod -a -G dialout $USER
 - First flash after changing partition tables should be done over serial (USB)
 
 **Board name required error:**
-- When multiple boards are configured, specify board name: `./upload.sh esp32`
+- When multiple boards are configured, specify board name: `./upload.sh esp32-nodisplay`
 - List available boards by checking `config.sh` or running with invalid board name
 
 For WSL-specific setup, see [WSL Development Guide](wsl-development.md).

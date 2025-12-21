@@ -33,8 +33,8 @@ ESP32 Arduino development template using `arduino-cli` for headless builds. Desi
 - **Output**: Compiled binaries in `./build/<board-name>/` directories
 - **Board Targets**: Multi-board support via `FQBN_TARGETS` associative array in `config.sh`
   - Board name → FQBN mapping allows multiple board variants with same FQBN
-  - `["esp32"]="esp32:esp32:esp32"` → `build/esp32/` (ESP32 Dev Module)
-  - `["esp32c3"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"` → `build/esp32c3/` (ESP32-C3 Super Mini)
+  - `["esp32-nodisplay"]="esp32:esp32:esp32"` → `build/esp32-nodisplay/` (ESP32 Dev Module, no display)
+  - `["esp32c3-waveshare-169-st7789v2"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"` → `build/esp32c3-waveshare-169-st7789v2/` (ESP32-C3 Super Mini + Waveshare 1.69" ST7789V2 240x280)
   - `["esp32c6"]="esp32:esp32:esp32c6:CDCOnBoot=cdc"` → `build/esp32c6/` (ESP32-C6 Dev Module)
   - `["cyd-v2"]="esp32:esp32:esp32"` → `build/cyd-v2/` (CYD v2 - same FQBN as esp32, different config)
 
@@ -51,20 +51,20 @@ ESP32 Arduino development template using `arduino-cli` for headless builds. Desi
 ./build.sh
 
 # Or build specific board
-./build.sh esp32        # Compile for ESP32 Dev Module
-./build.sh esp32c3      # Compile for ESP32-C3 Super Mini
+./build.sh esp32-nodisplay                   # Compile for ESP32 Dev Module (no display)
+./build.sh esp32c3-waveshare-169-st7789v2    # Compile for ESP32-C3 Super Mini + Waveshare 1.69" ST7789V2
 ./build.sh esp32c6      # Compile for ESP32-C6 Dev Module
 
 # Upload (board name required when multiple boards configured)
-./upload.sh esp32       # Auto-detects /dev/ttyUSB0 or /dev/ttyACM0
-./upload.sh esp32c3     # Auto-detects /dev/ttyUSB0 or /dev/ttyACM0
+./upload.sh esp32-nodisplay                   # Auto-detects /dev/ttyUSB0 or /dev/ttyACM0
+./upload.sh esp32c3-waveshare-169-st7789v2    # Auto-detects /dev/ttyUSB0 or /dev/ttyACM0
 
 # Monitor
 ./monitor.sh            # Serial monitor at 115200 baud
 
 # Convenience scripts
-./bum.sh esp32          # Build + Upload + Monitor
-./um.sh esp32c3         # Upload + Monitor
+./bum.sh esp32-nodisplay                   # Build + Upload + Monitor
+./um.sh esp32c3-waveshare-169-st7789v2    # Upload + Monitor
 ```
 
 All scripts use absolute paths via `SCRIPT_DIR` resolution - they work from any directory.

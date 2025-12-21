@@ -1,5 +1,5 @@
-#ifndef BOARD_OVERRIDES_ESP32C3_H
-#define BOARD_OVERRIDES_ESP32C3_H
+#ifndef BOARD_OVERRIDES_ESP32C3_WAVESHARE_169_ST7789V2_H
+#define BOARD_OVERRIDES_ESP32C3_WAVESHARE_169_ST7789V2_H
 
 // ============================================================================
 // ESP32-C3 Super Mini Board Configuration Overrides
@@ -85,4 +85,4 @@
 // #define BATTERY_ADC_PIN 4
 // #define BATTERY_VOLTAGE_DIVIDER 2.0
 
-#endif // BOARD_OVERRIDES_ESP32C3_H
+#endif // BOARD_OVERRIDES_ESP32C3_WAVESHARE_169_ST7789V2_H

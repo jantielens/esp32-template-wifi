@@ -11,6 +11,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.20] - 2025-12-21
+
+### Added
+- **Display + LVGL framework**
+  - `DisplayDriver` / `DisplayManager` HAL with LVGL integration and render-mode support (`Direct` vs `Buffered`)
+  - LVGL v8.4 screen framework with multiple screens (splash, info, test, direct image)
+  - Deferred screen switching to avoid FPS drops during transitions
+  - Optional LVGL performance monitor overlay
+- **Touch input support**
+  - `TouchDriver` / `TouchManager` HAL with LVGL input device registration and optional calibration
+  - Board-configurable touch support via `HAS_TOUCH`
+- **Display/touch drivers and backends**
+  - TFT_eSPI display driver
+  - Native SPI ST7789V2 display driver
+  - Arduino_GFX display backend
+  - ESP-Panel based display/touch drivers (where applicable)
+  - XPT2046 resistive touch driver
+  - AXS15231B touch backend wrapper (vendored implementation scoped under the driver)
+- **Board driver selection and documentation**
+  - Board overrides updated so boards explicitly select display/touch backends (including `cyd-v2`, `jc3248w535`, `jc3636w518`, and ESP32-C3 variants)
+  - Board→driver documentation and generator (`src/app/drivers/README.md` + `tools/generate-board-driver-table.py`)
+- **Image upload/display pipeline + tooling**
+  - JPEG upload + decode flow (`image_api`) with JPEG preflight validation
+  - Strip decoding and batching; async decode with screen preserved while processing
+  - Tools: `tools/upload_image.py` and `tools/camera_to_esp32.py`
+- **Docs**
+  - New architecture docs: `docs/display-touch-architecture.md`, `docs/arduino-gfx-unification.md`
+
+### Changed
+- Build tooling is more robust (detects and flags previously-silent build failures)
+- Telemetry and web portal behavior updated (including CPU usage monitoring with min/max tracking)
+
+### Documentation
+- Updated `README.md` and developer docs to reflect the new display/touch system and board targets
+- Updated `docs/web-portal.md`, `docs/scripts.md`, and `docs/build-and-release-process.md`
+
+---
+
 ## [0.0.19] - 2025-12-17
 
 ### Fixed
@@ -91,7 +129,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Compiler automatically eliminates unused code per board
 
 ### Removed
-- `src/boards/esp32c3/board_config.cpp` - Not compiled by Arduino build system, was misleading
+- `src/boards/<board>/board_config.cpp` - Not compiled by Arduino build system, was misleading
 
 ---
 

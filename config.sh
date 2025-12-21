@@ -46,20 +46,18 @@ PROJECT_DISPLAY_NAME="ESP32 Template"
 # space for OTA-enabled firmware as projects grow.
 #
 # Examples:
-#   ["esp32"]="esp32:esp32:esp32"                                       # Classic ESP32 - hardware UART
-#   ["esp32c3"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"   # C3 with USB CDC enabled
-#   ["esp32c3_ota_1_9mb"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb"    # C3 with custom partitions
-#   ["esp32c6"]="esp32:esp32:dfrobot_firebeetle2_esp32c6:CDCOnBoot=cdc" # C6 with USB CDC enabled
-#   ["cyd-v2"]="esp32:esp32:esp32"                                  # CYD display v2 (same FQBN as esp32)
-#   ["cyd-v3"]="esp32:esp32:esp32"                                  # CYD display v3 (same FQBN as esp32)
+#   ["esp32-nodisplay"]="esp32:esp32:esp32"                                       # Classic ESP32 dev module (no display)
+#   ["esp32c3-waveshare-169-st7789v2"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"  # ESP32-C3 Super Mini + Waveshare 1.69\" ST7789V2
+#   ["esp32c3_ota_1_9mb"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb"    # ESP32-C3 w/ custom partitions (example)
+#   ["esp32c6"]="esp32:esp32:dfrobot_firebeetle2_esp32c6:CDCOnBoot=cdc"           # ESP32-C6 (USB CDC)
+#   ["cyd-v2"]="esp32:esp32:esp32"                                                # CYD display v2 (same FQBN as classic ESP32)
 
 declare -A FQBN_TARGETS=(
-    ["esp32"]="esp32:esp32:esp32"
-    ["cyd-v2"]="esp32:esp32:esp32:PartitionScheme=min_spiffs"
-    ["cyd-v3"]="esp32:esp32:esp32:PartitionScheme=min_spiffs"
-    ["esp32c3"]="esp32:esp32:nologo_esp32c3_super_mini:PartitionScheme=ota_1_9mb,CDCOnBoot=default"
-    ["jc3248w535"]="esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB,USBMode=hwcdc,CDCOnBoot=cdc"
-    ["jc3636w518"]="esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB,USBMode=hwcdc,CDCOnBoot=cdc"
+    ["esp32-nodisplay"]="esp32:esp32:esp32" # Classic ESP32 dev module (no display)
+    ["cyd-v2"]="esp32:esp32:esp32:PartitionScheme=min_spiffs" # CYD v2 display (ESP32 + display; minimal spiffs)
+    ["esp32c3-waveshare-169-st7789v2"]="esp32:esp32:nologo_esp32c3_super_mini:PartitionScheme=ota_1_9mb,CDCOnBoot=default" # ESP32-C3 Super Mini + Waveshare 1.69\" ST7789V2 (240x280; OTA-friendly partitions)
+    ["jc3248w535"]="esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB,USBMode=hwcdc,CDCOnBoot=cdc" # ESP32-S3 JC3248W535 (16MB + OPI PSRAM)
+    ["jc3636w518"]="esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB,USBMode=hwcdc,CDCOnBoot=cdc" # ESP32-S3 JC3636W518 (16MB + OPI PSRAM)
 )
 
 # Default board (used when only one board is configured)
