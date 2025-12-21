@@ -6,11 +6,93 @@ import argparse
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 
 RE_DEFINE = re.compile(r"^\s*#define\s+(?P<key>[A-Z0-9_]+)\s+(?P<value>.+?)\s*(?://.*)?$")
 RE_DEFINE_FLAG = re.compile(r"^\s*#define\s+(?P<key>[A-Z0-9_]+)\s*(?://.*)?$")
+
+RE_SELECTOR_COND = re.compile(
+    r"^\s*#(?P<kind>if|elif)\s+"
+    r"(?P<selector>DISPLAY_DRIVER|TOUCH_DRIVER)\s*==\s*(?P<token>[A-Z0-9_]+)\s*(?://.*)?$"
+)
+RE_CPP_INCLUDE = re.compile(r"^\s*#include\s+\"(?P<path>drivers/[^\"]+\.cpp)\"\s*(?://.*)?$")
+
+
+def _strip_prefix(value: str, prefix: str) -> str:
+    value = value.strip()
+    if value.startswith(prefix):
+        return value[len(prefix):]
+    return value
+
+
+def _infer_panel_from_path(include_path: str) -> Optional[str]:
+    """Try to infer a panel/controller name from a driver include path.
+
+    Examples:
+    - drivers/esp_panel_st77916_driver.cpp -> ST77916
+    - drivers/st7789v2_driver.cpp -> ST7789V2
+    """
+
+    stem = Path(include_path).stem
+    if stem.endswith("_driver"):
+        stem = stem[: -len("_driver")]
+
+    # Look for common chip-like tokens, preferring longer/more specific matches.
+    # This is intentionally heuristic and should fall back to None.
+    tokens = re.split(r"[_\-/]", stem)
+    candidates: list[str] = []
+    for t in tokens:
+        t = t.strip()
+        if not t:
+            continue
+        # chip-ish: letters+digits, optionally with v2/v3 suffix, etc.
+        if re.fullmatch(r"[a-z]*\d{3,}[a-z0-9]*", t):
+            candidates.append(t)
+            continue
+        if re.fullmatch(r"[a-z]{2,}\d{2,}[a-z0-9]*", t):
+            candidates.append(t)
+
+    if not candidates:
+        return None
+
+    # Prefer the last candidate (often the specific controller/panel).
+    chip = candidates[-1]
+    return chip.upper()
+
+
+def _parse_driver_translation_unit(path: Path, selector: str) -> Dict[str, str]:
+    """Parse display_drivers.cpp / touch_drivers.cpp to discover selector tokens.
+
+    Returns mapping: SELECTOR_TOKEN -> included driver cpp path (drivers/..../*_driver.cpp)
+    """
+
+    mapping: Dict[str, str] = {}
+    current_token: Optional[str] = None
+
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        m_cond = RE_SELECTOR_COND.match(line)
+        if m_cond and m_cond.group("selector") == selector:
+            current_token = m_cond.group("token").strip()
+            continue
+
+        m_inc = RE_CPP_INCLUDE.match(line)
+        if m_inc and current_token:
+            inc_path = m_inc.group("path").strip()
+
+            # Prefer the actual driver implementation include.
+            # Some selectors may include additional helper/vendor .cpp files.
+            is_driver_cpp = inc_path.endswith("_driver.cpp")
+
+            if current_token not in mapping:
+                if is_driver_cpp:
+                    mapping[current_token] = inc_path
+            else:
+                # Upgrade if we previously captured a non-driver include.
+                if is_driver_cpp and not mapping[current_token].endswith("_driver.cpp"):
+                    mapping[current_token] = inc_path
+
+    return mapping
 
 
 @dataclass(frozen=True)
@@ -52,32 +134,22 @@ def _read_defines(path: Path) -> Dict[str, str]:
 
 def _map_display_backend(token: str) -> str:
     token = token.strip()
-    if token == "DISPLAY_DRIVER_TFT_ESPI":
-        return "TFT_eSPI"
-    if token == "DISPLAY_DRIVER_ST7789V2":
-        return "ST7789V2 (native)"
-    if token == "DISPLAY_DRIVER_ARDUINO_GFX":
-        return "Arduino_GFX"
-    if token == "DISPLAY_DRIVER_ESP_PANEL":
-        return "ESP_Panel"
-    if token == "DISPLAY_DRIVER_LOVYANGFX":
-        return "LovyanGFX"
-    return token
+    if not token or token == "?":
+        return "?"
+    return _strip_prefix(token, "DISPLAY_DRIVER_")
 
 
 def _map_touch_backend(token: str) -> Tuple[str, str]:
     token = token.strip()
     if token in ("0", "false", "False"):
         return "none", "none"
-    if token == "TOUCH_DRIVER_XPT2046":
-        return "XPT2046", "XPT2046"
-    if token == "TOUCH_DRIVER_AXS15231B":
-        return "AXS15231B", "AXS15231B"
-    if token == "TOUCH_DRIVER_FT6236":
-        return "FT6236", "FT6236"
-    if token == "TOUCH_DRIVER_CST816S_ESP_PANEL":
-        return "CST816S", "CST816S"
-    return token, token
+    if not token or token == "?":
+        return "?", "?"
+    stripped = _strip_prefix(token, "TOUCH_DRIVER_")
+    # Generic readability tweak: if token is something like CST816S_ESP_PANEL,
+    # show the leading controller name while keeping the full token available.
+    primary = stripped.split("_", 1)[0] if "_" in stripped else stripped
+    return primary, primary
 
 
 def _detect_bus(defines: Dict[str, str]) -> str:
@@ -91,20 +163,35 @@ def _detect_bus(defines: Dict[str, str]) -> str:
     return "?"
 
 
-def _detect_panel(defines: Dict[str, str], display_backend_token: str) -> str:
-    if display_backend_token == "DISPLAY_DRIVER_ARDUINO_GFX":
-        return "AXS15231B"
-
-    # Current ESP_Panel driver in this repo targets ST77916 (JC3636W518).
-    if display_backend_token == "DISPLAY_DRIVER_ESP_PANEL":
-        return "ST77916"
+def _detect_panel(
+    defines: Dict[str, str],
+    display_backend_token: str,
+    display_driver_cpp_by_token: Dict[str, str],
+    touch_backend_token: str,
+) -> str:
+    # If the board explicitly declares a panel/controller hint, prefer it.
+    if "DISPLAY_PANEL" in defines:
+        return _strip_parens(defines.get("DISPLAY_PANEL", "?")).strip("\"")
 
     # TFT_eSPI boards often declare a controller selection macro.
     if "DISPLAY_DRIVER_ILI9341_2" in defines:
         return "ILI9341"
 
+    # Native ST7789V2 driver is inherently tied to the controller.
     if display_backend_token == "DISPLAY_DRIVER_ST7789V2":
         return "ST7789V2"
+
+    # If we can infer from the selected driver file, do so.
+    cpp_path = display_driver_cpp_by_token.get(display_backend_token)
+    if cpp_path:
+        inferred = _infer_panel_from_path(cpp_path)
+        if inferred and inferred not in ("TFT", "SPI", "ESP", "PANEL", "ARDUINO", "GFX"):
+            # For general backends (tft_espi, arduino_gfx) this may be None.
+            return inferred
+
+    # Heuristic: if Arduino_GFX is used with AXS15231B touch, the common pairing is AXS15231B.
+    if display_backend_token == "DISPLAY_DRIVER_ARDUINO_GFX" and touch_backend_token == "TOUCH_DRIVER_AXS15231B":
+        return "AXS15231B"
 
     return "?"
 
@@ -120,7 +207,12 @@ def _build_notes(defines: Dict[str, str]) -> str:
     return ", ".join(notes)
 
 
-def parse_board_overrides(board_name: str, overrides_path: Path) -> BoardInfo:
+def parse_board_overrides(
+    board_name: str,
+    overrides_path: Path,
+    display_driver_cpp_by_token: Dict[str, str],
+    touch_driver_cpp_by_token: Dict[str, str],
+) -> BoardInfo:
     defines = _read_defines(overrides_path)
 
     display_backend_token = defines.get("DISPLAY_DRIVER", "?")
@@ -138,7 +230,12 @@ def parse_board_overrides(board_name: str, overrides_path: Path) -> BoardInfo:
     rotation = _strip_parens(defines.get("DISPLAY_ROTATION", "?"))
 
     display_bus = _detect_bus(defines)
-    display_panel = _detect_panel(defines, display_backend_token)
+    display_panel = _detect_panel(
+        defines,
+        display_backend_token,
+        display_driver_cpp_by_token,
+        defines.get("TOUCH_DRIVER", "?"),
+    )
 
     notes = _build_notes(defines)
 
@@ -214,6 +311,17 @@ def main() -> int:
     repo_root = Path(args.repo_root) if args.repo_root else Path(__file__).resolve().parents[1]
     boards_dir = repo_root / "src" / "boards"
 
+    display_tu = repo_root / "src" / "app" / "display_drivers.cpp"
+    touch_tu = repo_root / "src" / "app" / "touch_drivers.cpp"
+
+    display_driver_cpp_by_token: Dict[str, str] = {}
+    touch_driver_cpp_by_token: Dict[str, str] = {}
+
+    if display_tu.exists():
+        display_driver_cpp_by_token = _parse_driver_translation_unit(display_tu, "DISPLAY_DRIVER")
+    if touch_tu.exists():
+        touch_driver_cpp_by_token = _parse_driver_translation_unit(touch_tu, "TOUCH_DRIVER")
+
     if not boards_dir.is_dir():
         raise SystemExit(f"Boards directory not found: {boards_dir}")
 
@@ -223,7 +331,14 @@ def main() -> int:
         overrides_path = board_dir / "board_overrides.h"
         if not overrides_path.exists():
             continue
-        board_infos.append(parse_board_overrides(board_dir.name, overrides_path))
+        board_infos.append(
+            parse_board_overrides(
+                board_dir.name,
+                overrides_path,
+                display_driver_cpp_by_token,
+                touch_driver_cpp_by_token,
+            )
+        )
 
     table_md = generate_table(board_infos)
 

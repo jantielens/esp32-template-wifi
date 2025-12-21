@@ -10,7 +10,7 @@
 #include "drivers/xpt2046_driver.cpp"
 #elif TOUCH_DRIVER == TOUCH_DRIVER_AXS15231B
 #include "drivers/axs15231b_touch_driver.cpp"
-#include "drivers/vendor/AXS15231B_touch.cpp"
+#include "drivers/axs15231b/vendor/AXS15231B_touch.cpp"
 #elif TOUCH_DRIVER == TOUCH_DRIVER_CST816S_ESP_PANEL
 #include "drivers/esp_panel_cst816s_touch_driver.cpp"
 #else

@@ -176,6 +176,7 @@ See `docs/wsl-development.md` for complete USB/IP setup guide.
 - `src/app/drivers/xpt2046_driver.cpp/h` - XPT2046 resistive touch driver
 - `src/app/drivers/arduino_gfx_driver.cpp/h` - Arduino_GFX display backend (AXS15231B QSPI)
 - `src/app/drivers/axs15231b_touch_driver.cpp/h` - AXS15231B touch backend wrapper
+- `src/app/drivers/axs15231b/vendor/AXS15231B_touch.cpp/h` - Vendored AXS15231B touch implementation (driver-scoped vendor code)
 - `src/app/drivers/README.md` - Driver selection conventions + generated board→drivers table
 - `src/app/screens/screen.h` - Screen base class interface
 - `src/app/screens/splash_screen.cpp/h` - Boot splash with animated spinner
@@ -200,6 +201,8 @@ See `docs/wsl-development.md` for complete USB/IP setup guide.
   - Excludes template fragments (files starting with `_`)
 
 - `tools/generate-board-driver-table.py` - Generates the board→drivers table from `src/boards/*/board_overrides.h`
+- `tools/generate-board-driver-table.py` - Generates the board→drivers table from `src/boards/*/board_overrides.h`
+  - Auto-discovers available display/touch backends from `src/app/display_drivers.cpp` and `src/app/touch_drivers.cpp`
   - `python3 tools/generate-board-driver-table.py --update-drivers-readme`
 
 ### Configuration
@@ -418,3 +421,4 @@ If the build fails:
 - **Arduino build limitation**: do not include driver `.cpp` files in manager files; add conditional includes to `src/app/display_drivers.cpp` or `src/app/touch_drivers.cpp` instead.
 - **Board→driver visibility**: after editing board overrides, regenerate the table in `src/app/drivers/README.md`:
   - `python3 tools/generate-board-driver-table.py --update-drivers-readme`
+- **Vendored code placement**: third-party source that is not an Arduino library should live under the driver that uses it (driver-scoped vendor code), not in a shared `drivers/vendor/` bucket.

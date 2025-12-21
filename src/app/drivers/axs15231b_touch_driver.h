@@ -10,7 +10,7 @@
 
 #include "../touch_driver.h"
 #include "../board_config.h"
-#include "vendor/AXS15231B_touch.h"
+#include "axs15231b/vendor/AXS15231B_touch.h"
 
 class AXS15231B_TouchDriver : public TouchDriver {
 private:
