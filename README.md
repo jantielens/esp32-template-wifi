@@ -89,7 +89,8 @@ esp32-template-wifi/
 │   │   ├── board_config.h         # Default board configuration
 │   │   ├── config_manager.cpp/h   # NVS config storage
 │   │   ├── web_portal.cpp/h       # Web server & API
-│   │   ├── web_assets.cpp/h       # Embedded HTML/CSS/JS
+│   │   ├── web_assets.h           # Embedded HTML/CSS/JS (auto-generated)
+│   │   ├── project_branding.h     # PROJECT_NAME / PROJECT_DISPLAY_NAME (auto-generated)
 │   │   └── web/
 │   │       ├── _header.html       # Shared HTML head template
 │   │       ├── _nav.html          # Shared navigation template

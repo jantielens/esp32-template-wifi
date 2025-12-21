@@ -25,7 +25,8 @@ ESP32 Arduino development template using `arduino-cli` for headless builds. Desi
   - Conditional compilation: Only selected drivers are compiled via `display_drivers.cpp` / `touch_drivers.cpp` (Arduino doesn’t auto-compile subdir `.cpp`)
 - **Web Portal**: Multi-page async web server with captive portal support
   - `web_portal.cpp/h` - Server and REST API implementation
-  - `web_assets.cpp/h` - Embedded HTML/CSS/JS (from `src/app/web/`)
+  - `web_assets.h` - Embedded HTML/CSS/JS (from `src/app/web/`) (auto-generated)
+  - `project_branding.h` - Project branding defines (`PROJECT_NAME`, `PROJECT_DISPLAY_NAME`) (auto-generated)
   - `config_manager.cpp/h` - NVS configuration storage
   - Multi-page architecture: Home, Network, Firmware
   - Template system: `_header.html`, `_nav.html`, `_footer.html` for DRY
@@ -163,7 +164,8 @@ See `docs/wsl-development.md` for complete USB/IP setup guide.
 - `src/app/board_config.h` - Default board configuration (LED pins, WiFi settings)
 - `src/boards/[board-name]/board_overrides.h` - Optional board-specific compile-time configuration
 - `src/app/web_portal.cpp/h` - Async web server and REST API endpoints
-- `src/app/web_assets.cpp/h` - Embedded HTML/CSS/JS from `web/` directory
+- `src/app/web_assets.h` - Embedded HTML/CSS/JS from `src/app/web/` (auto-generated)
+- `src/app/project_branding.h` - Project branding defines (`PROJECT_NAME`, `PROJECT_DISPLAY_NAME`) (auto-generated)
 - `src/app/config_manager.cpp/h` - NVS-based configuration storage
 - `src/app/display_driver.h` - Display HAL interface with configureLVGL() hook
 - `src/app/display_manager.cpp/h` - Display lifecycle, LVGL init, FreeRTOS rendering task

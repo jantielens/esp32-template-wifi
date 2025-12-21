@@ -256,7 +256,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Project Branding System**: Centralized configuration for project identity
   - `PROJECT_NAME` and `PROJECT_DISPLAY_NAME` variables in `config.sh`
   - Template substitution in HTML files at build time (e.g., `{{PROJECT_DISPLAY_NAME}}`)
-  - Auto-generated C++ defines in `web_assets.h` for firmware use
+  - Auto-generated C++ defines in `src/app/project_branding.h` for firmware use (included by `web_assets.h`)
   - Branded AP SSID, device names, web portal titles, and release artifacts
 - **Automated Release Workflow**: GitHub Actions workflow for automated releases
   - `.github/workflows/release.yml` - Tag-triggered release pipeline with branded artifact names

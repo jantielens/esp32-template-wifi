@@ -726,7 +726,8 @@ Dismiss the currently displayed image and return to previous screen.
 **Backend (C++):**
 - `web_portal.cpp/h` - ESPAsyncWebServer with REST endpoints
 - `config_manager.cpp/h` - NVS (Non-Volatile Storage) for configuration
-- `web_assets.cpp/h` - PROGMEM embedded HTML/CSS/JS (gzip compressed)
+- `web_assets.h` - PROGMEM embedded HTML/CSS/JS (gzip compressed) (auto-generated)
+- `project_branding.h` - `PROJECT_NAME` / `PROJECT_DISPLAY_NAME` defines (auto-generated)
 - `log_manager.cpp/h` - Print-compatible logging with nested blocks (serial output only)
 
 **Frontend (HTML/CSS/JS):**
@@ -820,7 +821,8 @@ DNS server redirects all requests to device IP in AP mode:
    - Minifies CSS using `csscompressor`
    - Minifies JavaScript using `rjsmin`
    - Gzip compresses all assets (level 9)
-   - Generates `web_assets.h` with embedded byte arrays
+  - Generates `src/app/web_assets.h` with embedded byte arrays
+  - Generates `src/app/project_branding.h` with `PROJECT_NAME` / `PROJECT_DISPLAY_NAME` defines
    
    The build script shows compression statistics:
    ```

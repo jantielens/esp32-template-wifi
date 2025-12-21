@@ -84,7 +84,7 @@ The build system automatically applies project branding during compilation:
 
 1. `build.sh` sources `config.sh` to get `PROJECT_NAME` and `PROJECT_DISPLAY_NAME`
 2. `tools/minify-web-assets.sh` performs template substitution in HTML files
-3. C++ `#define` statements are generated in `web_assets.h`
+3. Branding C++ `#define` statements are generated in `src/app/project_branding.h` (and `web_assets.h` includes it)
 4. Firmware compiles with branded values embedded
 
 ### Board-Specific Configuration

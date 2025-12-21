@@ -1,6 +1,7 @@
 
 #include "screens/splash_screen.h"
 #include "log_manager.h"
+#include "project_branding.h"
 
 SplashScreen::SplashScreen() : screen(nullptr), logoLabel(nullptr), statusLabel(nullptr), spinner(nullptr) {}
 
@@ -23,7 +24,7 @@ void SplashScreen::create() {
     
     // Logo/title (centered above middle)
     logoLabel = lv_label_create(screen);
-    lv_label_set_text(logoLabel, "ESP32");
+    lv_label_set_text(logoLabel, PROJECT_DISPLAY_NAME);
     lv_obj_set_style_text_color(logoLabel, lv_color_white(), 0);
     lv_obj_set_style_text_font(logoLabel, &lv_font_montserrat_24, 0);
     lv_obj_align(logoLabel, LV_ALIGN_CENTER, 0, -40);
