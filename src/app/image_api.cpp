@@ -41,6 +41,30 @@ static void image_api_free(void* p) {
     heap_caps_free(p);
 }
 
+static size_t image_api_no_psram_effective_headroom_bytes(size_t base_headroom, size_t free_heap, size_t largest_block) {
+    // On no-PSRAM boards, a fixed headroom is often either too strict (false rejects) or too lax.
+    // Use a simple fragmentation-based adaptation:
+    // - When fragmentation is low (largest block is a good fraction of free heap), allow a smaller headroom.
+    // - When fragmentation is higher, fall back to the configured headroom.
+    // Keep a minimum safety floor.
+    const size_t min_headroom = 24 * 1024;
+    size_t headroom = base_headroom;
+
+    size_t frag_pct = 100;
+    if (free_heap > 0 && largest_block <= free_heap) {
+        frag_pct = 100 - (largest_block * 100) / free_heap;
+    }
+
+    if (frag_pct <= 45) {
+        headroom = min(headroom, (size_t)(32 * 1024));
+    } else if (frag_pct <= 60) {
+        headroom = min(headroom, (size_t)(40 * 1024));
+    }
+
+    headroom = max(headroom, min_headroom);
+    return headroom;
+}
+
 // ===== Constants =====
 
 // Note: AsyncWebServer callbacks run on the AsyncTCP task. Do not block
@@ -228,7 +252,8 @@ static void handleImageUpload(AsyncWebServerRequest *request, String filename, s
             // No PSRAM fitted: total heap + largest block check (prevents immediate alloc failure).
             const size_t free_heap = ESP.getFreeHeap();
             const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
-            const size_t required = total_size + g_cfg.decode_headroom_bytes;
+            const size_t headroom = image_api_no_psram_effective_headroom_bytes(g_cfg.decode_headroom_bytes, free_heap, largest);
+            const size_t required = total_size + headroom;
             if (free_heap < required || largest < total_size) {
                 Logger.logLinef(
                     "ERROR: Insufficient memory (need %u heap, have %u; largest %u)",
@@ -255,7 +280,8 @@ static void handleImageUpload(AsyncWebServerRequest *request, String filename, s
         // No PSRAM: total heap + largest block check (prevents immediate alloc failure).
         const size_t free_heap = ESP.getFreeHeap();
         const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
-        const size_t required = total_size + g_cfg.decode_headroom_bytes;
+        const size_t headroom = image_api_no_psram_effective_headroom_bytes(g_cfg.decode_headroom_bytes, free_heap, largest);
+        const size_t required = total_size + headroom;
         if (free_heap < required || largest < total_size) {
             Logger.logLinef(
                 "ERROR: Insufficient memory (need %u heap, have %u; largest %u)",

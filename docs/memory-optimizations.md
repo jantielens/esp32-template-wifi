@@ -70,7 +70,7 @@ Success criteria to aim for:
 | **9** | LVGL | Reduce screen/widget complexity | Variable | — | Low | Medium | Low |
 | **10** | Config | Lower IMAGE_API_MAX_SIZE_BYTES for no-PSRAM | Indirect | Worst-case 320x240 Q95 noise JPEGs ~77KB, ok under 80KB cap (cyd-v2). PSRAM QSPI boards use 300KB. Image API precheck is PSRAM-aware (runtime `psramFound()` so PSRAM-capable SoCs without PSRAM don't get falsely rejected) | Medium | Low | Medium |
 | **11** | Config | Reduce IMAGE_STRIP_BATCH_MAX_ROWS | +1-4KB | — | Low | Low | Low |
-| **12** | Config | Tune headroom thresholds for no-PSRAM | Indirect | — | Low | Low | Low |
+| **12** | Config | Tune headroom thresholds for no-PSRAM | Indirect | Implemented: adaptive Image API headroom on no-PSRAM based on fragmentation (largest 8-bit block vs free heap), with a minimum floor | Low | Low | Low |
 | **13** | JSON | Use sized StaticJsonDocument (8+ instances) | Variable | Implemented (no `JsonDocument doc;` in src/app) | Med-High | Low-Med | **High** |
 | **14** | LVGL | Disable unused widgets | +5-15KB flash | Build: -68204B flash (cyd-v2) | Low | Low | Low |
 | **15** | FreeRTOS | Reduce LVGL task stack (8192→4096-6144) | +2-4KB | — | N/A | Medium | Medium |
@@ -813,7 +813,30 @@ Notes:
 
 ---
 
-### 12) Prefer internal allocations for TLS + networking buffers on no-PSRAM
+### 12) Tune Image API headroom thresholds for no-PSRAM
+
+**What**
+
+No-PSRAM boards are sensitive to hard-coded headroom values (too high ⇒ false `507` rejects; too low ⇒ decode/display instability).
+
+**Change**
+
+Implement adaptive headroom on the no-PSRAM Image API precheck:
+
+- Keep a minimum headroom floor.
+- Reduce required headroom when fragmentation is low (largest free 8-bit block is a good fraction of total free heap).
+- Fall back to the configured headroom when fragmentation is higher.
+
+Implementation lives in [src/app/image_api.cpp](../src/app/image_api.cpp) and only affects the no-PSRAM precheck path.
+
+**Why this is safe**
+
+The upload still requires a contiguous block for the JPEG buffer (`heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) >= total_size`).
+Adaptive headroom only changes the extra safety margin beyond that.
+
+---
+
+### 12b) Prefer internal allocations for TLS + networking buffers on no-PSRAM
 
 **Measured (before/after)**
 
