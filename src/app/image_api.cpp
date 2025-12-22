@@ -12,6 +12,7 @@
 #include "image_api.h"
 #include "jpeg_preflight.h"
 #include "log_manager.h"
+#include "device_telemetry.h"
 
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
@@ -105,7 +106,7 @@ static void handleImageUpload(AsyncWebServerRequest *request, String filename, s
         image_upload_timeout_ms = parse_timeout_ms(request);
         Logger.logLinef("Timeout: %lu ms", image_upload_timeout_ms);
 
-        Logger.logLinef("Free heap before clear: %u bytes", ESP.getFreeHeap());
+        device_telemetry_log_memory_snapshot("img pre-clear");
 
         // Free any pending image buffer to make room for new upload
         if (pending_image_op.buffer) {
@@ -115,7 +116,7 @@ static void handleImageUpload(AsyncWebServerRequest *request, String filename, s
             pending_image_op.size = 0;
         }
 
-        Logger.logLinef("Free heap after clear: %u bytes", ESP.getFreeHeap());
+        device_telemetry_log_memory_snapshot("img post-clear");
 
         // Check file size
         size_t total_size = request->contentLength();
@@ -130,6 +131,7 @@ static void handleImageUpload(AsyncWebServerRequest *request, String filename, s
         size_t required_heap = total_size + g_cfg.decode_headroom_bytes;
         if (free_heap < required_heap) {
             Logger.logLinef("ERROR: Insufficient memory (need %u, have %u)", required_heap, free_heap);
+            device_telemetry_log_memory_snapshot("img insufficient");
             char error_msg[192];
             snprintf(error_msg, sizeof(error_msg),
                      "{\"success\":false,\"message\":\"Insufficient memory: need %uKB, have %uKB. Try reducing image size.\"}",
@@ -140,12 +142,15 @@ static void handleImageUpload(AsyncWebServerRequest *request, String filename, s
         }
 
         // Allocate buffer
+        device_telemetry_log_memory_snapshot("img pre-alloc");
         image_upload_buffer = (uint8_t*)malloc(total_size);
         if (!image_upload_buffer) {
             Logger.logEnd("ERROR: Memory allocation failed");
+            device_telemetry_log_memory_snapshot("img alloc-fail");
             request->send(507, "application/json", "{\"success\":false,\"message\":\"Memory allocation failed\"}");
             return;
         }
+        device_telemetry_log_memory_snapshot("img post-alloc");
 
         image_upload_size = 0;
         upload_state = UPLOAD_IN_PROGRESS;
@@ -294,6 +299,7 @@ static void handleStripUpload(AsyncWebServerRequest *request, uint8_t *data, siz
         // Only log first strip to reduce verbosity
         if (stripIndex == 0) {
             Logger.logMessagef("Strip Mode", "Uploading %dx%d image (%d strips)", imageWidth, imageHeight, totalStrips);
+            device_telemetry_log_memory_snapshot("strip pre-alloc");
         }
 
         if (stripIndex < 0 || stripIndex >= totalStrips) {
@@ -317,6 +323,7 @@ static void handleStripUpload(AsyncWebServerRequest *request, uint8_t *data, siz
         current_strip_buffer = (uint8_t*)malloc(total);
         if (!current_strip_buffer) {
             Logger.logLinef("ERROR: Out of memory (requested %u bytes, free heap: %u)", (unsigned)total, ESP.getFreeHeap());
+            device_telemetry_log_memory_snapshot("strip alloc-fail");
             Logger.logEnd();
             request->send(507, "application/json", "{\"success\":false,\"message\":\"Out of memory\"}");
             return;
@@ -475,6 +482,7 @@ void image_api_process_pending(bool ota_in_progress) {
 
     // Handle dismiss operation
     if (pending_image_op.dismiss) {
+        device_telemetry_log_memory_snapshot("img dismiss");
         if (g_backend.hide_current_image) {
             g_backend.hide_current_image();
         }
@@ -491,6 +499,10 @@ void image_api_process_pending(bool ota_in_progress) {
         const int total_strips = pending_strip_op.total_strips;
 
         Logger.logMessagef("Portal", "Processing strip %d/%d (%u bytes)", strip_index, total_strips - 1, (unsigned)sz);
+
+        if (strip_index == 0) {
+            device_telemetry_log_memory_snapshot("strip pre-decode");
+        }
 
         // Initialize strip session on first strip
         if (strip_index == 0) {
@@ -524,6 +536,10 @@ void image_api_process_pending(bool ota_in_progress) {
             success = g_backend.decode_strip(buf, sz, strip_index, false);
         }
 
+        if (strip_index == (uint8_t)(total_strips - 1)) {
+            device_telemetry_log_memory_snapshot("strip post-decode");
+        }
+
         free((void*)pending_strip_op.buffer);
         pending_strip_op.buffer = nullptr;
         pending_strip_op.size = 0;
@@ -531,6 +547,7 @@ void image_api_process_pending(bool ota_in_progress) {
 
         if (!success) {
             Logger.logMessagef("Portal", "ERROR: Failed to decode strip %d", strip_index);
+            device_telemetry_log_memory_snapshot("strip decode-fail");
             if (g_backend.hide_current_image) {
                 g_backend.hide_current_image();
             }
@@ -547,6 +564,8 @@ void image_api_process_pending(bool ota_in_progress) {
 
         Logger.logMessagef("Portal", "Processing pending image (%u bytes)", (unsigned)sz);
 
+        device_telemetry_log_memory_snapshot("img pre-decode");
+
         bool success = false;
         if (g_backend.start_strip_session && g_backend.decode_strip) {
             if (!g_backend.start_strip_session(g_cfg.lcd_width, g_cfg.lcd_height, pending_image_op.timeout_ms, pending_image_op.start_time)) {
@@ -557,6 +576,8 @@ void image_api_process_pending(bool ota_in_progress) {
             }
         }
 
+        device_telemetry_log_memory_snapshot("img post-decode");
+
         free((void*)pending_image_op.buffer);
         pending_image_op.buffer = nullptr;
         pending_image_op.size = 0;
@@ -564,6 +585,7 @@ void image_api_process_pending(bool ota_in_progress) {
 
         if (!success) {
             Logger.logMessage("Portal", "ERROR: Failed to display image");
+            device_telemetry_log_memory_snapshot("img decode-fail");
             if (g_backend.hide_current_image) {
                 g_backend.hide_current_image();
             }

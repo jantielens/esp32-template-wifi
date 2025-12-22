@@ -3,6 +3,17 @@
 
 #include <ArduinoJson.h>
 
+struct DeviceMemorySnapshot {
+	size_t heap_free_bytes;
+	size_t heap_min_free_bytes;
+	size_t heap_largest_free_block_bytes;
+	size_t heap_internal_free_bytes;
+	size_t heap_internal_min_free_bytes;
+	size_t psram_free_bytes;
+	size_t psram_min_free_bytes;
+	size_t psram_largest_free_block_bytes;
+};
+
 // Initializes cached values used by device telemetry (safe to call multiple times).
 // This exists to avoid re-entrant calls into ESP-IDF image helpers from different tasks.
 void device_telemetry_init();
@@ -28,5 +39,11 @@ void device_telemetry_get_cpu_minmax(int* out_min, int* out_max);
 // Initialize CPU monitoring background task.
 // Must be called once during setup.
 void device_telemetry_start_cpu_monitoring();
+
+// Capture a point-in-time memory snapshot (heap/internal heap/PSRAM).
+DeviceMemorySnapshot device_telemetry_get_memory_snapshot();
+
+// Convenience logging helper (single line) using LogManager.
+void device_telemetry_log_memory_snapshot(const char *tag);
 
 #endif // DEVICE_TELEMETRY_H

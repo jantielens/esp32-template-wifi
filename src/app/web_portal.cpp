@@ -74,6 +74,30 @@ static volatile bool pending_image_hide_request = false;
 
 // ===== WEB SERVER HANDLERS =====
 
+static AsyncWebServerResponse *begin_gzipped_asset_response(
+    AsyncWebServerRequest *request,
+    const char *content_type,
+    const uint8_t *content_gz,
+    size_t content_gz_len,
+    const char *cache_control
+) {
+    // Prefer the PROGMEM-aware response helper to avoid accidental heap copies.
+    // All generated assets live in flash as `const uint8_t[] PROGMEM`.
+    AsyncWebServerResponse *response = request->beginResponse_P(
+        200,
+        content_type,
+        content_gz,
+        content_gz_len
+    );
+
+    response->addHeader("Content-Encoding", "gzip");
+    response->addHeader("Vary", "Accept-Encoding");
+    if (cache_control && strlen(cache_control) > 0) {
+        response->addHeader("Cache-Control", cache_control);
+    }
+    return response;
+}
+
 // Handle root - redirect to network.html in AP mode, serve home in full mode
 void handleRoot(AsyncWebServerRequest *request) {
     if (ap_mode_active) {
@@ -81,10 +105,13 @@ void handleRoot(AsyncWebServerRequest *request) {
         request->redirect("/network.html");
     } else {
         // In full mode, serve home page
-        AsyncWebServerResponse *response = request->beginResponse(200, "text/html", 
-                                                                   home_html_gz, 
-                                                                   home_html_gz_len);
-        response->addHeader("Content-Encoding", "gzip");
+        AsyncWebServerResponse *response = begin_gzipped_asset_response(
+            request,
+            "text/html",
+            home_html_gz,
+            home_html_gz_len,
+            "no-store"
+        );
         request->send(response);
     }
 }
@@ -96,19 +123,25 @@ void handleHome(AsyncWebServerRequest *request) {
         request->redirect("/network.html");
         return;
     }
-    AsyncWebServerResponse *response = request->beginResponse(200, "text/html", 
-                                                               home_html_gz, 
-                                                               home_html_gz_len);
-    response->addHeader("Content-Encoding", "gzip");
+    AsyncWebServerResponse *response = begin_gzipped_asset_response(
+        request,
+        "text/html",
+        home_html_gz,
+        home_html_gz_len,
+        "no-store"
+    );
     request->send(response);
 }
 
 // Serve network configuration page
 void handleNetwork(AsyncWebServerRequest *request) {
-    AsyncWebServerResponse *response = request->beginResponse(200, "text/html", 
-                                                               network_html_gz, 
-                                                               network_html_gz_len);
-    response->addHeader("Content-Encoding", "gzip");
+    AsyncWebServerResponse *response = begin_gzipped_asset_response(
+        request,
+        "text/html",
+        network_html_gz,
+        network_html_gz_len,
+        "no-store"
+    );
     request->send(response);
 }
 
@@ -119,28 +152,37 @@ void handleFirmware(AsyncWebServerRequest *request) {
         request->redirect("/network.html");
         return;
     }
-    AsyncWebServerResponse *response = request->beginResponse(200, "text/html", 
-                                                               firmware_html_gz, 
-                                                               firmware_html_gz_len);
-    response->addHeader("Content-Encoding", "gzip");
+    AsyncWebServerResponse *response = begin_gzipped_asset_response(
+        request,
+        "text/html",
+        firmware_html_gz,
+        firmware_html_gz_len,
+        "no-store"
+    );
     request->send(response);
 }
 
 // Serve CSS
 void handleCSS(AsyncWebServerRequest *request) {
-    AsyncWebServerResponse *response = request->beginResponse(200, "text/css", 
-                                                               portal_css_gz, 
-                                                               portal_css_gz_len);
-    response->addHeader("Content-Encoding", "gzip");
+    AsyncWebServerResponse *response = begin_gzipped_asset_response(
+        request,
+        "text/css",
+        portal_css_gz,
+        portal_css_gz_len,
+        "public, max-age=600"
+    );
     request->send(response);
 }
 
 // Serve JavaScript
 void handleJS(AsyncWebServerRequest *request) {
-    AsyncWebServerResponse *response = request->beginResponse(200, "application/javascript", 
-                                                               portal_js_gz, 
-                                                               portal_js_gz_len);
-    response->addHeader("Content-Encoding", "gzip");
+    AsyncWebServerResponse *response = begin_gzipped_asset_response(
+        request,
+        "application/javascript",
+        portal_js_gz,
+        portal_js_gz_len,
+        "public, max-age=600"
+    );
     request->send(response);
 }
 
