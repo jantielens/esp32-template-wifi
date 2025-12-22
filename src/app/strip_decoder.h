@@ -52,12 +52,26 @@ public:
     int get_current_y() const { return current_y; }
     
 private:
+    void free_buffers();
+    bool ensure_buffers();
+
     DisplayDriver* driver;  // Display driver for LCD writes
     int width;              // Image width
     int height;             // Image height
     int lcd_width;          // LCD panel width
     int lcd_height;         // LCD panel height
     int current_y;          // Current Y position in image
+
+    // Per-session reusable buffers (allocated in begin(), freed in end()).
+    void* work_buffer = nullptr;
+    size_t work_buffer_size = 0;
+
+    uint16_t* line_buffer = nullptr;
+    int line_buffer_width = 0;
+
+    uint16_t* batch_buffer = nullptr;
+    int batch_max_rows = 0;
+    int batch_capacity_pixels = 0;
     
     // Note: Strip height is auto-detected from JPEG during decode (not hardcoded)
     // Typical values: 8, 16, 32, or 64 pixels (configurable in encoder)

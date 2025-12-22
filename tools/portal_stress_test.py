@@ -23,6 +23,8 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
+import subprocess
 import sys
 import time
 from dataclasses import dataclass
@@ -36,6 +38,110 @@ from urllib.request import Request, urlopen
 DEFAULT_TIMEOUT_S = 5.0
 DEFAULT_RETRIES = 3
 DEFAULT_RETRY_SLEEP_S = 0.25
+
+
+def _repo_root() -> str:
+    # tools/portal_stress_test.py -> repo root
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+
+def _run_upload_image_generate(
+    host: str,
+    resolution: str,
+    timeout_s: float,
+    retries: int,
+    retry_sleep_s: float,
+) -> None:
+    """Generate+upload a full image using tools/upload_image.py.
+
+    This keeps this stress script stdlib-only while still letting us
+    exercise the firmware's JPEG upload+decode path.
+
+    Note: tools/upload_image.py requires optional deps (requests, pillow).
+    """
+
+    repo_root = _repo_root()
+    script = os.path.join(repo_root, "tools", "upload_image.py")
+
+    if not os.path.exists(script):
+        raise RuntimeError(f"Missing tools/upload_image.py at {script}")
+
+    # upload_image.py expects host without scheme.
+    host_arg = host
+    if host_arg.startswith("http://"):
+        host_arg = host_arg[len("http://") :]
+    elif host_arg.startswith("https://"):
+        host_arg = host_arg[len("https://") :]
+    host_arg = host_arg.rstrip("/")
+
+    # We retry the whole operation because the device may return 409 Busy
+    # while the previous cycle is still being processed.
+    last_err: Optional[BaseException] = None
+    for attempt in range(1, max(1, retries) + 1):
+        try:
+            # We don't pass upload timeout here; upload_image.py has its own HTTP timeout.
+            # We do set firmware display timeout (query param) to a small non-zero
+            # value so images don't stack forever.
+            # Using 3 seconds is enough to exercise decode without long dwell time.
+            cmd = [
+                sys.executable,
+                script,
+                host_arg,
+                "--generate",
+                resolution,
+                "--timeout",
+                "3",
+            ]
+
+            # Bound runtime: allow the generator/uploader some time.
+            # (timeout_s is per-request in this script; treat it as a scale factor here.)
+            proc_timeout = max(10.0, float(timeout_s) * 6.0)
+            res = subprocess.run(
+                cmd,
+                cwd=repo_root,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=proc_timeout,
+                check=False,
+                text=True,
+            )
+
+            if res.returncode == 0:
+                return
+
+            out = (res.stdout or "").strip()
+            # Common transient conditions
+            transient = (
+                "Upload busy" in out
+                or "Busy" in out
+                or "409" in out
+                or "Network error" in out
+                or "Read timed out" in out
+                or "Connection" in out
+            )
+
+            if attempt < retries and transient:
+                time.sleep(retry_sleep_s * attempt)
+                continue
+
+            raise RuntimeError(
+                "upload_image.py failed "
+                f"(exit={res.returncode}, attempt={attempt}/{retries}):\n{out[-2000:]}"
+            )
+        except subprocess.TimeoutExpired as e:
+            last_err = e
+            if attempt < retries:
+                time.sleep(retry_sleep_s * attempt)
+                continue
+            break
+        except Exception as e:
+            last_err = e
+            if attempt < retries:
+                time.sleep(retry_sleep_s * attempt)
+                continue
+            break
+
+    raise RuntimeError(f"Image upload/generate failed after {retries} attempts: {last_err}")
 
 
 @dataclass
@@ -295,9 +401,18 @@ def main(argv: list[str]) -> int:
     p.add_argument("--cycles", type=int, default=10, help="Number of stress cycles (default: 10)")
     p.add_argument(
         "--scenario",
-        choices=("api", "portal", "both"),
+        choices=("api", "portal", "both", "image"),
         default="api",
-        help="Stress scenario: api (JSON churn), portal (fetch pages+assets), both (portal + api).",
+        help="Stress scenario: api (JSON churn), portal (fetch pages+assets), both (portal + api), image (full image upload).",
+    )
+
+    p.add_argument(
+        "--image-generate",
+        default=None,
+        help=(
+            "Optional: generate+upload a full image each cycle using tools/upload_image.py. "
+            "Format: WxH (example: 320x240). Requires requests+pillow installed for upload_image.py."
+        ),
     )
     p.add_argument("--sleep", type=float, default=0.5, help="Sleep between steps in seconds (default: 0.5)")
     p.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT_S, help="HTTP timeout seconds (default: 5)")
@@ -324,6 +439,8 @@ def main(argv: list[str]) -> int:
     print(f"Target: {base_url}")
     print(f"Scenario: {args.scenario}")
     print(f"Cycles: {args.cycles}")
+    if args.image_generate:
+        print(f"Image generate: {args.image_generate}")
 
     samples: list[HealthSample] = []
 
@@ -377,6 +494,30 @@ def main(argv: list[str]) -> int:
             except RuntimeError:
                 # Boards without display will 404; that's fine for "api" scenario.
                 pass
+
+            if args.scenario in ("image",) or args.image_generate:
+                # Sample before upload so we can see per-cycle allocation impact.
+                health_pre = get_health(base_url, timeout_s=args.timeout, retries=args.retries, retry_sleep_s=args.retry_sleep)
+                samples.append(extract_sample(cycle=i, phase="img_pre", health=health_pre))
+
+                if args.image_generate:
+                    _run_upload_image_generate(
+                        host=base_url,
+                        resolution=args.image_generate,
+                        timeout_s=args.timeout,
+                        retries=args.retries,
+                        retry_sleep_s=args.retry_sleep,
+                    )
+                else:
+                    # If user asked for scenario=image but didn't supply generation,
+                    # just skip (keeps behavior explicit).
+                    raise RuntimeError("scenario=image requires --image-generate")
+
+                # Allow main loop to process pending decode.
+                time.sleep(max(args.sleep, 0.25))
+
+                health_post = get_health(base_url, timeout_s=args.timeout, retries=args.retries, retry_sleep_s=args.retry_sleep)
+                samples.append(extract_sample(cycle=i, phase="img_post", health=health_post))
 
             # Take a sample per cycle
             health = get_health(base_url, timeout_s=args.timeout, retries=args.retries, retry_sleep_s=args.retry_sleep)

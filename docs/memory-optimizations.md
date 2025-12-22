@@ -39,6 +39,9 @@ python3 tools/portal_stress_test.py --host 192.168.1.111 --no-reboot --cycles 10
 
 # Write a CSV so you can diff runs across firmware changes
 python3 tools/portal_stress_test.py --host 192.168.1.111 --no-reboot --cycles 10 --scenario api --out /tmp/portal_api_run.csv
+
+# Stress the full-image upload + decode path (generates a test JPEG each cycle)
+python3 tools/portal_stress_test.py --host 192.168.1.111 --no-reboot --cycles 10 --scenario image --image-generate 320x240 --out /tmp/portal_image_run.csv
 ```
 
 The script prints per-cycle `heap_largest`/`heap_fragmentation` and a min/max summary, using `/api/health` as the source of truth.
@@ -58,7 +61,7 @@ Success criteria to aim for:
 | **2** | HTTPS | Fully streaming download (no response buffering) | +20-80KB | — | Med-High | Med-High | **Critical** |
 | **3** | JSON | Remove String temporaries in portal/MQTT | +2-20KB | Portal churn: hl stayed 77812B (no drop), frag 47→37 (cyd-v2) | **Medium** | Low-Med | **High** |
 | **4** | JSON | Replace JsonDocument with StaticJsonDocument | Variable | Implemented (no DynamicJsonDocument in src/app) | Med-High | Low-Med | **High** |
-| **5** | JPEG Decode | Reuse decoder buffers per session | +8-16KB | — | Medium | Medium | High |
+| **5** | JPEG Decode | Reuse decoder buffers per session | +8-16KB | Image stress: after_cycle mins hf +24296B, hl +8192B, hi +24296B (cyd-v2, 320x240 x5) | Medium | Medium | High |
 | **6** | LVGL | Switch to custom allocator (LV_MEM_CUSTOM=1) | +48KB | Build: DRAM -49168B, hl +49168B. Runtime: heap_free +40KB, hl +20480B (cyd-v2) | Mixed | High | Medium |
 | **7** | LVGL | Reduce draw buffer size | +2-6KB | — | Low | Low | Low |
 | **8** | LVGL | Disable unused fonts | +10-30KB flash | — | Low | Low | Low |
@@ -303,20 +306,24 @@ This repo already has image strip decoding infrastructure (`StripDecoder`) that 
 **Measured (before/after)**
 
 ```text
-Board:
-Scenario:
+Board: cyd-v2 (no PSRAM)
+Scenario: Portal churn (config save + screen switches; compare next heartbeat)
 
-Before:
-  [Mem] boot:
-  [Mem] setup:
-  [Mem] hb:
+Before (pre-change; config save + screen switches correlated with fragmentation hit):
+  Before portal actions:
+    [Mem] hb hf=127440 hm=98700 hl=77812 hi=82448 hin=53752 frag=38 pf=0 pm=0 pl=0
+  After config save + screen switches:
+    [Mem] hb hf=123916 hm=98700 hl=65524 hi=78924 hin=53752 frag=47 pf=0 pm=0 pl=0
 
-After:
-  [Mem] boot:
-  [Mem] setup:
-  [Mem] hb:
+After (serialize JSON without String temporaries; stream HTTP responses / bounded MQTT payloads):
+  Before portal actions:
+    [Mem] hb hf=127720 hm=98940 hl=77812 hi=82728 hin=53992 frag=39 pf=0 pm=0 pl=0
+  After screen switch (test→info) + config save:
+    [Mem] hb hf=124860 hm=93752 hl=77812 hi=79868 hin=48804 frag=37 pf=0 pm=0 pl=0
 
 Notes:
+  - Measured effect: avoided the post-save largest-block drop (77812→65524) seen before, and reduced the post-save frag spike (47→37).
+  - This result is not perfectly isolated: it reflects the combined “no String JSON” changes plus the JSON sizing work in items 4/13.
 ```
 
 **What**
@@ -367,20 +374,20 @@ If the payload doesn’t fit, either:
 **Measured (before/after)**
 
 ```text
-Board:
-Scenario:
+Board: cyd-v2 (no PSRAM)
+Scenario: Portal churn (config save + screen switches; compare next heartbeat)
 
-Before:
-  [Mem] boot:
-  [Mem] setup:
-  [Mem] hb:
+Before (dynamic JsonDocument growth + String serialization in portal/MQTT paths):
+  After config save + screen switches:
+    [Mem] hb hf=123916 hm=98700 hl=65524 hi=78924 hin=53752 frag=47 pf=0 pm=0 pl=0
 
-After:
-  [Mem] boot:
-  [Mem] setup:
-  [Mem] hb:
+After (sized StaticJsonDocument + streaming/bounded serialization):
+  After screen switch (test→info) + config save:
+    [Mem] hb hf=124860 hm=93752 hl=77812 hi=79868 hin=48804 frag=37 pf=0 pm=0 pl=0
 
 Notes:
+  - This measurement is shared with item 3 because the practical win is the combination: sized docs + no String temporaries.
+  - The primary goal here is predictability (fixed capacities + overflow/NoMemory handling), with fragmentation improvement as a side effect.
 ```
 
 **What**
@@ -494,20 +501,24 @@ And decide a strategy:
 **Measured (before/after)**
 
 ```text
-Board:
-Scenario:
+Board: cyd-v2 (no PSRAM)
+Scenario: Full image upload stress (generated 320x240 JPEG), 5 cycles
+Command:
+  python3 tools/portal_stress_test.py --host 192.168.1.111 --no-reboot --cycles 5 --scenario image --image-generate 320x240
 
-Before:
-  [Mem] boot:
-  [Mem] setup:
-  [Mem] hb:
+Before (baseline firmware):
+  after_cycle mins: hf=121900 hl=73716 hi=76908 frag=37
+  CSV: /tmp/portal_stress_baseline_image_full_320x240.csv
 
-After:
-  [Mem] boot:
-  [Mem] setup:
-  [Mem] hb:
+After (decoder buffers reused per session):
+  after_cycle mins: hf=146196 hl=81908 hi=101204 frag=43
+  CSV: /tmp/portal_stress_after_item5_image_full_320x240.csv
+
+Delta (after - before):
+  after_cycle mins: hf +24296B, hl +8192B, hi +24296B
 
 Notes:
+  - `heap_fragmentation` is computed as (1 - hl/hf) * 100, so it can increase if total free heap rises faster than the largest free block.
 ```
 
 **What**
@@ -1091,20 +1102,20 @@ If you want maximum robustness under heavy networking/decoding, make logging non
 **Measured (before/after)**
 
 ```text
-Board:
-Scenario:
+Board: cyd-v2 (no PSRAM)
+Scenario: Portal churn (config save + screen switches; compare next heartbeat)
 
-Before:
-  [Mem] boot:
-  [Mem] setup:
-  [Mem] hb:
+Before (dynamic JSON allocations present in portal/config flows):
+  After config save + screen switches:
+    [Mem] hb hf=123916 hm=98700 hl=65524 hi=78924 hin=53752 frag=47 pf=0 pm=0 pl=0
 
-After:
-  [Mem] boot:
-  [Mem] setup:
-  [Mem] hb:
+After (sized StaticJsonDocument everywhere in src/app/** + bounded serialization):
+  After screen switch (test→info) + config save:
+    [Mem] hb hf=124860 hm=93752 hl=77812 hi=79868 hin=48804 frag=37 pf=0 pm=0 pl=0
 
 Notes:
+  - This captures the “JSON sweep” effect as experienced by the portal: reduced churn during config save + UI changes.
+  - If you need a more isolated measurement, run tools/portal_stress_test.py across firmware revisions that differ only in JSON sizing.
 ```
 
 **What**
