@@ -61,7 +61,7 @@ Success criteria to aim for:
 | **2** | HTTPS | Fully streaming download (no response buffering) | +20-80KB | — | Med-High | Med-High | **Critical** |
 | **3** | JSON | Remove String temporaries in portal/MQTT | +2-20KB | Portal churn: hl stayed 77812B (no drop), frag 47→37 (cyd-v2) | **Medium** | Low-Med | **High** |
 | **4** | JSON | Replace JsonDocument with StaticJsonDocument | Variable | Implemented (no DynamicJsonDocument in src/app) | Med-High | Low-Med | **High** |
-| **5** | JPEG Decode | Reuse decoder buffers per session | +8-16KB | Image stress: after_cycle mins hf +24296B, hl +8192B, hi +24296B (cyd-v2, 320x240 x5) | Medium | Medium | High |
+| **5** | JPEG Decode | Reuse decoder buffers per session | +8-24KB | Image stress: after_cycle mins hf 121900→146196, hl 73716→81908, hi 76908→101204 (cyd-v2, 320x240 x5) | Mixed | Medium | High |
 | **6** | LVGL | Switch to custom allocator (LV_MEM_CUSTOM=1) | +48KB | Build: DRAM -49168B, hl +49168B. Runtime: heap_free +40KB, hl +20480B (cyd-v2) | Mixed | High | Medium |
 | **7** | LVGL | Reduce draw buffer size | +2-6KB | — | Low | Low | Low |
 | **8** | LVGL | Disable unused fonts | +10-30KB flash | — | Low | Low | Low |
