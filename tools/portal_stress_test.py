@@ -48,10 +48,13 @@ def _repo_root() -> str:
 def _run_upload_image_generate(
     host: str,
     resolution: str,
+    seed: int,
+    quality: int,
+    worst_case: bool,
     timeout_s: float,
     retries: int,
     retry_sleep_s: float,
-) -> None:
+) -> Tuple[str, Optional[int]]:
     """Generate+upload a full image using tools/upload_image.py.
 
     This keeps this stress script stdlib-only while still letting us
@@ -89,9 +92,16 @@ def _run_upload_image_generate(
                 host_arg,
                 "--generate",
                 resolution,
+                "--quality",
+                str(int(quality)),
+                "--seed",
+                str(int(seed)),
                 "--timeout",
                 "3",
             ]
+
+            if worst_case:
+                cmd.append("--worst-case")
 
             # Bound runtime: allow the generator/uploader some time.
             # (timeout_s is per-request in this script; treat it as a scale factor here.)
@@ -106,10 +116,32 @@ def _run_upload_image_generate(
                 text=True,
             )
 
-            if res.returncode == 0:
-                return
-
             out = (res.stdout or "").strip()
+
+            # Parse generated JPEG byte size (best-effort)
+            jpeg_bytes: Optional[int] = None
+            # Example: "Generated 12345 byte JPEG (quality 85%)"
+            marker = "Generated "
+            if marker in out and " byte JPEG" in out:
+                try:
+                    seg = out.split(marker, 1)[1]
+                    num = seg.split(" byte JPEG", 1)[0].strip()
+                    jpeg_bytes = int(num)
+                except Exception:
+                    jpeg_bytes = None
+
+            if res.returncode == 0:
+                return "ok", jpeg_bytes
+
+            # If the firmware rejects the upload due to our cap, this is a valid
+            # outcome in cap-tuning tests; do not treat as fatal.
+            too_large = (
+                "Image too large" in out
+                or "image too large" in out
+                or "HTTP 400" in out and "too large" in out
+            )
+            if too_large:
+                return "too_large", jpeg_bytes
             # Common transient conditions
             transient = (
                 "Upload busy" in out
@@ -149,11 +181,16 @@ class HealthSample:
     ts_iso: str
     cycle: int
     phase: str
+    img_upload_result: Optional[str]
+    img_jpeg_bytes: Optional[int]
     heap_free: Optional[int]
     heap_min: Optional[int]
     heap_largest: Optional[int]
     heap_internal_free: Optional[int]
     heap_internal_min: Optional[int]
+    psram_free: Optional[int]
+    psram_min: Optional[int]
+    psram_largest: Optional[int]
     heap_fragmentation: Optional[int]
 
 
@@ -306,7 +343,14 @@ def fetch_portal_assets(base_url: str, timeout_s: float, retries: int, retry_sle
             raise RuntimeError(f"GET {path} failed: HTTP {status}")
 
 
-def extract_sample(cycle: int, phase: str, health: Dict[str, Any]) -> HealthSample:
+def extract_sample(
+    cycle: int,
+    phase: str,
+    health: Dict[str, Any],
+    *,
+    img_upload_result: Optional[str] = None,
+    img_jpeg_bytes: Optional[int] = None,
+) -> HealthSample:
     def _int_or_none(key: str) -> Optional[int]:
         v = health.get(key)
         if isinstance(v, bool) or v is None:
@@ -320,11 +364,16 @@ def extract_sample(cycle: int, phase: str, health: Dict[str, Any]) -> HealthSamp
         ts_iso=_now_iso(),
         cycle=cycle,
         phase=phase,
+        img_upload_result=img_upload_result,
+        img_jpeg_bytes=img_jpeg_bytes,
         heap_free=_int_or_none("heap_free"),
         heap_min=_int_or_none("heap_min"),
         heap_largest=_int_or_none("heap_largest"),
         heap_internal_free=_int_or_none("heap_internal_free"),
         heap_internal_min=_int_or_none("heap_internal_min"),
+        psram_free=_int_or_none("psram_free"),
+        psram_min=_int_or_none("psram_min"),
+        psram_largest=_int_or_none("psram_largest"),
         heap_fragmentation=_int_or_none("heap_fragmentation"),
     )
 
@@ -349,6 +398,9 @@ def summarize(samples: list[HealthSample]) -> None:
         "heap_largest",
         "heap_internal_free",
         "heap_internal_min",
+        "psram_free",
+        "psram_min",
+        "psram_largest",
         "heap_fragmentation",
     ):
         vals = _series(field)
@@ -363,11 +415,16 @@ def write_csv(path: str, samples: list[HealthSample]) -> None:
                 "ts_iso",
                 "cycle",
                 "phase",
+                "img_upload_result",
+                "img_jpeg_bytes",
                 "heap_free",
                 "heap_min",
                 "heap_largest",
                 "heap_internal_free",
                 "heap_internal_min",
+                "psram_free",
+                "psram_min",
+                "psram_largest",
                 "heap_fragmentation",
             ]
         )
@@ -377,11 +434,16 @@ def write_csv(path: str, samples: list[HealthSample]) -> None:
                     s.ts_iso,
                     s.cycle,
                     s.phase,
+                    s.img_upload_result,
+                    s.img_jpeg_bytes,
                     s.heap_free,
                     s.heap_min,
                     s.heap_largest,
                     s.heap_internal_free,
                     s.heap_internal_min,
+                    s.psram_free,
+                    s.psram_min,
+                    s.psram_largest,
                     s.heap_fragmentation,
                 ]
             )
@@ -413,6 +475,17 @@ def main(argv: list[str]) -> int:
             "Optional: generate+upload a full image each cycle using tools/upload_image.py. "
             "Format: WxH (example: 320x240). Requires requests+pillow installed for upload_image.py."
         ),
+    )
+    p.add_argument(
+        "--image-quality",
+        type=int,
+        default=85,
+        help="JPEG quality for --image-generate (passed to tools/upload_image.py, default: 85)",
+    )
+    p.add_argument(
+        "--image-worst-case",
+        action="store_true",
+        help="For --image-generate: generate a high-entropy noise image (less compressible)",
     )
     p.add_argument("--sleep", type=float, default=0.5, help="Sleep between steps in seconds (default: 0.5)")
     p.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT_S, help="HTTP timeout seconds (default: 5)")
@@ -501,13 +574,17 @@ def main(argv: list[str]) -> int:
                 samples.append(extract_sample(cycle=i, phase="img_pre", health=health_pre))
 
                 if args.image_generate:
-                    _run_upload_image_generate(
+                    upload_result, jpeg_bytes = _run_upload_image_generate(
                         host=base_url,
                         resolution=args.image_generate,
+                        seed=i,
+                        quality=args.image_quality,
+                        worst_case=args.image_worst_case,
                         timeout_s=args.timeout,
                         retries=args.retries,
                         retry_sleep_s=args.retry_sleep,
                     )
+                    # Record the upload outcome alongside post-upload health.
                 else:
                     # If user asked for scenario=image but didn't supply generation,
                     # just skip (keeps behavior explicit).
@@ -517,7 +594,15 @@ def main(argv: list[str]) -> int:
                 time.sleep(max(args.sleep, 0.25))
 
                 health_post = get_health(base_url, timeout_s=args.timeout, retries=args.retries, retry_sleep_s=args.retry_sleep)
-                samples.append(extract_sample(cycle=i, phase="img_post", health=health_post))
+                samples.append(
+                    extract_sample(
+                        cycle=i,
+                        phase="img_post",
+                        health=health_post,
+                        img_upload_result=upload_result,
+                        img_jpeg_bytes=jpeg_bytes,
+                    )
+                )
 
             # Take a sample per cycle
             health = get_health(base_url, timeout_s=args.timeout, retries=args.retries, retry_sleep_s=args.retry_sleep)

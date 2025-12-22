@@ -113,8 +113,8 @@
 // Image API Configuration
 // ============================================================================
 #define HAS_IMAGE_API true
-// CYD has more RAM than ESP32-C3, can handle larger images
-#define IMAGE_API_MAX_SIZE_BYTES (150 * 1024)  // 150KB max for full image upload
+// Compromise cap: accepts worst-case 320x240 JPEGs while reducing allocation pressure
+#define IMAGE_API_MAX_SIZE_BYTES (80 * 1024)  // 80KB max for full image upload
 #define IMAGE_API_DECODE_HEADROOM_BYTES (50 * 1024)  // 50KB headroom for decoding
 
 #endif // BOARD_OVERRIDES_CYD2USB_V2_H

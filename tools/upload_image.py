@@ -27,6 +27,7 @@ import argparse
 import sys
 import os
 import io
+import random
 import requests
 from PIL import Image, ImageDraw, ImageFont
 from pathlib import Path
@@ -60,12 +61,13 @@ def print_info(msg: str):
     print(f"{Colors.OKCYAN}ℹ {msg}{Colors.ENDC}")
 
 
-def generate_test_image(width: int, height: int, quality: int = 85) -> bytes:
+def generate_test_image(width: int, height: int, quality: int = 85, seed: Optional[int] = None) -> bytes:
     """
     Generate a test image with color gradient bars (similar to test screen).
     Returns JPEG bytes.
     """
-    print_info(f"Generating test image: {width}x{height} (quality {quality}%)")
+    seed_msg = f", seed {seed}" if seed is not None else ""
+    print_info(f"Generating test image: {width}x{height} (quality {quality}%){seed_msg}")
     
     # Create image
     img = Image.new('RGB', (width, height))
@@ -106,6 +108,25 @@ def generate_test_image(width: int, height: int, quality: int = 85) -> bytes:
             b = int(start_color[2] * (1 - t) + end_color[2] * t)
             
             draw.line([(0, y), (width, y)], fill=(r, g, b))
+
+    # Optional deterministic variation to avoid repeatedly uploading the exact same JPEG.
+    # This intentionally changes compressibility and stresses a slightly wider range of
+    # JPEG sizes/entropy while staying fast and dependency-free.
+    if seed is not None:
+        rng = random.Random(int(seed))
+        # Add a set of random solid rectangles.
+        rect_count = 40
+        max_w = max(8, width // 5)
+        max_h = max(8, height // 5)
+        for _ in range(rect_count):
+            x0 = rng.randrange(0, width)
+            y0 = rng.randrange(0, height)
+            rw = rng.randrange(4, max_w)
+            rh = rng.randrange(4, max_h)
+            x1 = min(width, x0 + rw)
+            y1 = min(height, y0 + rh)
+            color = (rng.randrange(256), rng.randrange(256), rng.randrange(256))
+            draw.rectangle([x0, y0, x1, y1], fill=color)
     
     # Add resolution text overlay in center
     try:
@@ -114,6 +135,8 @@ def generate_test_image(width: int, height: int, quality: int = 85) -> bytes:
         font = ImageFont.load_default()
     
     text = f"{width}x{height}"
+    if seed is not None:
+        text = f"{text}  seed={seed}"
     # Get text bounding box for centering
     bbox = draw.textbbox((0, 0), text, font=font)
     text_width = bbox[2] - bbox[0]
@@ -135,6 +158,61 @@ def generate_test_image(width: int, height: int, quality: int = 85) -> bytes:
     img.save(buffer, format='JPEG', quality=quality, optimize=True)
     jpeg_bytes = buffer.getvalue()
     
+    print_success(f"Generated {len(jpeg_bytes)} byte JPEG (quality {quality}%)")
+    return jpeg_bytes
+
+
+def generate_worst_case_image(width: int, height: int, quality: int = 85, seed: Optional[int] = None) -> bytes:
+    """Generate a deliberately less-compressible (worst-case) RGB noise image.
+
+    This stresses the firmware's upload buffering and allocation behavior more realistically
+    than simple gradients, because entropy is high and JPEGs tend to be larger.
+
+    Deterministic when seed is provided.
+    """
+
+    seed_msg = f", seed {seed}" if seed is not None else ""
+    print_info(f"Generating WORST-CASE noise image: {width}x{height} (quality {quality}%){seed_msg}")
+
+    if seed is not None:
+        rng = random.Random(int(seed))
+    else:
+        rng = random.SystemRandom()
+
+    # Deterministic, fast-ish random bytes. Python's Random has randbytes().
+    # 3 bytes per pixel for RGB.
+    n = int(width) * int(height) * 3
+    try:
+        raw = rng.randbytes(n)  # type: ignore[attr-defined]
+    except Exception:
+        # Fallback for older Python
+        raw = bytes(rng.getrandbits(8) for _ in range(n))
+
+    img = Image.frombytes('RGB', (width, height), raw)
+    draw = ImageDraw.Draw(img)
+
+    # Small overlay so we can see which run/seed created the image.
+    try:
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 18)
+    except Exception:
+        font = ImageFont.load_default()
+
+    text = f"{width}x{height}"
+    if seed is not None:
+        text = f"{text} seed={seed}"
+
+    # Semi-transparent box (approx) by drawing a filled rectangle behind text.
+    bbox = draw.textbbox((0, 0), text, font=font)
+    pad = 6
+    x0, y0 = 6, 6
+    x1 = x0 + (bbox[2] - bbox[0]) + pad * 2
+    y1 = y0 + (bbox[3] - bbox[1]) + pad * 2
+    draw.rectangle([x0, y0, x1, y1], fill=(0, 0, 0))
+    draw.text((x0 + pad, y0 + pad), text, font=font, fill=(255, 255, 255))
+
+    buffer = io.BytesIO()
+    img.save(buffer, format='JPEG', quality=quality, optimize=True)
+    jpeg_bytes = buffer.getvalue()
     print_success(f"Generated {len(jpeg_bytes)} byte JPEG (quality {quality}%)")
     return jpeg_bytes
 
@@ -360,6 +438,18 @@ Examples:
                        help='Strip height in pixels for strip mode (default: 16, min: 1, max: 240)')
     parser.add_argument('--quality', type=int, default=85, metavar='N',
                        help='JPEG quality 1-100 for generated/re-encoded images (default: 85)')
+    parser.add_argument(
+        '--seed',
+        type=int,
+        default=None,
+        metavar='N',
+        help='Seed for --generate (makes images vary deterministically; default: none)',
+    )
+    parser.add_argument(
+        '--worst-case',
+        action='store_true',
+        help='For --generate: create a high-entropy noise image (less compressible; worst-case for upload size)',
+    )
     parser.add_argument('--save', metavar='PATH', 
                        help='Save the final processed image to file before uploading (e.g., --save output.jpg)')
     parser.add_argument('--timeout', type=int, default=10, metavar='SECONDS',
@@ -420,7 +510,10 @@ Examples:
             else:
                 width, height = parse_resolution(args.generate)
 
-            jpeg_data = generate_test_image(width, height, args.quality)
+            if args.worst_case:
+                jpeg_data = generate_worst_case_image(width, height, args.quality, seed=args.seed)
+            else:
+                jpeg_data = generate_test_image(width, height, args.quality, seed=args.seed)
             # Re-open to get PIL image for --save option
             if args.save:
                 jpeg_image = Image.open(io.BytesIO(jpeg_data))

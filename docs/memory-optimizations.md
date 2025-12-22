@@ -13,7 +13,7 @@ Before/after every change, capture at least:
 - **Free heap**: `ESP.getFreeHeap()`
 - **Largest free block** (fragmentation proxy): `heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)`
 - **Internal heap free**: `heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)`
-- **PSRAM free** (when present): `heap_caps_get_free_size(MALLOCLOC_CAP_SPIRAM)`
+- **PSRAM free** (when present): `heap_caps_get_free_size(MALLOC_CAP_SPIRAM)`
 - Optional: `esp_get_free_heap_size()` and `heap_caps_get_minimum_free_size()`
 
 Recommended test sequence (CYD-v2):
@@ -66,7 +66,7 @@ Success criteria to aim for:
 | **7** | LVGL | Reduce draw buffer size | +2-6KB | — | Low | Low | Low |
 | **8** | LVGL | Disable unused fonts | +10-30KB flash | — | Low | Low | Low |
 | **9** | LVGL | Reduce screen/widget complexity | Variable | — | Low | Medium | Low |
-| **10** | Config | Lower IMAGE_API_MAX_SIZE_BYTES for no-PSRAM | Indirect | — | Medium | Low | Medium |
+| **10** | Config | Lower IMAGE_API_MAX_SIZE_BYTES for no-PSRAM | Indirect | Worst-case 320x240 Q95 noise JPEGs ~77KB, ok under 80KB cap (cyd-v2). PSRAM QSPI boards use 300KB | Medium | Low | Medium |
 | **11** | Config | Reduce IMAGE_STRIP_BATCH_MAX_ROWS | +1-4KB | — | Low | Low | Low |
 | **12** | Config | Tune headroom thresholds for no-PSRAM | Indirect | — | Low | Low | Low |
 | **13** | JSON | Use sized StaticJsonDocument (8+ instances) | Variable | Implemented (no `JsonDocument doc;` in src/app) | Med-High | Low-Med | **High** |
@@ -203,10 +203,10 @@ Compared to the earlier run where config save + screen switches coincided with h
 
 **What**
 
-Today, `image_api.cpp` supports a “full image upload” path that allocates a single contiguous buffer (`malloc(total_size)`) and stores the entire JPEG before decode. That’s a textbook cause of **heap pressure + fragmentation**, especially after repeated allocations of varying sizes.
+Today, `image_api.cpp` supports a “full image upload” path that allocates a single contiguous buffer (via `image_api_alloc(total_size)`) and stores the entire JPEG before decode. That’s a textbook cause of **heap pressure + fragmentation**, especially after repeated allocations of varying sizes.
 
 - File: [src/app/image_api.cpp](../src/app/image_api.cpp)
-- Behavior: `POST /api/display/image` allocates up to `IMAGE_API_MAX_SIZE_BYTES` (CYD-v2 currently 150KB).
+- Behavior: `POST /api/display/image` allocates up to `IMAGE_API_MAX_SIZE_BYTES` (defaults to 100KB; `cyd-v2` overrides to 80KB; PSRAM QSPI boards override to 300KB).
 
 **Change**
 
@@ -1087,7 +1087,10 @@ If you want maximum robustness under heavy networking/decoding, make logging non
 
 ## Notes tied to current code
 
-- Full image upload path currently allows up to 150KB on CYD-v2 via `IMAGE_API_MAX_SIZE_BYTES` in [src/boards/cyd-v2/board_overrides.h](../src/boards/cyd-v2/board_overrides.h). That single allocation will fail early if the largest free block is small even when total free heap is large.
+- Full image upload path allocates a single contiguous buffer up to `IMAGE_API_MAX_SIZE_BYTES`. Current board defaults/overrides:
+  - No-PSRAM: `cyd-v2` overrides to 80KB in [src/boards/cyd-v2/board_overrides.h](../src/boards/cyd-v2/board_overrides.h)
+  - PSRAM QSPI: `jc3248w535` and `jc3636w518` override to 300KB in their board overrides
+  This allocation can still fail if the largest free block is small even when total free heap is large.
 - Strip decoding still allocates 3 buffers per decode in [src/app/strip_decoder.cpp](../src/app/strip_decoder.cpp). Reusing buffers per session should reduce churn.
 - LVGL uses a fixed 48KB internal pool configured in [src/app/lv_conf.h](../src/app/lv_conf.h). Reclaiming that pool is an easy 48KB win but must be balanced against fragmentation risk.
 

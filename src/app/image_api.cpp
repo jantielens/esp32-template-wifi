@@ -17,6 +17,27 @@
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
 
+#include <esp_heap_caps.h>
+#include <soc/soc_caps.h>
+
+static void* image_api_alloc(size_t size) {
+    if (size == 0) return nullptr;
+
+#if SOC_SPIRAM_SUPPORTED
+    // Prefer PSRAM to reduce internal heap pressure when available.
+    void* p = heap_caps_malloc(size, MALLOC_CAP_SPIRAM);
+    if (p) return p;
+#endif
+
+    // Fallback: internal 8-bit heap.
+    return heap_caps_malloc(size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+}
+
+static void image_api_free(void* p) {
+    if (!p) return;
+    heap_caps_free(p);
+}
+
 // ===== Constants =====
 
 // Note: AsyncWebServer callbacks run on the AsyncTCP task. Do not block
@@ -111,7 +132,7 @@ static void handleImageUpload(AsyncWebServerRequest *request, String filename, s
         // Free any pending image buffer to make room for new upload
         if (pending_image_op.buffer) {
             Logger.logMessage("Upload", "Freeing pending image buffer");
-            free((void*)pending_image_op.buffer);
+            image_api_free((void*)pending_image_op.buffer);
             pending_image_op.buffer = nullptr;
             pending_image_op.size = 0;
         }
@@ -126,24 +147,76 @@ static void handleImageUpload(AsyncWebServerRequest *request, String filename, s
             return;
         }
 
-        // Check available memory (upload size + decode headroom)
-        size_t free_heap = ESP.getFreeHeap();
-        size_t required_heap = total_size + g_cfg.decode_headroom_bytes;
-        if (free_heap < required_heap) {
-            Logger.logLinef("ERROR: Insufficient memory (need %u, have %u)", required_heap, free_heap);
+        // Check memory availability.
+        // - The upload buffer is allocated via image_api_alloc(), which prefers PSRAM when supported.
+        // - The decode pipeline still needs some internal (8-bit) heap headroom.
+        const size_t internal_free = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        const size_t internal_largest = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+
+#if SOC_SPIRAM_SUPPORTED
+        const size_t psram_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+        const size_t psram_largest = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM);
+        const bool psram_can_hold_upload = (psram_free >= total_size) && (psram_largest >= total_size);
+#else
+        const size_t psram_free = 0;
+        const size_t psram_largest = 0;
+        const bool psram_can_hold_upload = false;
+#endif
+
+        // Always require internal headroom for decoding/processing.
+        const bool internal_has_headroom = internal_free >= g_cfg.decode_headroom_bytes;
+        if (!internal_has_headroom) {
+            Logger.logLinef(
+                "ERROR: Insufficient internal memory for decode headroom (need %u, have %u)",
+                (unsigned)g_cfg.decode_headroom_bytes,
+                (unsigned)internal_free
+            );
             device_telemetry_log_memory_snapshot("img insufficient");
-            char error_msg[192];
-            snprintf(error_msg, sizeof(error_msg),
-                     "{\"success\":false,\"message\":\"Insufficient memory: need %uKB, have %uKB. Try reducing image size.\"}",
-                     (unsigned)(required_heap / 1024), (unsigned)(free_heap / 1024));
+            char error_msg[240];
+            snprintf(
+                error_msg,
+                sizeof(error_msg),
+                "{\"success\":false,\"message\":\"Insufficient internal memory: need %uKB decode headroom, have %uKB.\"}",
+                (unsigned)(g_cfg.decode_headroom_bytes / 1024),
+                (unsigned)(internal_free / 1024)
+            );
             Logger.logEnd();
             request->send(507, "application/json", error_msg);
             return;
         }
 
+        // If PSRAM can't hold the upload buffer, we'll fall back to internal allocation;
+        // in that case we must have total_size + headroom available, and a contiguous block.
+        if (!psram_can_hold_upload) {
+            const size_t required_internal = total_size + g_cfg.decode_headroom_bytes;
+            if (internal_free < required_internal || internal_largest < total_size) {
+                Logger.logLinef(
+                    "ERROR: Insufficient memory (need %u internal, have %u; largest %u; psram_free %u largest %u)",
+                    (unsigned)required_internal,
+                    (unsigned)internal_free,
+                    (unsigned)internal_largest,
+                    (unsigned)psram_free,
+                    (unsigned)psram_largest
+                );
+                device_telemetry_log_memory_snapshot("img insufficient");
+                char error_msg[300];
+                snprintf(
+                    error_msg,
+                    sizeof(error_msg),
+                    "{\"success\":false,\"message\":\"Insufficient memory: need %uKB internal, have %uKB (largest block %uKB).\"}",
+                    (unsigned)(required_internal / 1024),
+                    (unsigned)(internal_free / 1024),
+                    (unsigned)(internal_largest / 1024)
+                );
+                Logger.logEnd();
+                request->send(507, "application/json", error_msg);
+                return;
+            }
+        }
+
         // Allocate buffer
         device_telemetry_log_memory_snapshot("img pre-alloc");
-        image_upload_buffer = (uint8_t*)malloc(total_size);
+        image_upload_buffer = (uint8_t*)image_api_alloc(total_size);
         if (!image_upload_buffer) {
             Logger.logEnd("ERROR: Memory allocation failed");
             device_telemetry_log_memory_snapshot("img alloc-fail");
@@ -179,7 +252,7 @@ static void handleImageUpload(AsyncWebServerRequest *request, String filename, s
                                 image_upload_buffer[0], image_upload_buffer[1],
                                 image_upload_buffer[2], image_upload_buffer[3]);
                 Logger.logEnd("ERROR: Not a valid JPEG file");
-                free(image_upload_buffer);
+                image_api_free(image_upload_buffer);
                 image_upload_buffer = nullptr;
                 image_upload_size = 0;
                 upload_state = UPLOAD_IDLE;
@@ -198,7 +271,7 @@ static void handleImageUpload(AsyncWebServerRequest *request, String filename, s
                     sizeof(preflight_err))) {
                 Logger.logLinef("ERROR: JPEG preflight failed: %s", preflight_err);
                 Logger.logEnd();
-                free(image_upload_buffer);
+                image_api_free(image_upload_buffer);
                 image_upload_buffer = nullptr;
                 image_upload_size = 0;
                 upload_state = UPLOAD_IDLE;
@@ -212,7 +285,7 @@ static void handleImageUpload(AsyncWebServerRequest *request, String filename, s
             // Queue image for display by main loop (deferred operation)
             if (pending_image_op.buffer) {
                 Logger.logMessage("Upload", "Replacing pending image");
-                free((void*)pending_image_op.buffer);
+                image_api_free((void*)pending_image_op.buffer);
             }
 
             pending_image_op.buffer = image_upload_buffer;
@@ -247,7 +320,7 @@ static void handleImageDelete(AsyncWebServerRequest *request) {
     Logger.logMessage("Portal", "Image dismiss requested");
 
     if (pending_image_op.buffer) {
-        free((void*)pending_image_op.buffer);
+        image_api_free((void*)pending_image_op.buffer);
     }
     pending_image_op.buffer = nullptr;
     pending_image_op.size = 0;
@@ -316,11 +389,11 @@ static void handleStripUpload(AsyncWebServerRequest *request, uint8_t *data, siz
         }
 
         if (current_strip_buffer) {
-            free((void*)current_strip_buffer);
+            image_api_free((void*)current_strip_buffer);
             current_strip_buffer = nullptr;
         }
 
-        current_strip_buffer = (uint8_t*)malloc(total);
+        current_strip_buffer = (uint8_t*)image_api_alloc(total);
         if (!current_strip_buffer) {
             Logger.logLinef("ERROR: Out of memory (requested %u bytes, free heap: %u)", (unsigned)total, ESP.getFreeHeap());
             device_telemetry_log_memory_snapshot("strip alloc-fail");
@@ -340,7 +413,7 @@ static void handleStripUpload(AsyncWebServerRequest *request, uint8_t *data, siz
     // Final chunk: decode synchronously before returning
     if (index + len >= total) {
         if (current_strip_size != total) {
-            free((void*)current_strip_buffer);
+            image_api_free((void*)current_strip_buffer);
             current_strip_buffer = nullptr;
             Logger.logEnd();
             request->send(500, "application/json", "{\"success\":false,\"message\":\"Incomplete upload\"}");
@@ -348,7 +421,7 @@ static void handleStripUpload(AsyncWebServerRequest *request, uint8_t *data, siz
         }
 
         if (!is_jpeg_magic(current_strip_buffer, current_strip_size)) {
-            free((void*)current_strip_buffer);
+            image_api_free((void*)current_strip_buffer);
             current_strip_buffer = nullptr;
             Logger.logEnd();
             request->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid JPEG data\"}");
@@ -367,7 +440,7 @@ static void handleStripUpload(AsyncWebServerRequest *request, uint8_t *data, siz
                 preflight_err,
                 sizeof(preflight_err))) {
             Logger.logLinef("ERROR: JPEG fragment preflight failed: %s", preflight_err);
-            free((void*)current_strip_buffer);
+            image_api_free((void*)current_strip_buffer);
             current_strip_buffer = nullptr;
             Logger.logEnd();
 
@@ -380,7 +453,7 @@ static void handleStripUpload(AsyncWebServerRequest *request, uint8_t *data, siz
         // Queue strip for async decode (don't decode in HTTP handler)
         // If we're busy, reject and let client retry.
         if (upload_state == UPLOAD_IN_PROGRESS || upload_state == UPLOAD_READY_TO_DISPLAY || pending_strip_op.buffer) {
-            free((void*)current_strip_buffer);
+            image_api_free((void*)current_strip_buffer);
             current_strip_buffer = nullptr;
             Logger.logEnd();
             request->send(409, "application/json", "{\"success\":false,\"message\":\"Busy\"}" );
@@ -429,19 +502,19 @@ void image_api_init(const ImageApiConfig& cfg, const ImageApiBackend& backend) {
     pending_image_op = {nullptr, 0, false, g_cfg.default_timeout_ms, 0};
 
     if (current_strip_buffer) {
-        free((void*)current_strip_buffer);
+        image_api_free((void*)current_strip_buffer);
         current_strip_buffer = nullptr;
     }
     current_strip_size = 0;
 
     if (pending_strip_op.buffer) {
-        free((void*)pending_strip_op.buffer);
+        image_api_free((void*)pending_strip_op.buffer);
         pending_strip_op.buffer = nullptr;
     }
     pending_strip_op = {nullptr, 0, 0, 0, 0, 0, g_cfg.default_timeout_ms, 0};
 
     if (image_upload_buffer) {
-        free((void*)image_upload_buffer);
+        image_api_free((void*)image_upload_buffer);
         image_upload_buffer = nullptr;
     }
     image_upload_size = 0;
@@ -511,7 +584,7 @@ void image_api_process_pending(bool ota_in_progress) {
                 if (g_backend.hide_current_image) {
                     g_backend.hide_current_image();
                 }
-                free((void*)pending_strip_op.buffer);
+                image_api_free((void*)pending_strip_op.buffer);
                 pending_strip_op.buffer = nullptr;
                 upload_state = UPLOAD_IDLE;
                 return;
@@ -523,7 +596,7 @@ void image_api_process_pending(bool ota_in_progress) {
                 if (g_backend.hide_current_image) {
                     g_backend.hide_current_image();
                 }
-                free((void*)pending_strip_op.buffer);
+                image_api_free((void*)pending_strip_op.buffer);
                 pending_strip_op.buffer = nullptr;
                 upload_state = UPLOAD_IDLE;
                 return;
@@ -540,7 +613,7 @@ void image_api_process_pending(bool ota_in_progress) {
             device_telemetry_log_memory_snapshot("strip post-decode");
         }
 
-        free((void*)pending_strip_op.buffer);
+        image_api_free((void*)pending_strip_op.buffer);
         pending_strip_op.buffer = nullptr;
         pending_strip_op.size = 0;
         upload_state = UPLOAD_IDLE;
@@ -578,7 +651,7 @@ void image_api_process_pending(bool ota_in_progress) {
 
         device_telemetry_log_memory_snapshot("img post-decode");
 
-        free((void*)pending_image_op.buffer);
+        image_api_free((void*)pending_image_op.buffer);
         pending_image_op.buffer = nullptr;
         pending_image_op.size = 0;
         upload_state = UPLOAD_IDLE;
