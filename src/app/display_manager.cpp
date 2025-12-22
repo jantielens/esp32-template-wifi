@@ -412,6 +412,9 @@ void DisplayManager::showDirectImage() {
     // Defer screen switch to lvglTask (non-blocking)
     // Immediately gate LVGL flushes so the decoder can safely write even before
     // the screen switch is processed by the LVGL task.
+    // Also drop any pending buffered present() to avoid flushing stale LVGL content
+    // over the direct-image content.
+    flushPending = false;
     directImageActive = true;
     pendingScreen = &directImageScreen;
     Logger.logMessage("Display", "Queued switch to DirectImageScreen");
@@ -524,6 +527,18 @@ const ScreenInfo* display_manager_get_available_screens(size_t* count) {
 void display_manager_set_backlight_brightness(uint8_t brightness) {
     if (displayManager && displayManager->getDriver()) {
         displayManager->getDriver()->setBacklightBrightness(brightness);
+    }
+}
+
+void display_manager_lock() {
+    if (displayManager) {
+        displayManager->lock();
+    }
+}
+
+void display_manager_unlock() {
+    if (displayManager) {
+        displayManager->unlock();
     }
 }
 

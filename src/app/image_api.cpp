@@ -14,8 +14,16 @@
 #include "log_manager.h"
 #include "device_telemetry.h"
 
+#if HAS_DISPLAY
+#include "display_manager.h"
+#endif
+
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <WiFiClientSecure.h>
+#include <ArduinoJson.h>
 
 #include <esp_heap_caps.h>
 #include <soc/soc_caps.h>
@@ -117,6 +125,15 @@ struct PendingStripOp {
 };
 static PendingStripOp pending_strip_op = {nullptr, 0, 0, 0, 0, 0, 10000, 0};
 
+// URL download state (queued by HTTP handler, executed in main loop)
+static constexpr size_t IMAGE_API_URL_MAX_LEN = 256;
+struct PendingUrlOp {
+    bool active;
+    char url[IMAGE_API_URL_MAX_LEN];
+    unsigned long timeout_ms;
+};
+static PendingUrlOp pending_url_op = {false, {0}, 0};
+
 static bool is_jpeg_magic(const uint8_t* buf, size_t sz) {
     return (buf && sz >= 3 && buf[0] == 0xFF && buf[1] == 0xD8 && buf[2] == 0xFF);
 }
@@ -132,6 +149,287 @@ static unsigned long parse_timeout_ms(AsyncWebServerRequest* request) {
         if (timeout_seconds > max_seconds) timeout_seconds = max_seconds;
     }
     return timeout_seconds * 1000UL;
+}
+
+static bool starts_with_ignore_case(const char* s, const char* prefix) {
+    if (!s || !prefix) return false;
+    while (*prefix) {
+        const char a = *s;
+        const char b = *prefix;
+        if (!a) return false;
+        const char al = (a >= 'A' && a <= 'Z') ? (char)(a - 'A' + 'a') : a;
+        const char bl = (b >= 'A' && b <= 'Z') ? (char)(b - 'A' + 'a') : b;
+        if (al != bl) return false;
+        s++;
+        prefix++;
+    }
+    return true;
+}
+
+enum UrlScheme {
+    URL_SCHEME_HTTP = 0,
+    URL_SCHEME_HTTPS = 1,
+};
+
+// Minimal URL parser: http(s)://host[:port]/path
+static bool parse_http_or_https_url(
+    const char* url,
+    UrlScheme* scheme_out,
+    char* host_out,
+    size_t host_out_len,
+    uint16_t* port_out,
+    char* path_out,
+    size_t path_out_len
+) {
+    if (!url || !scheme_out || !host_out || !port_out || !path_out) return false;
+
+    UrlScheme scheme;
+    size_t scheme_len = 0;
+    uint16_t default_port = 0;
+
+    if (starts_with_ignore_case(url, "https://")) {
+        scheme = URL_SCHEME_HTTPS;
+        scheme_len = 8;
+        default_port = 443;
+    } else if (starts_with_ignore_case(url, "http://")) {
+        scheme = URL_SCHEME_HTTP;
+        scheme_len = 7;
+        default_port = 80;
+    } else {
+        return false;
+    }
+
+    const char* p = url + scheme_len; // after scheme://
+    const char* slash = strchr(p, '/');
+    const char* host_end = slash ? slash : (p + strlen(p));
+    if (host_end <= p) return false;
+
+    // Copy host[:port]
+    const size_t hostport_len = (size_t)(host_end - p);
+    if (hostport_len >= host_out_len) return false;
+    char hostport[IMAGE_API_URL_MAX_LEN];
+    memcpy(hostport, p, hostport_len);
+    hostport[hostport_len] = '\0';
+
+    // Split host and optional port
+    const char* colon = strchr(hostport, ':');
+    uint16_t port = default_port;
+    if (colon) {
+        const size_t host_len = (size_t)(colon - hostport);
+        if (host_len == 0 || host_len >= host_out_len) return false;
+        memcpy(host_out, hostport, host_len);
+        host_out[host_len] = '\0';
+        long parsed_port = strtol(colon + 1, nullptr, 10);
+        if (parsed_port <= 0 || parsed_port > 65535) return false;
+        port = (uint16_t)parsed_port;
+    } else {
+        if (strlen(hostport) >= host_out_len) return false;
+        strncpy(host_out, hostport, host_out_len);
+        host_out[host_out_len - 1] = '\0';
+    }
+
+    const char* path = slash ? slash : "/";
+    if (strlen(path) >= path_out_len) return false;
+    strncpy(path_out, path, path_out_len);
+    path_out[path_out_len - 1] = '\0';
+
+    *port_out = port;
+    *scheme_out = scheme;
+    return true;
+}
+
+static bool download_jpeg_to_buffer(
+    const char* url,
+    uint8_t** out_buf,
+    size_t* out_sz,
+    char* err,
+    size_t err_len
+) {
+    if (!out_buf || !out_sz) return false;
+    *out_buf = nullptr;
+    *out_sz = 0;
+
+    if (!url || strlen(url) == 0) {
+        snprintf(err, err_len, "Missing URL");
+        return false;
+    }
+
+    if (WiFi.status() != WL_CONNECTED) {
+        snprintf(err, err_len, "WiFi not connected");
+        return false;
+    }
+
+    UrlScheme scheme = URL_SCHEME_HTTPS;
+    char host[128];
+    char path[256];
+    uint16_t port = 0;
+    if (!parse_http_or_https_url(url, &scheme, host, sizeof(host), &port, path, sizeof(path))) {
+        snprintf(err, err_len, "Invalid URL (must be http:// or https://)");
+        return false;
+    }
+
+    // Keep a decode headroom guard on PSRAM boards (TLS + decode need internal heap).
+#if SOC_SPIRAM_SUPPORTED
+    if (psramFound()) {
+        if (scheme == URL_SCHEME_HTTPS) {
+            const size_t internal_free = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+            if (internal_free < g_cfg.decode_headroom_bytes) {
+                snprintf(err, err_len, "Insufficient internal heap for TLS/decode headroom");
+                return false;
+            }
+        }
+    }
+#endif
+
+    // Conservative per-operation deadline.
+    const unsigned long start_ms = millis();
+    const unsigned long deadline_ms = start_ms + 15000UL;
+
+    WiFiClientSecure client_tls;
+    WiFiClient client_plain;
+    Client* client = nullptr;
+    if (scheme == URL_SCHEME_HTTPS) {
+        client_tls.setInsecure();
+        client = &client_tls;
+    } else {
+        client = &client_plain;
+    }
+
+    if (!client->connect(host, port)) {
+        snprintf(err, err_len, "%s connect failed", scheme == URL_SCHEME_HTTPS ? "TLS" : "TCP");
+        return false;
+    }
+
+    client->printf("GET %s HTTP/1.1\r\n", path);
+    client->printf("Host: %s\r\n", host);
+    client->print("User-Agent: esp32-template-image-api/1.0\r\n");
+    client->print("Accept: image/jpeg, */*\r\n");
+    client->print("Connection: close\r\n\r\n");
+
+    // Read headers into a fixed buffer
+    char header[2048];
+    size_t header_len = 0;
+    bool header_done = false;
+    while (!header_done && millis() < deadline_ms) {
+        int b = client->read();
+        if (b < 0) {
+            delay(1);
+            continue;
+        }
+        if (header_len + 1 >= sizeof(header)) {
+            snprintf(err, err_len, "HTTP headers too large");
+            return false;
+        }
+        header[header_len++] = (char)b;
+        if (header_len >= 4 && memcmp(header + header_len - 4, "\r\n\r\n", 4) == 0) {
+            header_done = true;
+            break;
+        }
+    }
+    if (!header_done) {
+        snprintf(err, err_len, "Timeout waiting for headers");
+        return false;
+    }
+    header[header_len] = '\0';
+
+    // Parse status code
+    int status = 0;
+    {
+        const char* eol = strstr(header, "\r\n");
+        if (!eol) {
+            snprintf(err, err_len, "Invalid HTTP response");
+            return false;
+        }
+        char status_line[128];
+        const size_t slen = min((size_t)(eol - header), sizeof(status_line) - 1);
+        memcpy(status_line, header, slen);
+        status_line[slen] = '\0';
+        // HTTP/1.1 200 OK
+        if (sscanf(status_line, "HTTP/%*s %d", &status) != 1) {
+            snprintf(err, err_len, "Failed to parse HTTP status");
+            return false;
+        }
+    }
+    if (status != 200) {
+        snprintf(err, err_len, "HTTP status %d", status);
+        return false;
+    }
+
+    // Parse headers
+    bool chunked = false;
+    size_t content_length = 0;
+    {
+        const char* p = strstr(header, "\r\n");
+        if (!p) {
+            snprintf(err, err_len, "Invalid HTTP headers");
+            return false;
+        }
+        p += 2;
+        while (*p) {
+            const char* next = strstr(p, "\r\n");
+            if (!next) break;
+            if (next == p) break; // end of headers
+
+            const size_t line_len = (size_t)(next - p);
+            if (line_len > 0) {
+                if (starts_with_ignore_case(p, "Content-Length:")) {
+                    const char* v = p + strlen("Content-Length:");
+                    while (*v == ' ' || *v == '\t') v++;
+                    content_length = (size_t)strtoul(v, nullptr, 10);
+                } else if (starts_with_ignore_case(p, "Transfer-Encoding:")) {
+                    // If chunked, we bail for now (keeps implementation small + memory-predictable).
+                    if (strstr(p, "chunked") || strstr(p, "Chunked") || strstr(p, "CHUNKED")) {
+                        chunked = true;
+                    }
+                }
+            }
+            p = next + 2;
+        }
+    }
+    if (chunked) {
+        snprintf(err, err_len, "Chunked transfer unsupported");
+        return false;
+    }
+    if (content_length == 0) {
+        snprintf(err, err_len, "Missing Content-Length");
+        return false;
+    }
+    if (content_length > g_cfg.max_image_size_bytes) {
+        snprintf(err, err_len, "Image too large (%u bytes)", (unsigned)content_length);
+        return false;
+    }
+
+    uint8_t* buf = (uint8_t*)image_api_alloc(content_length);
+    if (!buf) {
+        snprintf(err, err_len, "Out of memory allocating %u bytes", (unsigned)content_length);
+        return false;
+    }
+
+    size_t pos = 0;
+    while (pos < content_length && millis() < deadline_ms) {
+        const int r = client->read(buf + pos, (int)min((size_t)1024, content_length - pos));
+        if (r > 0) {
+            pos += (size_t)r;
+            continue;
+        }
+        delay(1);
+    }
+
+    if (pos != content_length) {
+        image_api_free(buf);
+        snprintf(err, err_len, "Incomplete body (%u/%u)", (unsigned)pos, (unsigned)content_length);
+        return false;
+    }
+
+    if (!is_jpeg_magic(buf, content_length)) {
+        image_api_free(buf);
+        snprintf(err, err_len, "Downloaded data is not a JPEG");
+        return false;
+    }
+
+    *out_buf = buf;
+    *out_sz = content_length;
+    return true;
 }
 
 // ===== Handlers =====
@@ -422,6 +720,77 @@ static void handleImageDelete(AsyncWebServerRequest *request) {
     request->send(200, "application/json", "{\"success\":true,\"message\":\"Image dismiss queued\"}");
 }
 
+// POST /api/display/image_url - Queue HTTP(S) JPEG download for display
+// Body: {"url":"https://example.com/image.jpg"}
+static void handleImageUrl(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+    // Only accept small JSON payloads.
+    if (index == 0) {
+        if (upload_state == UPLOAD_IN_PROGRESS || upload_state == UPLOAD_READY_TO_DISPLAY || pending_url_op.active || pending_strip_op.buffer) {
+            request->send(409, "application/json", "{\"success\":false,\"message\":\"Busy\"}");
+            return;
+        }
+        if (total == 0 || total > 1024) {
+            request->send(413, "application/json", "{\"success\":false,\"message\":\"Body too large\"}");
+            return;
+        }
+        char* body = (char*)malloc(total + 1);
+        if (!body) {
+            request->send(507, "application/json", "{\"success\":false,\"message\":\"Out of memory\"}");
+            return;
+        }
+        request->_tempObject = body;
+        ((char*)request->_tempObject)[0] = '\0';
+    }
+
+    if (!request->_tempObject) {
+        request->send(500, "application/json", "{\"success\":false,\"message\":\"Internal error\"}");
+        return;
+    }
+
+    char* body = (char*)request->_tempObject;
+    memcpy(body + index, data, len);
+    if (index + len >= total) {
+        body[total] = '\0';
+
+        StaticJsonDocument<512> doc;
+        const DeserializationError jerr = deserializeJson(doc, body);
+        free(body);
+        request->_tempObject = nullptr;
+
+        if (jerr) {
+            request->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid JSON\"}");
+            return;
+        }
+
+        const char* url = doc["url"] | "";
+        if (!url || strlen(url) == 0) {
+            request->send(400, "application/json", "{\"success\":false,\"message\":\"Missing url\"}");
+            return;
+        }
+        if (strlen(url) >= IMAGE_API_URL_MAX_LEN) {
+            request->send(400, "application/json", "{\"success\":false,\"message\":\"URL too long\"}");
+            return;
+        }
+
+        // Free any pending image buffer to make room.
+        if (pending_image_op.buffer) {
+            image_api_free((void*)pending_image_op.buffer);
+            pending_image_op.buffer = nullptr;
+            pending_image_op.size = 0;
+        }
+
+        pending_url_op.active = true;
+        strncpy(pending_url_op.url, url, sizeof(pending_url_op.url));
+        pending_url_op.url[sizeof(pending_url_op.url) - 1] = '\0';
+        pending_url_op.timeout_ms = parse_timeout_ms(request);
+
+        upload_state = UPLOAD_READY_TO_DISPLAY;
+        pending_op_id++;
+
+        request->send(200, "application/json", "{\"success\":true,\"message\":\"Image URL queued\"}");
+    }
+}
+
 // POST /api/display/image/strips?strip_index=N&strip_count=T&width=W&height=H[&timeout=seconds]
 // Upload a single JPEG strip; decode is deferred to the main loop.
 static void handleStripUpload(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
@@ -628,6 +997,14 @@ void image_api_register_routes(AsyncWebServer* server) {
         handleImageUpload
     );
 
+    server->on(
+        "/api/display/image_url",
+        HTTP_POST,
+        [](AsyncWebServerRequest *request) {},
+        NULL,
+        handleImageUrl
+    );
+
     server->on("/api/display/image", HTTP_DELETE, handleImageDelete);
 }
 
@@ -643,6 +1020,49 @@ void image_api_process_pending(bool ota_in_progress) {
     }
 
     last_processed_id = pending_op_id;
+
+    // Handle queued HTTP(S) download
+    if (pending_url_op.active) {
+        Logger.logMessagef("Portal", "Downloading image URL (%s)", pending_url_op.url);
+        device_telemetry_log_memory_snapshot("urlimg pre-download");
+
+        upload_state = UPLOAD_IN_PROGRESS;
+
+        const unsigned long timeout_ms = pending_url_op.timeout_ms;
+
+        uint8_t* downloaded = nullptr;
+        size_t downloaded_sz = 0;
+        char err[128];
+        const bool ok = download_jpeg_to_buffer(pending_url_op.url, &downloaded, &downloaded_sz, err, sizeof(err));
+
+        pending_url_op.active = false;
+        pending_url_op.url[0] = '\0';
+
+        device_telemetry_log_memory_snapshot("urlimg post-download");
+
+        if (!ok) {
+            Logger.logMessagef("Portal", "ERROR: URL download failed: %s", err);
+            device_telemetry_log_memory_snapshot("urlimg download-fail");
+            upload_state = UPLOAD_IDLE;
+            if (g_backend.hide_current_image) {
+                g_backend.hide_current_image();
+            }
+            return;
+        }
+
+        // Queue the downloaded JPEG for decode on the next main-loop tick.
+        if (pending_image_op.buffer) {
+            image_api_free((void*)pending_image_op.buffer);
+        }
+        pending_image_op.buffer = downloaded;
+        pending_image_op.size = downloaded_sz;
+        pending_image_op.dismiss = false;
+        pending_image_op.timeout_ms = timeout_ms > 0 ? timeout_ms : g_cfg.default_timeout_ms;
+        pending_image_op.start_time = millis();
+        pending_op_id++;
+        upload_state = UPLOAD_READY_TO_DISPLAY;
+        return;
+    }
 
     // Handle dismiss operation
     if (pending_image_op.dismiss) {
@@ -697,7 +1117,15 @@ void image_api_process_pending(bool ota_in_progress) {
         // Decode strip
         bool success = false;
         if (g_backend.decode_strip) {
+            #if HAS_DISPLAY
+            // Serialize with LVGL task to protect buffered backends (Arduino_GFX canvas)
+            // and prevent overlapping present()/SPI polling transactions.
+            display_manager_lock();
+            #endif
             success = g_backend.decode_strip(buf, sz, strip_index, false);
+            #if HAS_DISPLAY
+            display_manager_unlock();
+            #endif
         }
 
         if (strip_index == (uint8_t)(total_strips - 1)) {
@@ -732,12 +1160,21 @@ void image_api_process_pending(bool ota_in_progress) {
 
         bool success = false;
         if (g_backend.start_strip_session && g_backend.decode_strip) {
+            #if HAS_DISPLAY
+            // Serialize with LVGL task for the duration of the full decode.
+            display_manager_lock();
+            #endif
+
             if (!g_backend.start_strip_session(g_cfg.lcd_width, g_cfg.lcd_height, pending_image_op.timeout_ms, pending_image_op.start_time)) {
                 Logger.logMessage("Portal", "ERROR: Failed to init image display");
                 success = false;
             } else {
                 success = g_backend.decode_strip(buf, sz, 0, false);
             }
+
+            #if HAS_DISPLAY
+            display_manager_unlock();
+            #endif
         }
 
         device_telemetry_log_memory_snapshot("img post-decode");

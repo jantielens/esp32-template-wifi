@@ -400,16 +400,31 @@ static void fill_common(JsonDocument &doc, bool include_ip_and_channel, bool inc
     doc["heap_largest"] = heap_largest;
     doc["heap_internal_free"] = internal_free;
     doc["heap_internal_min"] = internal_min;
+    const size_t internal_largest = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    doc["heap_internal_largest"] = internal_largest;
     doc["psram_free"] = psram_free;
     doc["psram_min"] = psram_min;
     doc["psram_largest"] = psram_largest;
 
     // Heap fragmentation
-    float fragmentation = 0;
-    if (heap_free > 0) {
-        fragmentation = (1.0f - ((float)heap_largest / (float)heap_free)) * 100.0f;
+    // IMPORTANT: On PSRAM boards, `heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)` can return a PSRAM block,
+    // while `ESP.getFreeHeap()` reports internal heap only. Mixing those yields negative fragmentation.
+    // We define heap fragmentation as INTERNAL heap fragmentation.
+    float heap_frag = 0;
+    if (internal_free > 0 && internal_largest <= internal_free) {
+        heap_frag = (1.0f - ((float)internal_largest / (float)internal_free)) * 100.0f;
     }
-    doc["heap_fragmentation"] = (int)fragmentation;
+    if (heap_frag < 0) heap_frag = 0;
+    if (heap_frag > 100) heap_frag = 100;
+    doc["heap_fragmentation"] = (int)heap_frag;
+
+    float psram_frag = 0;
+    if (psram_free > 0 && psram_largest <= psram_free) {
+        psram_frag = (1.0f - ((float)psram_largest / (float)psram_free)) * 100.0f;
+    }
+    if (psram_frag < 0) psram_frag = 0;
+    if (psram_frag > 100) psram_frag = 100;
+    doc["psram_fragmentation"] = (int)psram_frag;
 
     // Flash usage
     const size_t sketch_size = device_telemetry_sketch_size();
@@ -451,7 +466,8 @@ static void get_memory_snapshot(
     if (out_heap_min) *out_heap_min = ESP.getMinFreeHeap();
 
     if (out_heap_largest) {
-        *out_heap_largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+        // Keep this consistent with ESP.getFreeHeap() (internal heap): use INTERNAL 8-bit largest block.
+        *out_heap_largest = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     }
 
     if (out_internal_free) {

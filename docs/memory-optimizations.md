@@ -265,6 +265,29 @@ This repo already has image strip decoding infrastructure (`StripDecoder`) that 
 
 **Change**
 
+**Status (now): implemented a PoC HTTP(S) download path**
+
+- Added `POST /api/display/image_url` which queues an HTTP(S) JPEG download.
+- The client reads from the socket in small chunks (no `String` concatenation / `HTTPClient::getString()` style buffering).
+- The downloaded JPEG is currently buffered into a single contiguous allocation before decode (this is not “stream-to-decode” yet).
+
+Example stress run:
+
+```bash
+python3 tools/portal_stress_test.py \
+  --host 192.168.1.111 \
+  --no-reboot \
+  --cycles 10 \
+  --scenario https_image \
+  --image-url https://example.com/test320x240.jpg
+```
+
+**Remaining work to reach the original goal (“fully streaming”):**
+
+- Stream the HTTPS body directly into TJpgDec input (or into a small ring buffer feeding TJpgDec) so the firmware never allocates `O(image_size)` RAM.
+
+---
+
 - Use a streaming client (`WiFiClientSecure`) and read in small fixed chunks (e.g. 1–4KB) from the TLS socket.
 - Avoid `HTTPClient::getString()` / `String` concatenation.
 - Consider pinning a TLS I/O buffer (static) to reduce repeated alloc/free patterns.

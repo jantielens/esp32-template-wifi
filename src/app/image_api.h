@@ -44,6 +44,7 @@ void image_api_init(const ImageApiConfig& cfg, const ImageApiBackend& backend);
 // Register REST API routes with web server
 // Endpoints:
 //   POST   /api/display/image          - Upload full JPEG (deferred decode)
+//   POST   /api/display/image_url      - Queue HTTP/HTTPS JPEG download (deferred download+decode)
 //   DELETE /api/display/image          - Dismiss current image
 //   POST   /api/display/image/strips   - Upload JPEG strip (synchronous)
 void image_api_register_routes(AsyncWebServer* server);

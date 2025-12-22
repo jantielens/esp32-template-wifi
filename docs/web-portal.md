@@ -586,6 +586,45 @@ Upload a JPEG image for display on the device screen (full mode - deferred decod
 - Requires enough heap memory to buffer entire JPEG
 - The safest client behavior is to pre-size (and if needed, letterbox) the JPEG to the device's display coordinate-space resolution (see `GET /api/info` fields `display_coord_width`/`display_coord_height`)
 
+#### `POST /api/display/image_url`
+
+Queue an HTTP/HTTPS JPEG download for display.
+
+This endpoint returns quickly (it only queues the job). The actual HTTP/HTTPS download and JPEG decode run later (in the main loop) to avoid blocking AsyncTCP.
+
+**Request:**
+- Content-Type: `application/json`
+- Body:
+```json
+{
+  "url": "https://example.com/image.jpg"
+}
+```
+- Query parameters:
+  - `timeout` (optional): Display timeout in seconds (`0` = permanent; defaults to firmware setting)
+
+**Response (Success):**
+```json
+{
+  "success": true,
+  "message": "Image URL queued"
+}
+```
+
+**Response (Busy - HTTP 409):**
+```json
+{
+  "success": false,
+  "message": "Busy"
+}
+```
+
+**Notes:**
+- Supports `http://...` and `https://...`.
+- Current implementation requires a `Content-Length` header and does not support `Transfer-Encoding: chunked`.
+- For `https://` URLs, the firmware currently uses an insecure TLS mode (no certificate validation). Treat this as a PoC until CA/pinning is implemented.
+- Flow control: returns HTTP 409 if an image upload/decode is already in progress; clients should retry with a short delay.
+
 #### Home Assistant (AppDaemon): Send Camera Snapshots to ESP32
 
 You can display Home Assistant camera snapshots on the ESP32 by deploying the included AppDaemon app:

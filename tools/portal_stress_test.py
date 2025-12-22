@@ -12,6 +12,7 @@ Typical usage:
 Scenarios:
 - api:    hits API endpoints only (JSON churn focus)
 - portal: fetches HTML/CSS/JS pages in addition to API calls (portal load)
+ - https_image: queues an HTTP/HTTPS JPEG download via /api/display/image_url
 
 Notes:
 - Requires --no-reboot and always uses ?no_reboot=1 when saving config.
@@ -335,6 +336,25 @@ def set_screen(base_url: str, screen_id: str, timeout_s: float, retries: int, re
         )
 
 
+def queue_image_url(base_url: str, image_url: str, timeout_s: float, retries: int, retry_sleep_s: float) -> str:
+    body = json.dumps({"url": image_url}, separators=(",", ":")).encode("utf-8")
+    # Use a small display timeout so images don't stack on screen.
+    status, data = _http(
+        base_url,
+        method="POST",
+        path="/api/display/image_url?timeout=3",
+        body=body,
+        content_type="application/json",
+        timeout_s=timeout_s,
+        accept="application/json",
+        retries=retries,
+        retry_sleep_s=retry_sleep_s,
+    )
+    if status != 200:
+        raise RuntimeError(f"POST /api/display/image_url failed: HTTP {status} body={data[:200]!r}")
+    return data.decode("utf-8", errors="replace")[:200]
+
+
 def fetch_portal_assets(base_url: str, timeout_s: float, retries: int, retry_sleep_s: float) -> None:
     # We don't need to parse/decompress; we just want the server to do the work.
     for path in ("/network.html", "/home.html", "/firmware.html", "/portal.css", "/portal.js"):
@@ -471,9 +491,12 @@ def main(argv: list[str]) -> int:
     p.add_argument("--cycles", type=int, default=10, help="Number of stress cycles (default: 10)")
     p.add_argument(
         "--scenario",
-        choices=("api", "portal", "both", "image"),
+        choices=("api", "portal", "both", "image", "https_image"),
         default="api",
-        help="Stress scenario: api (JSON churn), portal (fetch pages+assets), both (portal + api), image (full image upload).",
+        help=(
+            "Stress scenario: api (JSON churn), portal (fetch pages+assets), both (portal + api), "
+            "image (full image upload), https_image (queue HTTPS download)."
+        ),
     )
 
     p.add_argument(
@@ -483,6 +506,12 @@ def main(argv: list[str]) -> int:
             "Optional: generate+upload a full image each cycle using tools/upload_image.py. "
             "Format: WxH (example: 320x240). Requires requests+pillow installed for upload_image.py."
         ),
+    )
+
+    p.add_argument(
+        "--image-url",
+        default=None,
+        help="For --scenario https_image: HTTP/HTTPS URL to a JPEG to download and display.",
     )
     p.add_argument(
         "--image-quality",
@@ -522,6 +551,8 @@ def main(argv: list[str]) -> int:
     print(f"Cycles: {args.cycles}")
     if args.image_generate:
         print(f"Image generate: {args.image_generate}")
+    if args.image_url:
+        print(f"Image URL: {args.image_url}")
 
     samples: list[HealthSample] = []
 
@@ -609,6 +640,35 @@ def main(argv: list[str]) -> int:
                         health=health_post,
                         img_upload_result=upload_result,
                         img_jpeg_bytes=jpeg_bytes,
+                    )
+                )
+
+            if args.scenario in ("https_image",):
+                if not args.image_url:
+                    raise RuntimeError("scenario=https_image requires --image-url")
+
+                health_pre = get_health(base_url, timeout_s=args.timeout, retries=args.retries, retry_sleep_s=args.retry_sleep)
+                samples.append(extract_sample(cycle=i, phase="https_img_pre", health=health_pre))
+
+                resp = queue_image_url(
+                    base_url,
+                    args.image_url,
+                    timeout_s=args.timeout,
+                    retries=args.retries,
+                    retry_sleep_s=args.retry_sleep,
+                )
+
+                # Allow time for main loop to download+decode.
+                time.sleep(max(args.sleep, 0.5))
+
+                health_post = get_health(base_url, timeout_s=args.timeout, retries=args.retries, retry_sleep_s=args.retry_sleep)
+                samples.append(
+                    extract_sample(
+                        cycle=i,
+                        phase="https_img_post",
+                        health=health_post,
+                        img_upload_result=resp,
+                        img_jpeg_bytes=None,
                     )
                 )
 
