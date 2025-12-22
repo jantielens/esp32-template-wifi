@@ -142,6 +142,14 @@ def _run_upload_image_generate(
             )
             if too_large:
                 return "too_large", jpeg_bytes
+
+            insufficient_mem = (
+                "Insufficient memory" in out
+                or "insufficient memory" in out
+                or "HTTP 507" in out
+            )
+            if insufficient_mem:
+                return "insufficient_memory", jpeg_bytes
             # Common transient conditions
             transient = (
                 "Upload busy" in out

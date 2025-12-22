@@ -46,6 +46,8 @@ python3 tools/portal_stress_test.py --host 192.168.1.111 --no-reboot --cycles 10
 
 The script prints per-cycle `heap_largest`/`heap_fragmentation` and a min/max summary, using `/api/health` as the source of truth.
 
+When using `--scenario image`, the CSV also includes `img_upload_result` (e.g. `ok`, `too_large`, `insufficient_memory`) and the uploaded `img_jpeg_bytes`. The stress run is designed to continue even if some cycles return `HTTP 507` (so you can quantify failure rates instead of aborting).
+
 Success criteria to aim for:
 
 - Largest free block remains stable (does not monotonically shrink)
@@ -57,7 +59,7 @@ Success criteria to aim for:
 | # | Category | Optimization | Est. Gain | Measured | Fragmentation Impact | Complexity | Priority |
 |---|----------|--------------|-----------|----------|---------------------|------------|----------|
 | **0** | Web Assets | PROGMEM verification, cache headers, AsyncTCP stack tuning | 0-8KB | Baseline: hl +4096B, frag -4pp (cyd-v2). Portal churn spike recorded in notes | Low | Low-Med | Medium |
-| **1** | Image API | Eliminate full-image buffering (stream-to-decode) | +80-180KB | — | **High** | High | **Critical** |
+| **1** | Image API | Eliminate full-image buffering (stream-to-decode) | +80-180KB | Not implemented (yet): high complexity. Also ruled out “stream-to-flash then decode” due to frequent uploads (flash wear) | **High** | High | **Critical** |
 | **2** | HTTPS | Fully streaming download (no response buffering) | +20-80KB | — | Med-High | Med-High | **Critical** |
 | **3** | JSON | Remove String temporaries in portal/MQTT | +2-20KB | Portal churn: hl stayed 77812B (no drop), frag 47→37 (cyd-v2) | **Medium** | Low-Med | **High** |
 | **4** | JSON | Replace JsonDocument with StaticJsonDocument | Variable | Implemented (no DynamicJsonDocument in src/app) | Med-High | Low-Med | **High** |
@@ -66,7 +68,7 @@ Success criteria to aim for:
 | **7** | LVGL | Reduce draw buffer size | +2-6KB | — | Low | Low | Low |
 | **8** | LVGL | Disable unused fonts | +10-30KB flash | — | Low | Low | Low |
 | **9** | LVGL | Reduce screen/widget complexity | Variable | — | Low | Medium | Low |
-| **10** | Config | Lower IMAGE_API_MAX_SIZE_BYTES for no-PSRAM | Indirect | Worst-case 320x240 Q95 noise JPEGs ~77KB, ok under 80KB cap (cyd-v2). PSRAM QSPI boards use 300KB | Medium | Low | Medium |
+| **10** | Config | Lower IMAGE_API_MAX_SIZE_BYTES for no-PSRAM | Indirect | Worst-case 320x240 Q95 noise JPEGs ~77KB, ok under 80KB cap (cyd-v2). PSRAM QSPI boards use 300KB. Image API precheck is PSRAM-aware (runtime `psramFound()` so PSRAM-capable SoCs without PSRAM don't get falsely rejected) | Medium | Low | Medium |
 | **11** | Config | Reduce IMAGE_STRIP_BATCH_MAX_ROWS | +1-4KB | — | Low | Low | Low |
 | **12** | Config | Tune headroom thresholds for no-PSRAM | Indirect | — | Low | Low | Low |
 | **13** | JSON | Use sized StaticJsonDocument (8+ instances) | Variable | Implemented (no `JsonDocument doc;` in src/app) | Med-High | Low-Med | **High** |
@@ -173,37 +175,23 @@ However, serving assets still uses RAM for:
 
 ### 1) Eliminate full-image buffering for image display (stream-to-decode)
 
-**Measured (before/after)**
+**Status**
 
-```text
-Board: cyd-v2 (no PSRAM)
-Scenario: Idle baseline after JSON response/publish changes (boot + setup + first heartbeat; no portal actions yet)
-
-Before:
-  [Mem] boot:
-  [Mem] setup:
-  [Mem] hb:
-
-After:
-  [Mem] boot hf=232404 hm=226716 hl=110580 hi=187412 hin=181768 frag=52 pf=0 pm=0 pl=0
-  [Mem] setup hf=130400 hm=130048 hl=81908  hi=85408  hin=85100  frag=37 pf=0 pm=0 pl=0
-  [Mem] hb   hf=126648 hm=98940  hl=77812  hi=81656  hin=53992  frag=38 pf=0 pm=0 pl=0
-
-Notes: This optimization mainly reduces heap churn during /api/config, /api/health, and MQTT publish activity.
-
-Portal stress datapoint (screen switch + config save → next heartbeat):
-
-  Before portal actions:
-    [Mem] hb hf=127720 hm=98940 hl=77812 hi=82728 hin=53992 frag=39 pf=0 pm=0 pl=0
-  After screen switch (test→info) + config save:
-    [Mem] hb hf=124860 hm=93752 hl=77812 hi=79868 hin=48804 frag=37 pf=0 pm=0 pl=0
-
-Compared to the earlier run where config save + screen switches coincided with hl dropping to 65524 and frag jumping to 47, this suggests removing `String` JSON payload building materially reduced fragmentation pressure during portal/config operations.
-```
+- Not implemented yet.
+- We explicitly avoided the “spool to flash then decode” variant because this project expects many uploads (flash wear concern).
+- Mitigation work landed under item #10 instead (caps + PSRAM-aware precheck + stress tooling), while keeping full-image upload support.
 
 **What**
 
 Today, `image_api.cpp` supports a “full image upload” path that allocates a single contiguous buffer (via `image_api_alloc(total_size)`) and stores the entire JPEG before decode. That’s a textbook cause of **heap pressure + fragmentation**, especially after repeated allocations of varying sizes.
+
+Note: We also tested a “persistent upload buffer reuse” approach to reduce alloc/free churn. On no-PSRAM boards this was counterproductive: it effectively pins a large block in the 8-bit heap and collapses `heap_largest`, so it was removed.
+
+**Experiment (rejected): persistent upload buffer reuse on cyd-v2**
+
+- Workload: 20-cycle worst-case 320x240 Q95 noise uploads (~77KB) via `tools/portal_stress_test.py --scenario image`.
+- With persistent buffer reuse: uploads succeeded, but `heap_largest` collapsed to ~7–13KB and fragmentation stayed ~78–88%.
+- With per-upload alloc/free: uploads succeeded and `heap_largest` stayed high (~90–94KB) with fragmentation ~35–43%.
 
 - File: [src/app/image_api.cpp](../src/app/image_api.cpp)
 - Behavior: `POST /api/display/image` allocates up to `IMAGE_API_MAX_SIZE_BYTES` (defaults to 100KB; `cyd-v2` overrides to 80KB; PSRAM QSPI boards override to 300KB).
@@ -1091,6 +1079,9 @@ If you want maximum robustness under heavy networking/decoding, make logging non
   - No-PSRAM: `cyd-v2` overrides to 80KB in [src/boards/cyd-v2/board_overrides.h](../src/boards/cyd-v2/board_overrides.h)
   - PSRAM QSPI: `jc3248w535` and `jc3636w518` override to 300KB in their board overrides
   This allocation can still fail if the largest free block is small even when total free heap is large.
+  The Image API memory precheck is PSRAM-aware:
+  - If PSRAM is present (`psramFound()`), keep an internal headroom guard and expect the upload buffer to land in PSRAM.
+  - If PSRAM is not present (including PSRAM-capable SoCs where the board has no PSRAM fitted), use the no-PSRAM style guard (total heap + largest 8-bit block) to avoid false rejections.
 - Strip decoding still allocates 3 buffers per decode in [src/app/strip_decoder.cpp](../src/app/strip_decoder.cpp). Reusing buffers per session should reduce churn.
 - LVGL uses a fixed 48KB internal pool configured in [src/app/lv_conf.h](../src/app/lv_conf.h). Reclaiming that pool is an easy 48KB win but must be balanced against fragmentation risk.
 

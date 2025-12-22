@@ -29,8 +29,11 @@ static void* image_api_alloc(size_t size) {
     if (p) return p;
 #endif
 
-    // Fallback: internal 8-bit heap.
-    return heap_caps_malloc(size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    // Fallback: any 8-bit heap.
+    // On some no-PSRAM boards, using INTERNAL|8BIT can exclude viable 8-bit regions.
+    // Using 8BIT matches ESP.getFreeHeap() behavior and can reduce pressure on the
+    // internal heap reserved for decode-time allocations.
+    return heap_caps_malloc(size, MALLOC_CAP_8BIT);
 }
 
 static void image_api_free(void* p) {
@@ -148,24 +151,30 @@ static void handleImageUpload(AsyncWebServerRequest *request, String filename, s
         }
 
         // Check memory availability.
-        // - The upload buffer is allocated via image_api_alloc(), which prefers PSRAM when supported.
-        // - The decode pipeline still needs some internal (8-bit) heap headroom.
-        const size_t internal_free = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-        const size_t internal_largest = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        // - Upload uses a single contiguous buffer.
+        // - The decode pipeline needs headroom (historically expressed via g_cfg.decode_headroom_bytes).
 
 #if SOC_SPIRAM_SUPPORTED
-        const size_t psram_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
-        const size_t psram_largest = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM);
-        const bool psram_can_hold_upload = (psram_free >= total_size) && (psram_largest >= total_size);
+        // `SOC_SPIRAM_SUPPORTED` means the SoC can use PSRAM, but some boards have no PSRAM fitted.
+        // Use a runtime check so no-PSRAM boards don't take PSRAM-specific headroom gating.
+        const bool has_psram = psramFound();
+        const size_t psram_free = has_psram ? heap_caps_get_free_size(MALLOC_CAP_SPIRAM) : 0;
+        const size_t psram_largest = has_psram ? heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM) : 0;
+        const bool psram_can_hold_upload = has_psram && (psram_free >= total_size) && (psram_largest >= total_size);
 #else
         const size_t psram_free = 0;
         const size_t psram_largest = 0;
         const bool psram_can_hold_upload = false;
 #endif
 
-        // Always require internal headroom for decoding/processing.
-        const bool internal_has_headroom = internal_free >= g_cfg.decode_headroom_bytes;
-        if (!internal_has_headroom) {
+        // PSRAM boards vs no-PSRAM boards behave very differently.
+        // - On PSRAM boards: upload buffer is expected to land in PSRAM; keep an internal headroom guard.
+        // - On no-PSRAM boards: keep the historical "total heap" guard (ESP.getFreeHeap) so we don't
+        //   falsely reject when internal-only metrics look tight but the system can still operate.
+#if SOC_SPIRAM_SUPPORTED
+        if (has_psram) {
+            const size_t internal_free = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+            if (internal_free < g_cfg.decode_headroom_bytes) {
             Logger.logLinef(
                 "ERROR: Insufficient internal memory for decode headroom (need %u, have %u)",
                 (unsigned)g_cfg.decode_headroom_bytes,
@@ -183,36 +192,92 @@ static void handleImageUpload(AsyncWebServerRequest *request, String filename, s
             Logger.logEnd();
             request->send(507, "application/json", error_msg);
             return;
-        }
+            }
 
-        // If PSRAM can't hold the upload buffer, we'll fall back to internal allocation;
-        // in that case we must have total_size + headroom available, and a contiguous block.
-        if (!psram_can_hold_upload) {
-            const size_t required_internal = total_size + g_cfg.decode_headroom_bytes;
-            if (internal_free < required_internal || internal_largest < total_size) {
+            if (!psram_can_hold_upload) {
+            // We'll fall back to non-PSRAM allocation; be conservative.
+            const size_t heap8_free = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+            const size_t heap8_largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+            const size_t required_heap8 = total_size + g_cfg.decode_headroom_bytes;
+            if (heap8_free < required_heap8 || heap8_largest < total_size) {
                 Logger.logLinef(
-                    "ERROR: Insufficient memory (need %u internal, have %u; largest %u; psram_free %u largest %u)",
-                    (unsigned)required_internal,
+                    "ERROR: Insufficient memory (need %u heap8, have %u; largest %u; internal_free %u; psram_free %u largest %u)",
+                    (unsigned)required_heap8,
+                    (unsigned)heap8_free,
+                    (unsigned)heap8_largest,
                     (unsigned)internal_free,
-                    (unsigned)internal_largest,
                     (unsigned)psram_free,
                     (unsigned)psram_largest
                 );
                 device_telemetry_log_memory_snapshot("img insufficient");
-                char error_msg[300];
+                char error_msg[320];
                 snprintf(
                     error_msg,
                     sizeof(error_msg),
-                    "{\"success\":false,\"message\":\"Insufficient memory: need %uKB internal, have %uKB (largest block %uKB).\"}",
-                    (unsigned)(required_internal / 1024),
-                    (unsigned)(internal_free / 1024),
-                    (unsigned)(internal_largest / 1024)
+                    "{\"success\":false,\"message\":\"Insufficient memory: need %uKB total heap, have %uKB (largest block %uKB).\"}",
+                    (unsigned)(required_heap8 / 1024),
+                    (unsigned)(heap8_free / 1024),
+                    (unsigned)(heap8_largest / 1024)
+                );
+                Logger.logEnd();
+                request->send(507, "application/json", error_msg);
+                return;
+            }
+            }
+        } else {
+            // No PSRAM fitted: total heap + largest block check (prevents immediate alloc failure).
+            const size_t free_heap = ESP.getFreeHeap();
+            const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+            const size_t required = total_size + g_cfg.decode_headroom_bytes;
+            if (free_heap < required || largest < total_size) {
+                Logger.logLinef(
+                    "ERROR: Insufficient memory (need %u heap, have %u; largest %u)",
+                    (unsigned)required,
+                    (unsigned)free_heap,
+                    (unsigned)largest
+                );
+                device_telemetry_log_memory_snapshot("img insufficient");
+                char error_msg[256];
+                snprintf(
+                    error_msg,
+                    sizeof(error_msg),
+                    "{\"success\":false,\"message\":\"Insufficient memory: need %uKB, have %uKB (largest block %uKB).\"}",
+                    (unsigned)(required / 1024),
+                    (unsigned)(free_heap / 1024),
+                    (unsigned)(largest / 1024)
                 );
                 Logger.logEnd();
                 request->send(507, "application/json", error_msg);
                 return;
             }
         }
+#else
+        // No PSRAM: total heap + largest block check (prevents immediate alloc failure).
+        const size_t free_heap = ESP.getFreeHeap();
+        const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+        const size_t required = total_size + g_cfg.decode_headroom_bytes;
+        if (free_heap < required || largest < total_size) {
+            Logger.logLinef(
+                "ERROR: Insufficient memory (need %u heap, have %u; largest %u)",
+                (unsigned)required,
+                (unsigned)free_heap,
+                (unsigned)largest
+            );
+            device_telemetry_log_memory_snapshot("img insufficient");
+            char error_msg[256];
+            snprintf(
+                error_msg,
+                sizeof(error_msg),
+                "{\"success\":false,\"message\":\"Insufficient memory: need %uKB, have %uKB (largest block %uKB).\"}",
+                (unsigned)(required / 1024),
+                (unsigned)(free_heap / 1024),
+                (unsigned)(largest / 1024)
+            );
+            Logger.logEnd();
+            request->send(507, "application/json", error_msg);
+            return;
+        }
+#endif
 
         // Allocate buffer
         device_telemetry_log_memory_snapshot("img pre-alloc");
