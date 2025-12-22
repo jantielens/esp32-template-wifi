@@ -135,20 +135,43 @@
 /* Documentation of the widgets: https://docs.lvgl.io/latest/en/html/widgets/index.html */
 
 #define LV_USE_ARC        1
-#define LV_USE_BAR        1
-#define LV_USE_BTN        1
-#define LV_USE_BTNMATRIX  1
-#define LV_USE_CANVAS     1
-#define LV_USE_CHECKBOX   1
-#define LV_USE_DROPDOWN   1
-#define LV_USE_IMG        1
+#define LV_USE_BAR        0
+#define LV_USE_BTN        0
+#define LV_USE_BTNMATRIX  0
+#define LV_USE_CANVAS     0
+#define LV_USE_CHECKBOX   0
+#define LV_USE_DROPDOWN   0
+#define LV_USE_IMG        0
 #define LV_USE_LABEL      1
-#define LV_USE_LINE       1
-#define LV_USE_ROLLER     1
-#define LV_USE_SLIDER     1
-#define LV_USE_SWITCH     1
-#define LV_USE_TEXTAREA   1
-#define LV_USE_TABLE      1
+#define LV_USE_LINE       0
+#define LV_USE_ROLLER     0
+#define LV_USE_SLIDER     0
+#define LV_USE_SWITCH     0
+#define LV_USE_TEXTAREA   0
+#define LV_USE_TABLE      0
+
+/* Used by SplashScreen */
+#define LV_USE_SPINNER    1
+
+/* Disable LVGL extra widgets we don't use (prevents dependency pulls).
+ * These default to enabled in LVGL unless explicitly disabled. */
+#define LV_USE_ANIMIMG                   0
+#define LV_USE_CALENDAR                  0
+#define LV_USE_CALENDAR_HEADER_ARROW     0
+#define LV_USE_CALENDAR_HEADER_DROPDOWN  0
+#define LV_USE_CHART                     0
+#define LV_USE_COLORWHEEL                0
+#define LV_USE_IMGBTN                    0
+#define LV_USE_KEYBOARD                  0
+#define LV_USE_LED                       0
+#define LV_USE_LIST                      0
+#define LV_USE_METER                     0
+#define LV_USE_MENU                      0
+#define LV_USE_MSGBOX                    0
+#define LV_USE_SPINBOX                   0
+#define LV_USE_TABVIEW                   0
+#define LV_USE_TILEVIEW                  0
+#define LV_USE_WIN                       0
 
 /*==================
  * THEMES
@@ -178,10 +201,10 @@
  *==================*/
 
 /* A layout similar to Flexbox in CSS */
-#define LV_USE_FLEX 1
+#define LV_USE_FLEX 0
 
 /* A layout similar to Grid in CSS */
-#define LV_USE_GRID 1
+#define LV_USE_GRID 0
 
 /*==================
  * OTHERS
@@ -202,7 +225,7 @@
  *-----------*/
 /* 1: Show CPU usage and FPS count in the right bottom corner
  * Note: We use a custom FPS overlay controlled via config instead */
-#define LV_USE_PERF_MONITOR 1
+#define LV_USE_PERF_MONITOR 0
 
 #if LV_USE_PERF_MONITOR
   #ifndef LV_USE_PERF_MONITOR_POS

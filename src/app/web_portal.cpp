@@ -207,7 +207,7 @@ void handleGetConfig(AsyncWebServerRequest *request) {
     }
     
     // Create JSON response (don't include passwords)
-    JsonDocument doc;
+    StaticJsonDocument<2048> doc;
     doc["wifi_ssid"] = current_config->wifi_ssid;
     doc["wifi_password"] = ""; // Don't send password
     doc["device_name"] = current_config->device_name;
@@ -236,11 +236,16 @@ void handleGetConfig(AsyncWebServerRequest *request) {
     
     // Display settings
     doc["backlight_brightness"] = current_config->backlight_brightness;
-    
-    String response;
-    serializeJson(doc, response);
-    
-    request->send(200, "application/json", response);
+
+    if (doc.overflowed()) {
+        Logger.logMessage("Portal", "ERROR: /api/config JSON overflow (StaticJsonDocument too small)");
+        request->send(500, "application/json", "{\"success\":false,\"message\":\"Response too large\"}");
+        return;
+    }
+
+    AsyncResponseStream *response = request->beginResponseStream("application/json");
+    serializeJson(doc, *response);
+    request->send(response);
 }
 
 // POST /api/config - Save new configuration
@@ -252,11 +257,15 @@ void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len,
     }
     
     // Parse JSON body
-    JsonDocument doc;
+    StaticJsonDocument<2048> doc;
     DeserializationError error = deserializeJson(doc, data, len);
     
     if (error) {
         Logger.logMessagef("Portal", "JSON parse error: %s", error.c_str());
+        if (error == DeserializationError::NoMemory) {
+            request->send(413, "application/json", "{\"success\":false,\"message\":\"JSON body too large\"}");
+            return;
+        }
         request->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid JSON\"}");
         return;
     }
@@ -504,14 +513,19 @@ void handleGetVersion(AsyncWebServerRequest *request) {
 
 // GET /api/health - Get device health statistics
 void handleGetHealth(AsyncWebServerRequest *request) {
-    JsonDocument doc;
+    StaticJsonDocument<1024> doc;
 
     device_telemetry_fill_api(doc);
-    
-    String response;
-    serializeJson(doc, response);
-    
-    request->send(200, "application/json", response);
+
+    if (doc.overflowed()) {
+        Logger.logMessage("Portal", "ERROR: /api/health JSON overflow (StaticJsonDocument too small)");
+        request->send(500, "application/json", "{\"success\":false,\"message\":\"Response too large\"}");
+        return;
+    }
+
+    AsyncResponseStream *response = request->beginResponseStream("application/json");
+    serializeJson(doc, *response);
+    request->send(response);
 }
 
 // POST /api/reboot - Reboot device without saving
@@ -534,7 +548,7 @@ void handleSetDisplayBrightness(AsyncWebServerRequest *request, uint8_t *data, s
     }
     
     // Parse JSON body
-    JsonDocument doc;
+    StaticJsonDocument<256> doc;
     DeserializationError error = deserializeJson(doc, data, len);
     
     if (error) {
@@ -572,7 +586,7 @@ void handleSetDisplayScreen(AsyncWebServerRequest *request, uint8_t *data, size_
     }
     
     // Parse JSON body
-    JsonDocument doc;
+    StaticJsonDocument<256> doc;
     DeserializationError error = deserializeJson(doc, data, len);
     
     if (error) {
@@ -600,9 +614,8 @@ void handleSetDisplayScreen(AsyncWebServerRequest *request, uint8_t *data, size_
     
     if (success) {
         // Build success response with new screen ID
-        String response = "{\"success\":true,\"screen\":\"";
-        response += screen_id;
-        response += "\"}";
+        char response[96];
+        snprintf(response, sizeof(response), "{\"success\":true,\"screen\":\"%s\"}", screen_id);
         request->send(200, "application/json", response);
     } else {
         request->send(404, "application/json", "{\"success\":false,\"message\":\"Screen not found\"}");

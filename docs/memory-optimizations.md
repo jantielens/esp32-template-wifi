@@ -23,6 +23,26 @@ Recommended test sequence (CYD-v2):
 3) Trigger HTTPS JPEG download+display repeatedly (20–100 times)
 4) Run MQTT publish loop for 10+ minutes
 
+Optional: automate portal/API churn tests
+
+If you want repeatable numbers without copying serial logs, you can drive the test using `/api/health`:
+
+```bash
+# API-only (focus on JSON churn): config save + screen switch + health sample, repeated
+python3 tools/portal_stress_test.py --host 192.168.1.111 --no-reboot --cycles 10 --scenario api
+
+# Portal + assets (fetch HTML/CSS/JS in addition to API actions)
+python3 tools/portal_stress_test.py --host 192.168.1.111 --no-reboot --cycles 10 --scenario portal
+
+# If you see occasional timeouts under load, increase timeout + retries
+python3 tools/portal_stress_test.py --host 192.168.1.111 --no-reboot --cycles 10 --scenario portal --timeout 8 --retries 5 --retry-sleep 0.3
+
+# Write a CSV so you can diff runs across firmware changes
+python3 tools/portal_stress_test.py --host 192.168.1.111 --no-reboot --cycles 10 --scenario api --out /tmp/portal_api_run.csv
+```
+
+The script prints per-cycle `heap_largest`/`heap_fragmentation` and a min/max summary, using `/api/health` as the source of truth.
+
 Success criteria to aim for:
 
 - Largest free block remains stable (does not monotonically shrink)
@@ -36,8 +56,8 @@ Success criteria to aim for:
 | **0** | Web Assets | PROGMEM verification, cache headers, AsyncTCP stack tuning | 0-8KB | Baseline: hl +4096B, frag -4pp (cyd-v2). Portal churn spike recorded in notes | Low | Low-Med | Medium |
 | **1** | Image API | Eliminate full-image buffering (stream-to-decode) | +80-180KB | — | **High** | High | **Critical** |
 | **2** | HTTPS | Fully streaming download (no response buffering) | +20-80KB | — | Med-High | Med-High | **Critical** |
-| **3** | JSON | Remove String temporaries in portal/MQTT | +2-20KB | — | **Medium** | Low-Med | **High** |
-| **4** | JSON | Replace JsonDocument with StaticJsonDocument | Variable | — | Med-High | Low-Med | **High** |
+| **3** | JSON | Remove String temporaries in portal/MQTT | +2-20KB | Portal churn: hl stayed 77812B (no drop), frag 47→37 (cyd-v2) | **Medium** | Low-Med | **High** |
+| **4** | JSON | Replace JsonDocument with StaticJsonDocument | Variable | Implemented (no DynamicJsonDocument in src/app) | Med-High | Low-Med | **High** |
 | **5** | JPEG Decode | Reuse decoder buffers per session | +8-16KB | — | Medium | Medium | High |
 | **6** | LVGL | Switch to custom allocator (LV_MEM_CUSTOM=1) | +48KB | — | Mixed | High | Medium |
 | **7** | LVGL | Reduce draw buffer size | +2-6KB | — | Low | Low | Low |
@@ -46,8 +66,8 @@ Success criteria to aim for:
 | **10** | Config | Lower IMAGE_API_MAX_SIZE_BYTES for no-PSRAM | Indirect | — | Medium | Low | Medium |
 | **11** | Config | Reduce IMAGE_STRIP_BATCH_MAX_ROWS | +1-4KB | — | Low | Low | Low |
 | **12** | Config | Tune headroom thresholds for no-PSRAM | Indirect | — | Low | Low | Low |
-| **13** | JSON | Use sized StaticJsonDocument (8+ instances) | Variable | — | Med-High | Low-Med | **High** |
-| **14** | LVGL | Disable unused widgets | +5-15KB flash | — | Low | Low | Low |
+| **13** | JSON | Use sized StaticJsonDocument (8+ instances) | Variable | Implemented (no `JsonDocument doc;` in src/app) | Med-High | Low-Med | **High** |
+| **14** | LVGL | Disable unused widgets | +5-15KB flash | Build: -68204B flash (cyd-v2) | Low | Low | Low |
 | **15** | FreeRTOS | Reduce LVGL task stack (8192→4096-6144) | +2-4KB | — | N/A | Medium | Medium |
 | **16** | FreeRTOS | Reduce telemetry task stack (2048→1280-1536) | +512-768B | — | N/A | Low | Low |
 | **17** | WiFi | Eliminate .toString() String temporaries | +15-25B/call | — | Low-Med | Low | Medium |
@@ -153,8 +173,8 @@ However, serving assets still uses RAM for:
 **Measured (before/after)**
 
 ```text
-Board:
-Scenario:
+Board: cyd-v2 (no PSRAM)
+Scenario: Idle baseline after JSON response/publish changes (boot + setup + first heartbeat; no portal actions yet)
 
 Before:
   [Mem] boot:
@@ -162,11 +182,20 @@ Before:
   [Mem] hb:
 
 After:
-  [Mem] boot:
-  [Mem] setup:
-  [Mem] hb:
+  [Mem] boot hf=232404 hm=226716 hl=110580 hi=187412 hin=181768 frag=52 pf=0 pm=0 pl=0
+  [Mem] setup hf=130400 hm=130048 hl=81908  hi=85408  hin=85100  frag=37 pf=0 pm=0 pl=0
+  [Mem] hb   hf=126648 hm=98940  hl=77812  hi=81656  hin=53992  frag=38 pf=0 pm=0 pl=0
 
-Notes:
+Notes: This optimization mainly reduces heap churn during /api/config, /api/health, and MQTT publish activity.
+
+Portal stress datapoint (screen switch + config save → next heartbeat):
+
+  Before portal actions:
+    [Mem] hb hf=127720 hm=98940 hl=77812 hi=82728 hin=53992 frag=39 pf=0 pm=0 pl=0
+  After screen switch (test→info) + config save:
+    [Mem] hb hf=124860 hm=93752 hl=77812 hi=79868 hin=48804 frag=37 pf=0 pm=0 pl=0
+
+Compared to the earlier run where config save + screen switches coincided with hl dropping to 65524 and frag jumping to 47, this suggests removing `String` JSON payload building materially reduced fragmentation pressure during portal/config operations.
 ```
 
 **What**
@@ -359,6 +388,11 @@ Start with:
 - `handleGetConfig()`
 - `handleGetHealth()`
 - MQTT state payload in `publishHealthNow()`
+
+Status (implemented):
+
+- Web portal handlers now use `StaticJsonDocument` and stream JSON responses (with overflow checks and `413` on `NoMemory`).
+- MQTT health payload is serialized from a sized `StaticJsonDocument` into a bounded publish buffer.
 
 **Estimated gain**
 
@@ -1066,19 +1100,29 @@ Notes:
 
 **What**
 
-All `JsonDocument doc;` declarations in the code use ArduinoJson v7's automatic sizing, which dynamically allocates memory as needed. These allocations happen in:
+ArduinoJson v7’s `JsonDocument` grows dynamically when you declare it without a capacity (e.g. `JsonDocument doc;`). That’s convenient, but it can create variable-sized heap allocations and fragmentation under repeated use.
 
-- [src/app/web_portal.cpp](../src/app/web_portal.cpp) - 5 instances (lines 168, 213, 465, 495, 533)
-- [src/app/mqtt_manager.cpp](../src/app/mqtt_manager.cpp) - 2 instances (lines 101, 117)
-- [src/app/ha_discovery.cpp](../src/app/ha_discovery.cpp) - 1 instance (line 71)
-
-Each creates variable-sized heap allocations based on JSON complexity, leading to fragmentation under repeated use.
+In this repo we now avoid that pattern in the main firmware (`src/app/**`): all JSON payloads are built with explicit `StaticJsonDocument<N>` capacities (plus bounded serialization buffers for MQTT and streaming responses for HTTP).
 
 **Change**
 
 - Replace with `StaticJsonDocument<N>` where N is carefully sized to fit the largest expected payload.
 - For responses, this pairs well with item 3 (serialize directly to stream/buffer instead of String).
 - Document maximum sizes for each JSON payload type to ensure buffers are adequate.
+
+Status (implemented in `src/app/**`):
+
+- Portal JSON:
+  - `/api/config` response uses `StaticJsonDocument<2048>` with `doc.overflowed()` guard.
+  - `/api/config` request body uses `StaticJsonDocument<2048>` with `413` on `DeserializationError::NoMemory`.
+  - `/api/health` response uses `StaticJsonDocument<1024>` with `doc.overflowed()` guard.
+  - Display control request bodies use `StaticJsonDocument<256>`.
+- MQTT JSON:
+  - Health state uses `StaticJsonDocument<768>` and serializes into a bounded `char payload[MQTT_MAX_PACKET_SIZE]`.
+- Home Assistant discovery JSON:
+  - Each discovery payload uses `StaticJsonDocument<768>` with overflow check.
+
+This leaves no `JsonDocument doc;` declarations in `src/app/**`.
 
 Example:
 ```cpp
@@ -1123,42 +1167,42 @@ serializeJson(doc, response, sizeof(response));
 **Measured (before/after)**
 
 ```text
-Board:
-Scenario:
+Board: cyd-v2
+Scenario: build (program storage size)
 
 Before:
-  [Mem] boot:
-  [Mem] setup:
-  [Mem] hb:
+  Sketch uses 1417067 bytes (72%) of program storage space.
 
 After:
-  [Mem] boot:
-  [Mem] setup:
-  [Mem] hb:
+  Sketch uses 1348863 bytes (68%) of program storage space.
+
+Delta:
+  -68204 bytes flash
 
 Notes:
+  - Needed explicit LVGL "extra widget" disables because LVGL defaults compile them unless overridden in lv_conf.h.
 ```
 
 **What**
 
 [src/app/lv_conf.h](../src/app/lv_conf.h) enables many LVGL widgets that may not be used:
 
-- `LV_USE_ARC`, `LV_USE_BAR`, `LV_USE_BTNMATRIX`, `LV_USE_CANVAS`, `LV_USE_CHECKBOX`, `LV_USE_DROPDOWN`, `LV_USE_ROLLER`, `LV_USE_SWITCH`, `LV_USE_TEXTAREA`, `LV_USE_TABLE` (lines 137-151)
-- `LV_USE_FLEX` and `LV_USE_GRID` layouts (lines 181, 184)
-- `LV_USE_ANIMATION` (line 191)
+- `LV_USE_ARC`, `LV_USE_BAR`, `LV_USE_BTNMATRIX`, `LV_USE_CANVAS`, `LV_USE_CHECKBOX`, `LV_USE_DROPDOWN`, `LV_USE_ROLLER`, `LV_USE_SWITCH`, `LV_USE_TEXTAREA`, `LV_USE_TABLE`
+- `LV_USE_FLEX` and `LV_USE_GRID` layouts
+- `LV_USE_PERF_MONITOR`
 
-Current screens (splash, info, test) use only: labels, buttons, spinners, arcs (for progress), and basic layouts.
+Current screens (splash, info, test) use only: labels, a spinner (which depends on arcs), and basic objects/styles.
 
 **Change**
 
 - Audit actual widget usage in [src/app/screens/](../src/app/screens/) directory
 - Set unused widget defines to `0`
-- Keep only: `LV_USE_BTN`, `LV_USE_LABEL`, `LV_USE_IMG`, `LV_USE_ARC` (for spinner), `LV_USE_FLEX` (if used)
+- Keep only what is actually used by our screens (at minimum: `LV_USE_LABEL`, `LV_USE_SPINNER`, `LV_USE_ARC`)
 - Disable complex widgets: `CANVAS`, `TABLE`, `TEXTAREA`, `DROPDOWN`, `ROLLER`, `CHECKBOX`, `SWITCH`
 
 **Estimated gain**
 
-- Flash: **~5-15KB** (code size reduction from disabled widgets)
+- Flash: **~5-15KB** typical; **measured -68KB on cyd-v2** (includes disabling LVGL "extra" widgets that were enabled by default)
 - RAM: **small-medium** (less widget state structures and style data)
 - Compile time: **small improvement**
 
