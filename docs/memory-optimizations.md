@@ -59,7 +59,7 @@ Success criteria to aim for:
 | **3** | JSON | Remove String temporaries in portal/MQTT | +2-20KB | Portal churn: hl stayed 77812B (no drop), frag 47→37 (cyd-v2) | **Medium** | Low-Med | **High** |
 | **4** | JSON | Replace JsonDocument with StaticJsonDocument | Variable | Implemented (no DynamicJsonDocument in src/app) | Med-High | Low-Med | **High** |
 | **5** | JPEG Decode | Reuse decoder buffers per session | +8-16KB | — | Medium | Medium | High |
-| **6** | LVGL | Switch to custom allocator (LV_MEM_CUSTOM=1) | +48KB | — | Mixed | High | Medium |
+| **6** | LVGL | Switch to custom allocator (LV_MEM_CUSTOM=1) | +48KB | Build: DRAM -49168B, hl +49168B. Runtime: heap_free +40KB, hl +20480B (cyd-v2) | Mixed | High | Medium |
 | **7** | LVGL | Reduce draw buffer size | +2-6KB | — | Low | Low | Low |
 | **8** | LVGL | Disable unused fonts | +10-30KB flash | — | Low | Low | Low |
 | **9** | LVGL | Reduce screen/widget complexity | Variable | — | Low | Medium | Low |
@@ -241,20 +241,29 @@ This likely means changing the Image API contract and/or client tooling (OK per 
 **Measured (before/after)**
 
 ```text
-Board:
-Scenario:
+Board: cyd-v2 (no PSRAM)
 
-Before:
-  [Mem] boot:
-  [Mem] setup:
-  [Mem] hb:
+Build (arduino-cli compile output):
+  Before (LV_MEM_CUSTOM=0):
+    Sketch uses 1348951 bytes
+    Global variables use 100632 bytes
+    Leaving 227048 bytes for local variables
+  After (LV_MEM_CUSTOM=1):
+    Sketch uses 1347535 bytes
+    Global variables use 51464 bytes
+    Leaving 276216 bytes for local variables
 
-After:
-  [Mem] boot:
-  [Mem] setup:
-  [Mem] hb:
+Runtime stress (tools/portal_stress_test.py, host 192.168.1.111, 10 cycles):
+  API scenario:
+    Before: heap_free min=121616 max=124476, heap_largest min=73716 max=77812, heap_fragmentation min=36 max=40
+    After:  heap_free min=162168 max=166244, heap_largest min=94196 max=94196, heap_fragmentation min=41 max=43
+  Portal scenario:
+    Before: heap_free min=121588 max=121624, heap_largest min=73716 max=73716, heap_fragmentation min=39 max=39
+    After:  heap_free min=161804 max=162240, heap_largest min=94196 max=94196, heap_fragmentation min=41 max=41
 
 Notes:
+  - Net win on cyd-v2: heap_free +~40KB, heap_largest +20480B.
+  - Baseline API run showed a mid-run largest-block drop (77812→73716) that did not occur after.
 ```
 
 **What**
