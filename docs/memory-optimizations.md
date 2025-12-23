@@ -60,7 +60,7 @@ Success criteria to aim for:
 |---|----------|--------------|-----------|----------|---------------------|------------|----------|
 | **0** | Web Assets | PROGMEM verification, cache headers, AsyncTCP stack tuning | 0-8KB | Baseline: hl +4096B, frag -4pp (cyd-v2). Portal churn spike recorded in notes | Low | Low-Med | Medium |
 | **1** | Image API | Eliminate full-image buffering (stream-to-decode) | +80-180KB | Not implemented (yet): high complexity. Also ruled out “stream-to-flash then decode” due to frequent uploads (flash wear) | **High** | High | **Critical** |
-| **2** | HTTPS | Fully streaming download (no response buffering) | +20-80KB | — | Med-High | Med-High | **Critical** |
+| **2** | HTTPS | Streaming HTTP(S) download (still buffers full JPEG before decode) | +20-80KB | Implemented (PoC): streaming socket reads; response is still buffered into one contiguous JPEG allocation | Med-High | Med-High | **Critical** |
 | **3** | JSON | Remove String temporaries in portal/MQTT | +2-20KB | Portal churn: hl stayed 77812B (no drop), frag 47→37 (cyd-v2) | **Medium** | Low-Med | **High** |
 | **4** | JSON | Replace JsonDocument with StaticJsonDocument | Variable | Implemented (no DynamicJsonDocument in src/app) | Med-High | Low-Med | **High** |
 | **5** | JPEG Decode | Reuse decoder buffers per session | +8-24KB | Image stress: after_cycle mins hf 121900→146196, hl 73716→81908, hi 76908→101204 (cyd-v2, 320x240 x5) | Mixed | Medium | High |
@@ -270,6 +270,7 @@ This repo already has image strip decoding infrastructure (`StripDecoder`) that 
 - Added `POST /api/display/image_url` which queues an HTTP(S) JPEG download.
 - The client reads from the socket in small chunks (no `String` concatenation / `HTTPClient::getString()` style buffering).
 - The downloaded JPEG is currently buffered into a single contiguous allocation before decode (this is not “stream-to-decode” yet).
+- When the active screen is `lvgl_image`, the downloaded JPEG is decoded to an RGB565 buffer and displayed via LVGL (`lv_img`).
 
 Example stress run:
 
@@ -1251,13 +1252,15 @@ Notes:
 - `LV_USE_FLEX` and `LV_USE_GRID` layouts
 - `LV_USE_PERF_MONITOR`
 
-Current screens (splash, info, test) use only: labels, a spinner (which depends on arcs), and basic objects/styles.
+Current default screens (splash, info, test) use only: labels, a spinner (which depends on arcs), and basic objects/styles.
+
+When `HAS_IMAGE_API` is enabled, the firmware also compiles an optional LVGL image screen (`lvgl_image`) which uses `lv_img` and zoom (so `LV_USE_IMG` and `LV_USE_IMG_TRANSFORM` must be enabled for that configuration).
 
 **Change**
 
 - Audit actual widget usage in [src/app/screens/](../src/app/screens/) directory
 - Set unused widget defines to `0`
-- Keep only what is actually used by our screens (at minimum: `LV_USE_LABEL`, `LV_USE_SPINNER`, `LV_USE_ARC`)
+- Keep only what is actually used by our screens (at minimum: `LV_USE_LABEL`, `LV_USE_SPINNER`, `LV_USE_ARC`; plus `LV_USE_IMG`/`LV_USE_IMG_TRANSFORM` when `HAS_IMAGE_API` is enabled)
 - Disable complex widgets: `CANVAS`, `TABLE`, `TEXTAREA`, `DROPDOWN`, `ROLLER`, `CHECKBOX`, `SWITCH`
 
 **Estimated gain**
@@ -1312,7 +1315,9 @@ LVGL task is created with 8192 bytes stack in [src/app/display_manager.cpp](../s
 xTaskCreatePinnedToCore(lvgl_task, "LVGL", 8192, NULL, 1, NULL, 1);
 ```
 
-When image API is disabled (no JPEG decoding), LVGL operations are simpler (just widget rendering and touch input). The generous 8KB stack may be overkill.
+When image API is disabled (no Image API endpoints, no JPEG download/decode paths), LVGL operations are simpler (just widget rendering and touch input). The generous 8KB stack may be overkill.
+
+Note: in this repo, enabling `HAS_IMAGE_API` also enables LVGL image widget/transform support in `src/app/lv_conf.h` to support the optional `lvgl_image` screen. If you want Image API without that LVGL image/zoom code, you can override `LV_USE_IMG=0` and/or `LV_USE_IMG_TRANSFORM=0`.
 
 **Change**
 

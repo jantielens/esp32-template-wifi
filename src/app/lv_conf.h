@@ -8,11 +8,14 @@
 
 #include <stdint.h>
 
-// Allow LVGL config to react to board-specific overrides.
-// build.sh defines BOARD_HAS_OVERRIDE and adds the override include path.
-#ifdef BOARD_HAS_OVERRIDE
-#include "board_overrides.h"
-#endif
+// lv_conf.h is included by LVGL's C sources.
+// The project uses true/false-style feature flags (e.g., HAS_IMAGE_API true) in board_config.h
+// and board_overrides.h. In C, those require <stdbool.h> to make true/false available.
+#include <stdbool.h>
+
+// Pull in project feature flags (HAS_DISPLAY, HAS_IMAGE_API, etc.).
+// board_config.h will include board_overrides.h when BOARD_HAS_OVERRIDE is set.
+#include "board_config.h"
 
 /*====================
    COLOR SETTINGS
@@ -141,7 +144,19 @@
 #define LV_USE_CANVAS     0
 #define LV_USE_CHECKBOX   0
 #define LV_USE_DROPDOWN   0
-#define LV_USE_IMG        0
+
+// Image widget support is only needed for the Image API's optional LVGL image screen.
+// Keep it disabled by default to reduce flash size in template builds.
+#if HAS_IMAGE_API
+  #ifndef LV_USE_IMG
+    #define LV_USE_IMG        1
+  #endif
+#else
+  #ifndef LV_USE_IMG
+    #define LV_USE_IMG        0
+  #endif
+#endif
+
 #define LV_USE_LABEL      1
 #define LV_USE_LINE       0
 #define LV_USE_ROLLER     0
@@ -152,6 +167,15 @@
 
 /* Used by SplashScreen */
 #define LV_USE_SPINNER    1
+
+/* Enable scaling/rotation of images (needed for lv_img_set_zoom). */
+#ifndef LV_USE_IMG_TRANSFORM
+  #if LV_USE_IMG
+    #define LV_USE_IMG_TRANSFORM 1
+  #else
+    #define LV_USE_IMG_TRANSFORM 0
+  #endif
+#endif
 
 /* Disable LVGL extra widgets we don't use (prevents dependency pulls).
  * These default to enabled in LVGL unless explicitly disabled. */

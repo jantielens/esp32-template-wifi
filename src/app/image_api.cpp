@@ -24,6 +24,9 @@
 #include <WiFiClient.h>
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
+#include <string.h>
+
+#include "lvgl_jpeg_decoder.h"
 
 #include <esp_heap_caps.h>
 #include <soc/soc_caps.h>
@@ -1157,6 +1160,91 @@ void image_api_process_pending(bool ota_in_progress) {
         Logger.logMessagef("Portal", "Processing pending image (%u bytes)", (unsigned)sz);
 
         device_telemetry_log_memory_snapshot("img pre-decode");
+
+        #if HAS_DISPLAY && LV_USE_IMG
+        // PoC: if the user is currently on the LVGL image screen, decode JPEG to RGB565 and
+        // show via LVGL (lv_img) instead of direct LCD writes.
+        const char* current_screen = display_manager_get_current_screen_id();
+        Logger.logMessagef("Portal", "Current screen: %s", current_screen ? current_screen : "(none)");
+        if (current_screen && strcmp(current_screen, "lvgl_image") == 0) {
+            uint16_t* pixels = nullptr;
+            int w = 0;
+            int h = 0;
+            int scale_used = -1;
+            char derr[96];
+
+            // Decode without holding the LVGL mutex.
+            const bool ok = lvgl_jpeg_decode_to_rgb565(buf, sz, &pixels, &w, &h, &scale_used, derr, sizeof(derr));
+            if (!ok) {
+                Logger.logMessagef("Portal", "ERROR: LVGL JPEG decode failed: %s", derr);
+                device_telemetry_log_memory_snapshot("img lvgl-decode-fail");
+
+                image_api_free((void*)pending_image_op.buffer);
+                pending_image_op.buffer = nullptr;
+                pending_image_op.size = 0;
+                upload_state = UPLOAD_IDLE;
+
+                if (g_backend.hide_current_image) {
+                    g_backend.hide_current_image();
+                }
+                return;
+            }
+
+            LvglImageScreen* screen = display_manager_get_lvgl_image_screen();
+            bool set_ok = false;
+            display_manager_lock();
+            if (screen) set_ok = screen->setImageRgb565(pixels, w, h);
+            display_manager_unlock();
+
+            // Helpful runtime diagnostics: show whether we decoded at reduced resolution.
+            // The screen will scale this to a fixed 200x200 box via lv_img zoom.
+            const int div = (scale_used >= 0 && scale_used <= 7) ? (1 << scale_used) : 0;
+            const double zoom = (double)200.0 / (double)((w > h) ? w : h);
+            if (div) {
+                Logger.logMessagef(
+                    "Portal",
+                    "LVGL img: decoded %dx%d (tjpgd scale %d (1/%d)) -> target 200x200 (zoom %.2fx)",
+                    w,
+                    h,
+                    scale_used,
+                    div,
+                    zoom
+                );
+            } else {
+                Logger.logMessagef(
+                    "Portal",
+                    "LVGL img: decoded %dx%d (tjpgd scale %d) -> target 200x200 (zoom %.2fx)",
+                    w,
+                    h,
+                    scale_used,
+                    zoom
+                );
+            }
+
+            if (!set_ok) {
+                heap_caps_free(pixels);
+                Logger.logMessage("Portal", "ERROR: Failed to set LVGL image");
+
+                image_api_free((void*)pending_image_op.buffer);
+                pending_image_op.buffer = nullptr;
+                pending_image_op.size = 0;
+                upload_state = UPLOAD_IDLE;
+
+                if (g_backend.hide_current_image) {
+                    g_backend.hide_current_image();
+                }
+                return;
+            }
+
+            device_telemetry_log_memory_snapshot("img lvgl-post");
+
+            image_api_free((void*)pending_image_op.buffer);
+            pending_image_op.buffer = nullptr;
+            pending_image_op.size = 0;
+            upload_state = UPLOAD_IDLE;
+            return;
+        }
+        #endif
 
         bool success = false;
         if (g_backend.start_strip_session && g_backend.decode_strip) {

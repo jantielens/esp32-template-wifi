@@ -552,6 +552,11 @@ Upload new firmware binary for over-the-air update.
 
 ### Image Display (HAS_DISPLAY enabled)
 
+**Build-time gating:**
+- The Image Display endpoints are enabled when `HAS_IMAGE_API` is enabled (defined in `src/app/board_config.h` and typically overridden per-board in `src/boards/<board>/board_overrides.h`).
+- When `HAS_IMAGE_API` is enabled, the firmware also compiles an optional LVGL-based image screen (`lvgl_image`) and enables LVGL image widget/zoom support via `src/app/lv_conf.h`.
+- To reduce firmware size, you can disable the LVGL image widget/zoom code by overriding `LV_USE_IMG=0` and/or `LV_USE_IMG_TRANSFORM=0` in `src/app/lv_conf.h` (or via build flags).
+
 #### `POST /api/display/image`
 
 Upload a JPEG image for display on the device screen (full mode - deferred decode).

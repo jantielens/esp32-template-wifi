@@ -176,6 +176,10 @@ The hostname is automatically set from the device name and includes the last 4 h
 
 ### REST API Endpoints
 
+Build-time gating:
+- Display/image endpoints require `HAS_DISPLAY` + `HAS_IMAGE_API` (typically set per-board in `src/boards/<board>/board_overrides.h`).
+- When `HAS_IMAGE_API` is enabled, an optional LVGL image screen (`lvgl_image`) is also compiled and can be selected via `PUT /api/display/screen`.
+
 | Method | Endpoint | Purpose |
 |--------|----------|----------|
 | GET | `/api/info` | Device info (firmware, chip, cores, flash, PSRAM, hostname, MAC; plus `display_coord_width/height` when HAS_DISPLAY) |

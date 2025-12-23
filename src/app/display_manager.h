@@ -11,6 +11,7 @@
 
 #if HAS_IMAGE_API
 #include "screens/direct_image_screen.h"
+#include "screens/lvgl_image_screen.h"
 #endif
 
 #include <lvgl.h>
@@ -78,6 +79,9 @@ private:
     
     #if HAS_IMAGE_API
     DirectImageScreen directImageScreen;
+    #if LV_USE_IMG
+    LvglImageScreen lvglImageScreen;
+    #endif
     #endif
     
     // Screen registry for runtime navigation (static allocation, no heap)
@@ -154,6 +158,11 @@ public:
     #if HAS_IMAGE_API
     // Access to direct image screen for image API
     DirectImageScreen* getDirectImageScreen() { return &directImageScreen; }
+
+    // Access to LVGL image screen (shows images via lv_img)
+    #if LV_USE_IMG
+    LvglImageScreen* getLvglImageScreen() { return &lvglImageScreen; }
+    #endif
     #endif
     
     // Access to display driver (for touch integration)
@@ -183,6 +192,9 @@ void display_manager_unlock();
 // C-style interface for image API
 void display_manager_show_direct_image();
 DirectImageScreen* display_manager_get_direct_image_screen();
+#if LV_USE_IMG
+LvglImageScreen* display_manager_get_lvgl_image_screen();
+#endif
 void display_manager_return_to_previous_screen();
 #endif
 
