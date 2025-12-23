@@ -7,6 +7,7 @@ ESP32 Arduino development template using `arduino-cli` for headless builds. Desi
 ## Architecture
 
 - **Build System**: Custom bash scripts wrapping `arduino-cli` (installed locally to `./bin/`)
+- **PNG Assets (LVGL)**: Optional `assets/png/*.png` conversion to `lv_img_dsc_t` symbols (generated into `src/app/png_assets.cpp/h` by `tools/png2lvgl_assets.py` when building display-enabled boards)
 - **Sketch Location**: Main Arduino file at `src/app/app.ino`
 - **Board Configuration**: Flexible system with optional board-specific overrides
   - `src/app/board_config.h` - Default configuration for all boards
@@ -162,6 +163,7 @@ See `docs/wsl-development.md` for complete USB/IP setup guide.
 ### Source
 - `src/app/app.ino` - Main sketch file (standard Arduino structure)
 - `src/app/board_config.h` - Default board configuration (LED pins, WiFi settings)
+- `src/app/png_assets.cpp/h` - Generated LVGL PNG assets (auto-generated when `assets/png/*.png` exists and building a display-enabled board)
 - `src/boards/[board-name]/board_overrides.h` - Optional board-specific compile-time configuration
 - `src/app/web_portal.cpp/h` - Async web server and REST API endpoints
 - `src/app/web_assets.h` - Embedded HTML/CSS/JS from `src/app/web/` (auto-generated)
@@ -201,6 +203,8 @@ See `docs/wsl-development.md` for complete USB/IP setup guide.
   - Minifies CSS and JavaScript
   - Gzips all assets for efficient storage
   - Excludes template fragments (files starting with `_`)
+
+- `tools/png2lvgl_assets.py` - Converts `assets/png/*.png` into LVGL `lv_img_dsc_t` symbols (requires Python + Pillow)
 
 - `tools/generate-board-driver-table.py` - Generates the board→drivers table from `src/boards/*/board_overrides.h`
 - `tools/generate-board-driver-table.py` - Generates the board→drivers table from `src/boards/*/board_overrides.h`

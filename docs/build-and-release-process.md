@@ -83,9 +83,10 @@ Used for user-facing text and branding:
 The build system automatically applies project branding during compilation:
 
 1. `build.sh` sources `config.sh` to get `PROJECT_NAME` and `PROJECT_DISPLAY_NAME`
-2. `tools/minify-web-assets.sh` performs template substitution in HTML files
-3. Branding C++ `#define` statements are generated in `src/app/project_branding.h` (and `web_assets.h` includes it)
-4. Firmware compiles with branded values embedded
+2. (Optional) If `assets/png/*.png` exists and you are building a display-enabled board, `build.sh` generates LVGL image assets into `src/app/png_assets.cpp` and `src/app/png_assets.h`
+3. `tools/minify-web-assets.sh` performs template substitution in HTML files
+4. Branding C++ `#define` statements are generated in `src/app/project_branding.h` (and `web_assets.h` includes it)
+5. Firmware compiles with branded values embedded
 
 ### Board-Specific Configuration
 

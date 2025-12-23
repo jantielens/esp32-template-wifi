@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.22] - 2025-12-23
+
+### Added
+- LVGL PNG asset pipeline: `assets/png/*.png` → generated `src/app/png_assets.cpp/h` via `tools/png2lvgl_assets.py` (used by the splash screen)
+
+---
+
 ## [0.0.21] - 2025-12-23
 
 ### Added
