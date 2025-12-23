@@ -82,6 +82,9 @@ void setup()
   // #endif
   Logger.logEnd();
 
+  // Baseline memory snapshot as early as possible.
+  device_telemetry_log_memory_snapshot("boot");
+
   // Initialize device_config with sensible defaults
   // (Important: must happen before display_manager_init uses the config)
   memset(&device_config, 0, sizeof(DeviceConfig));
@@ -182,6 +185,9 @@ void setup()
   lastHeartbeat = millis();
   Logger.logMessage("Main", "Setup complete");
 
+  // Snapshot after all subsystems are initialized.
+  device_telemetry_log_memory_snapshot("setup");
+
   #if HAS_DISPLAY
   // Show splash for minimum duration to ensure visibility
   display_manager_set_splash_status("Ready!");
@@ -232,6 +238,9 @@ void loop()
     }
 
     lastHeartbeat = currentMillis;
+
+    // Keep a consistent memory line in the logs to quantify before/after changes.
+    device_telemetry_log_memory_snapshot("hb");
   }
 
   delay(10);

@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.21] - 2025-12-23
+
+### Added
+- `POST /api/display/image_url` to queue HTTP/HTTPS JPEG downloads for display (download+decode runs later in the main loop)
+- Optional LVGL image screen (`lvgl_image`) when `HAS_IMAGE_API` is enabled
+- Optional `LV_MEM_CUSTOM` LVGL allocator backed by `heap_caps_*` allocators (helps reduce internal heap fragmentation)
+- `tools/portal_stress_test.py` for repeatable portal/API/image stress testing
+
+### Changed
+- Image API HTTP(S) download path is more robust (honors timeouts, reduces stack usage during header parsing)
+
+### Fixed
+- Hardened Image API request handling (abort-safe behavior; cleanup for interrupted/stuck uploads)
+
+### Documentation
+- Documented and logged a security warning for insecure TLS mode (`WiFiClientSecure::setInsecure()`)
+
+### Removed
+- Removed internal working doc `docs/memory-optimizations.md`
+
 ## [0.0.20] - 2025-12-21
 
 ### Added

@@ -552,6 +552,11 @@ Upload new firmware binary for over-the-air update.
 
 ### Image Display (HAS_DISPLAY enabled)
 
+**Build-time gating:**
+- The Image Display endpoints are enabled when `HAS_IMAGE_API` is enabled (defined in `src/app/board_config.h` and typically overridden per-board in `src/boards/<board>/board_overrides.h`).
+- When `HAS_IMAGE_API` is enabled, the firmware also compiles an optional LVGL-based image screen (`lvgl_image`) and enables LVGL image widget/zoom support via `src/app/lv_conf.h`.
+- To reduce firmware size, you can disable the LVGL image widget/zoom code by overriding `LV_USE_IMG=0` and/or `LV_USE_IMG_TRANSFORM=0` in `src/app/lv_conf.h` (or via build flags).
+
 #### `POST /api/display/image`
 
 Upload a JPEG image for display on the device screen (full mode - deferred decode).
@@ -585,6 +590,47 @@ Upload a JPEG image for display on the device screen (full mode - deferred decod
 - Use for single image uploads or testing
 - Requires enough heap memory to buffer entire JPEG
 - The safest client behavior is to pre-size (and if needed, letterbox) the JPEG to the device's display coordinate-space resolution (see `GET /api/info` fields `display_coord_width`/`display_coord_height`)
+
+#### `POST /api/display/image_url`
+
+Queue an HTTP/HTTPS JPEG download for display.
+
+This endpoint returns quickly (it only queues the job). The actual HTTP/HTTPS download and JPEG decode run later (in the main loop) to avoid blocking AsyncTCP.
+
+**Request:**
+- Content-Type: `application/json`
+- Body:
+```json
+{
+  "url": "https://example.com/image.jpg"
+}
+```
+- Query parameters:
+  - `timeout` (optional): Display timeout in seconds (`0` = permanent; defaults to firmware setting)
+
+**Response (Success):**
+```json
+{
+  "success": true,
+  "message": "Image URL queued"
+}
+```
+
+**Response (Busy - HTTP 409):**
+```json
+{
+  "success": false,
+  "message": "Busy"
+}
+```
+
+**Notes:**
+- Supports `http://...` and `https://...`.
+- Current implementation requires a `Content-Length` header and does not support `Transfer-Encoding: chunked`.
+- SECURITY WARNING: For `https://` URLs, the firmware currently uses an insecure TLS mode (no certificate validation / `setInsecure()`).
+  This encrypts traffic but does **not** authenticate the server: an active attacker on the network (MITM) can spoof the server and deliver arbitrary content.
+  Use this only on trusted networks until proper TLS verification (CA bundle) or host pinning is implemented.
+- Flow control: returns HTTP 409 if an image upload/decode is already in progress; clients should retry with a short delay.
 
 #### Home Assistant (AppDaemon): Send Camera Snapshots to ESP32
 

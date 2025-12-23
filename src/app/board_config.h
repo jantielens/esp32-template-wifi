@@ -184,10 +184,18 @@
 // ============================================================================
 // Enable web-based image upload and display functionality
 // Requires: HAS_DISPLAY = true
+//
+// Template note (bloat control):
+// - When HAS_IMAGE_API is enabled, the firmware also compiles an optional LVGL-based image screen
+//   (screen id: "lvgl_image") which can display downloaded/uploaded JPEGs via LVGL (lv_img).
+// - LVGL image widget + zoom support are enabled via src/app/lv_conf.h when HAS_IMAGE_API is true.
+// - If you want Image API without the LVGL image widget/zoom code, you can override LVGL config
+//   by setting LV_USE_IMG=0 and/or LV_USE_IMG_TRANSFORM=0 in src/app/lv_conf.h (or via build flags).
 // Adds REST endpoints:
 //   POST   /api/display/image          - Upload full JPEG (deferred decode)
 //   DELETE /api/display/image          - Dismiss current image
 //   POST   /api/display/image/strips   - Upload JPEG strip (synchronous)
+//   POST   /api/display/image_url      - Download JPEG via HTTP/HTTPS (deferred)
 #ifndef HAS_IMAGE_API
 #define HAS_IMAGE_API false
 #endif

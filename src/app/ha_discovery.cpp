@@ -68,7 +68,7 @@ static bool publish_sensor_config(
     char topic[160];
     snprintf(topic, sizeof(topic), "homeassistant/sensor/%s/%s/config", mqtt.sanitizedName(), object_id);
 
-    JsonDocument doc;
+    StaticJsonDocument<768> doc;
 
     // Use base topic shortcut to keep discovery payload small
     doc["~"] = mqtt.baseTopic();
@@ -118,6 +118,12 @@ static bool publish_sensor_config(
     dev["name"] = mqtt.friendlyName();
     dev["mdl"] = PROJECT_DISPLAY_NAME;
     dev["sw"] = FIRMWARE_VERSION;
+
+    if (doc.overflowed()) {
+        // Payload too large for this StaticJsonDocument size.
+        // mqtt.publishJson() will also fail if serialization exceeds MQTT_MAX_PACKET_SIZE.
+        return false;
+    }
 
     return mqtt.publishJson(topic, doc, true);
 }

@@ -19,6 +19,10 @@
 // Enable Image Upload API on this board
 #define HAS_IMAGE_API true
 
+// PSRAM board: allow larger full-image uploads than the global default.
+// High-entropy JPEGs at higher quality can exceed 100KB.
+#define IMAGE_API_MAX_SIZE_BYTES (300 * 1024)
+
 // ---------------------------------------------------------------------------
 // Driver Selection (HAL)
 // ---------------------------------------------------------------------------

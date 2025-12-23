@@ -48,7 +48,19 @@ DisplayManager::DisplayManager(DeviceConfig* cfg)
     // Initialize screen registry (exclude splash - it's boot-specific)
     availableScreens[0] = {"info", "Info Screen", &infoScreen};
     availableScreens[1] = {"test", "Test Screen", &testScreen};
+    #if HAS_IMAGE_API
+    // Optional LVGL image screen (JPEG -> RGB565 -> lv_img).
+    // Included under HAS_IMAGE_API for simplicity. To reduce firmware size,
+    // disable LVGL image support via LV_USE_IMG=0 / LV_USE_IMG_TRANSFORM=0 in src/app/lv_conf.h.
+    #if LV_USE_IMG
+    availableScreens[2] = {"lvgl_image", "LVGL Image", &lvglImageScreen};
+    screenCount = 3;
+    #else
     screenCount = 2;
+    #endif
+    #else
+    screenCount = 2;
+    #endif
     
     #if HAS_IMAGE_API
     // Register DirectImageScreen (optional, only shown via API)
@@ -73,6 +85,9 @@ DisplayManager::~DisplayManager() {
     
     #if HAS_IMAGE_API
     directImageScreen.destroy();
+    #if LV_USE_IMG
+    lvglImageScreen.destroy();
+    #endif
     #endif
     
     // Delete display driver
@@ -348,6 +363,11 @@ void DisplayManager::init() {
     splashScreen.create();
     infoScreen.create();
     testScreen.create();
+    #if HAS_IMAGE_API
+    #if LV_USE_IMG
+    lvglImageScreen.create();
+    #endif
+    #endif
     
     Logger.logLine("Screens created");
     
@@ -412,6 +432,9 @@ void DisplayManager::showDirectImage() {
     // Defer screen switch to lvglTask (non-blocking)
     // Immediately gate LVGL flushes so the decoder can safely write even before
     // the screen switch is processed by the LVGL task.
+    // Also drop any pending buffered present() to avoid flushing stale LVGL content
+    // over the direct-image content.
+    flushPending = false;
     directImageActive = true;
     pendingScreen = &directImageScreen;
     Logger.logMessage("Display", "Queued switch to DirectImageScreen");
@@ -527,6 +550,18 @@ void display_manager_set_backlight_brightness(uint8_t brightness) {
     }
 }
 
+void display_manager_lock() {
+    if (displayManager) {
+        displayManager->lock();
+    }
+}
+
+void display_manager_unlock() {
+    if (displayManager) {
+        displayManager->unlock();
+    }
+}
+
 #if HAS_IMAGE_API
 void display_manager_show_direct_image() {
     if (displayManager) {
@@ -540,6 +575,15 @@ DirectImageScreen* display_manager_get_direct_image_screen() {
     }
     return nullptr;
 }
+
+#if LV_USE_IMG
+LvglImageScreen* display_manager_get_lvgl_image_screen() {
+    if (displayManager) {
+        return displayManager->getLvglImageScreen();
+    }
+    return nullptr;
+}
+#endif
 
 void display_manager_return_to_previous_screen() {
     if (displayManager) {

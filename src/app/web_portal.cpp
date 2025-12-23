@@ -74,6 +74,30 @@ static volatile bool pending_image_hide_request = false;
 
 // ===== WEB SERVER HANDLERS =====
 
+static AsyncWebServerResponse *begin_gzipped_asset_response(
+    AsyncWebServerRequest *request,
+    const char *content_type,
+    const uint8_t *content_gz,
+    size_t content_gz_len,
+    const char *cache_control
+) {
+    // Prefer the PROGMEM-aware response helper to avoid accidental heap copies.
+    // All generated assets live in flash as `const uint8_t[] PROGMEM`.
+    AsyncWebServerResponse *response = request->beginResponse_P(
+        200,
+        content_type,
+        content_gz,
+        content_gz_len
+    );
+
+    response->addHeader("Content-Encoding", "gzip");
+    response->addHeader("Vary", "Accept-Encoding");
+    if (cache_control && strlen(cache_control) > 0) {
+        response->addHeader("Cache-Control", cache_control);
+    }
+    return response;
+}
+
 // Handle root - redirect to network.html in AP mode, serve home in full mode
 void handleRoot(AsyncWebServerRequest *request) {
     if (ap_mode_active) {
@@ -81,10 +105,13 @@ void handleRoot(AsyncWebServerRequest *request) {
         request->redirect("/network.html");
     } else {
         // In full mode, serve home page
-        AsyncWebServerResponse *response = request->beginResponse(200, "text/html", 
-                                                                   home_html_gz, 
-                                                                   home_html_gz_len);
-        response->addHeader("Content-Encoding", "gzip");
+        AsyncWebServerResponse *response = begin_gzipped_asset_response(
+            request,
+            "text/html",
+            home_html_gz,
+            home_html_gz_len,
+            "no-store"
+        );
         request->send(response);
     }
 }
@@ -96,19 +123,25 @@ void handleHome(AsyncWebServerRequest *request) {
         request->redirect("/network.html");
         return;
     }
-    AsyncWebServerResponse *response = request->beginResponse(200, "text/html", 
-                                                               home_html_gz, 
-                                                               home_html_gz_len);
-    response->addHeader("Content-Encoding", "gzip");
+    AsyncWebServerResponse *response = begin_gzipped_asset_response(
+        request,
+        "text/html",
+        home_html_gz,
+        home_html_gz_len,
+        "no-store"
+    );
     request->send(response);
 }
 
 // Serve network configuration page
 void handleNetwork(AsyncWebServerRequest *request) {
-    AsyncWebServerResponse *response = request->beginResponse(200, "text/html", 
-                                                               network_html_gz, 
-                                                               network_html_gz_len);
-    response->addHeader("Content-Encoding", "gzip");
+    AsyncWebServerResponse *response = begin_gzipped_asset_response(
+        request,
+        "text/html",
+        network_html_gz,
+        network_html_gz_len,
+        "no-store"
+    );
     request->send(response);
 }
 
@@ -119,28 +152,37 @@ void handleFirmware(AsyncWebServerRequest *request) {
         request->redirect("/network.html");
         return;
     }
-    AsyncWebServerResponse *response = request->beginResponse(200, "text/html", 
-                                                               firmware_html_gz, 
-                                                               firmware_html_gz_len);
-    response->addHeader("Content-Encoding", "gzip");
+    AsyncWebServerResponse *response = begin_gzipped_asset_response(
+        request,
+        "text/html",
+        firmware_html_gz,
+        firmware_html_gz_len,
+        "no-store"
+    );
     request->send(response);
 }
 
 // Serve CSS
 void handleCSS(AsyncWebServerRequest *request) {
-    AsyncWebServerResponse *response = request->beginResponse(200, "text/css", 
-                                                               portal_css_gz, 
-                                                               portal_css_gz_len);
-    response->addHeader("Content-Encoding", "gzip");
+    AsyncWebServerResponse *response = begin_gzipped_asset_response(
+        request,
+        "text/css",
+        portal_css_gz,
+        portal_css_gz_len,
+        "public, max-age=600"
+    );
     request->send(response);
 }
 
 // Serve JavaScript
 void handleJS(AsyncWebServerRequest *request) {
-    AsyncWebServerResponse *response = request->beginResponse(200, "application/javascript", 
-                                                               portal_js_gz, 
-                                                               portal_js_gz_len);
-    response->addHeader("Content-Encoding", "gzip");
+    AsyncWebServerResponse *response = begin_gzipped_asset_response(
+        request,
+        "application/javascript",
+        portal_js_gz,
+        portal_js_gz_len,
+        "public, max-age=600"
+    );
     request->send(response);
 }
 
@@ -165,7 +207,7 @@ void handleGetConfig(AsyncWebServerRequest *request) {
     }
     
     // Create JSON response (don't include passwords)
-    JsonDocument doc;
+    StaticJsonDocument<2048> doc;
     doc["wifi_ssid"] = current_config->wifi_ssid;
     doc["wifi_password"] = ""; // Don't send password
     doc["device_name"] = current_config->device_name;
@@ -194,11 +236,16 @@ void handleGetConfig(AsyncWebServerRequest *request) {
     
     // Display settings
     doc["backlight_brightness"] = current_config->backlight_brightness;
-    
-    String response;
-    serializeJson(doc, response);
-    
-    request->send(200, "application/json", response);
+
+    if (doc.overflowed()) {
+        Logger.logMessage("Portal", "ERROR: /api/config JSON overflow (StaticJsonDocument too small)");
+        request->send(500, "application/json", "{\"success\":false,\"message\":\"Response too large\"}");
+        return;
+    }
+
+    AsyncResponseStream *response = request->beginResponseStream("application/json");
+    serializeJson(doc, *response);
+    request->send(response);
 }
 
 // POST /api/config - Save new configuration
@@ -210,11 +257,15 @@ void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len,
     }
     
     // Parse JSON body
-    JsonDocument doc;
+    StaticJsonDocument<2048> doc;
     DeserializationError error = deserializeJson(doc, data, len);
     
     if (error) {
         Logger.logMessagef("Portal", "JSON parse error: %s", error.c_str());
+        if (error == DeserializationError::NoMemory) {
+            request->send(413, "application/json", "{\"success\":false,\"message\":\"JSON body too large\"}");
+            return;
+        }
         request->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid JSON\"}");
         return;
     }
@@ -462,14 +513,19 @@ void handleGetVersion(AsyncWebServerRequest *request) {
 
 // GET /api/health - Get device health statistics
 void handleGetHealth(AsyncWebServerRequest *request) {
-    JsonDocument doc;
+    StaticJsonDocument<1024> doc;
 
     device_telemetry_fill_api(doc);
-    
-    String response;
-    serializeJson(doc, response);
-    
-    request->send(200, "application/json", response);
+
+    if (doc.overflowed()) {
+        Logger.logMessage("Portal", "ERROR: /api/health JSON overflow (StaticJsonDocument too small)");
+        request->send(500, "application/json", "{\"success\":false,\"message\":\"Response too large\"}");
+        return;
+    }
+
+    AsyncResponseStream *response = request->beginResponseStream("application/json");
+    serializeJson(doc, *response);
+    request->send(response);
 }
 
 // POST /api/reboot - Reboot device without saving
@@ -492,7 +548,7 @@ void handleSetDisplayBrightness(AsyncWebServerRequest *request, uint8_t *data, s
     }
     
     // Parse JSON body
-    JsonDocument doc;
+    StaticJsonDocument<256> doc;
     DeserializationError error = deserializeJson(doc, data, len);
     
     if (error) {
@@ -530,7 +586,7 @@ void handleSetDisplayScreen(AsyncWebServerRequest *request, uint8_t *data, size_
     }
     
     // Parse JSON body
-    JsonDocument doc;
+    StaticJsonDocument<256> doc;
     DeserializationError error = deserializeJson(doc, data, len);
     
     if (error) {
@@ -558,9 +614,8 @@ void handleSetDisplayScreen(AsyncWebServerRequest *request, uint8_t *data, size_
     
     if (success) {
         // Build success response with new screen ID
-        String response = "{\"success\":true,\"screen\":\"";
-        response += screen_id;
-        response += "\"}";
+        char response[96];
+        snprintf(response, sizeof(response), "{\"success\":true,\"screen\":\"%s\"}", screen_id);
         request->send(200, "application/json", response);
     } else {
         request->send(404, "application/json", "{\"success\":false,\"message\":\"Screen not found\"}");

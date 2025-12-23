@@ -8,11 +8,14 @@
 
 #include <stdint.h>
 
-// Allow LVGL config to react to board-specific overrides.
-// build.sh defines BOARD_HAS_OVERRIDE and adds the override include path.
-#ifdef BOARD_HAS_OVERRIDE
-#include "board_overrides.h"
-#endif
+// lv_conf.h is included by LVGL's C sources.
+// The project uses true/false-style feature flags (e.g., HAS_IMAGE_API true) in board_config.h
+// and board_overrides.h. In C, those require <stdbool.h> to make true/false available.
+#include <stdbool.h>
+
+// Pull in project feature flags (HAS_DISPLAY, HAS_IMAGE_API, etc.).
+// board_config.h will include board_overrides.h when BOARD_HAS_OVERRIDE is set.
+#include "board_config.h"
 
 /*====================
    COLOR SETTINGS
@@ -35,7 +38,7 @@
  *=========================*/
 
 /* 1: use custom malloc/free, 0: use the built-in `lv_mem_alloc()` and `lv_mem_free()` */
-#define LV_MEM_CUSTOM 0
+#define LV_MEM_CUSTOM 1
 #if LV_MEM_CUSTOM == 0
   /* Size of the memory available for `lv_mem_alloc()` in bytes (>= 2kB)*/
   #define LV_MEM_SIZE (48U * 1024U)          /*[bytes]*/
@@ -43,10 +46,10 @@
   /* Set an address for the memory pool instead of allocating it as a normal array. */
   #define LV_MEM_ADR 0     /*0: unused*/
 #else       /*LV_MEM_CUSTOM*/
-  #define LV_MEM_CUSTOM_INCLUDE <stdlib.h>   /*Header for the dynamic memory function*/
-  #define LV_MEM_CUSTOM_ALLOC   malloc
-  #define LV_MEM_CUSTOM_FREE    free
-  #define LV_MEM_CUSTOM_REALLOC realloc
+  #define LV_MEM_CUSTOM_INCLUDE "lvgl_heap.h"   /*Header for the dynamic memory function*/
+  #define LV_MEM_CUSTOM_ALLOC   lvgl_heap_malloc
+  #define LV_MEM_CUSTOM_FREE    lvgl_heap_free
+  #define LV_MEM_CUSTOM_REALLOC lvgl_heap_realloc
 #endif     /*LV_MEM_CUSTOM*/
 
 /* Number of the intermediate memory buffer used during rendering */
@@ -58,9 +61,6 @@
 /*=================
    HAL SETTINGS
  *=================*/
-
-/* Default display refresh period. LVG will redraw changed areas with this period time*/
-#define LV_DISP_DEF_REFR_PERIOD 30      /*[ms]*/
 
 /* Use a custom tick source that tells the elapsed time in milliseconds */
 #define LV_TICK_CUSTOM 1
@@ -135,20 +135,64 @@
 /* Documentation of the widgets: https://docs.lvgl.io/latest/en/html/widgets/index.html */
 
 #define LV_USE_ARC        1
-#define LV_USE_BAR        1
-#define LV_USE_BTN        1
-#define LV_USE_BTNMATRIX  1
-#define LV_USE_CANVAS     1
-#define LV_USE_CHECKBOX   1
-#define LV_USE_DROPDOWN   1
-#define LV_USE_IMG        1
+#define LV_USE_BAR        0
+#define LV_USE_BTN        0
+#define LV_USE_BTNMATRIX  0
+#define LV_USE_CANVAS     0
+#define LV_USE_CHECKBOX   0
+#define LV_USE_DROPDOWN   0
+
+// Image widget support is only needed for the Image API's optional LVGL image screen.
+// Keep it disabled by default to reduce flash size in template builds.
+#if HAS_IMAGE_API
+  #ifndef LV_USE_IMG
+    #define LV_USE_IMG        1
+  #endif
+#else
+  #ifndef LV_USE_IMG
+    #define LV_USE_IMG        0
+  #endif
+#endif
+
 #define LV_USE_LABEL      1
-#define LV_USE_LINE       1
-#define LV_USE_ROLLER     1
-#define LV_USE_SLIDER     1
-#define LV_USE_SWITCH     1
-#define LV_USE_TEXTAREA   1
-#define LV_USE_TABLE      1
+#define LV_USE_LINE       0
+#define LV_USE_ROLLER     0
+#define LV_USE_SLIDER     0
+#define LV_USE_SWITCH     0
+#define LV_USE_TEXTAREA   0
+#define LV_USE_TABLE      0
+
+/* Used by SplashScreen */
+#define LV_USE_SPINNER    1
+
+/* Enable scaling/rotation of images (needed for lv_img_set_zoom). */
+#ifndef LV_USE_IMG_TRANSFORM
+  #if LV_USE_IMG
+    #define LV_USE_IMG_TRANSFORM 1
+  #else
+    #define LV_USE_IMG_TRANSFORM 0
+  #endif
+#endif
+
+/* Disable LVGL extra widgets we don't use (prevents dependency pulls).
+ * These default to enabled in LVGL unless explicitly disabled. */
+#define LV_USE_ANIMIMG                   0
+#define LV_USE_CALENDAR                  0
+#define LV_USE_CALENDAR_HEADER_ARROW     0
+#define LV_USE_CALENDAR_HEADER_DROPDOWN  0
+#define LV_USE_CHART                     0
+#define LV_USE_COLORWHEEL                0
+#define LV_USE_IMGBTN                    0
+#define LV_USE_KEYBOARD                  0
+#define LV_USE_LED                       0
+#define LV_USE_LIST                      0
+#define LV_USE_METER                     0
+#define LV_USE_MENU                      0
+#define LV_USE_MSGBOX                    0
+#define LV_USE_SPINBOX                   0
+#define LV_USE_TABVIEW                   0
+#define LV_USE_TILEVIEW                  0
+#define LV_USE_WIN                       0
 
 /*==================
  * THEMES
@@ -178,10 +222,10 @@
  *==================*/
 
 /* A layout similar to Flexbox in CSS */
-#define LV_USE_FLEX 1
+#define LV_USE_FLEX 0
 
 /* A layout similar to Grid in CSS */
-#define LV_USE_GRID 1
+#define LV_USE_GRID 0
 
 /*==================
  * OTHERS
@@ -202,7 +246,7 @@
  *-----------*/
 /* 1: Show CPU usage and FPS count in the right bottom corner
  * Note: We use a custom FPS overlay controlled via config instead */
-#define LV_USE_PERF_MONITOR 1
+#define LV_USE_PERF_MONITOR 0
 
 #if LV_USE_PERF_MONITOR
   #ifndef LV_USE_PERF_MONITOR_POS

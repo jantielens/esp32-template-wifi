@@ -73,9 +73,16 @@ bool MqttManager::publish(const char *topic, const char *payload, bool retained)
 bool MqttManager::publishJson(const char *topic, JsonDocument &doc, bool retained) {
     if (!topic) return false;
 
-    String payload;
-    serializeJson(doc, payload);
-    return publish(topic, payload.c_str(), retained);
+    // Avoid heap allocations inside String by using a bounded buffer.
+    char payload[MQTT_MAX_PACKET_SIZE];
+    size_t n = serializeJson(doc, payload, sizeof(payload));
+    if (n == 0 || n >= sizeof(payload)) {
+        Logger.logMessagef("MQTT", "ERROR: JSON payload too large for MQTT_MAX_PACKET_SIZE (%u)", (unsigned)sizeof(payload));
+        return false;
+    }
+
+    if (!enabled() || !_client.connected()) return false;
+    return _client.publish(topic, (const uint8_t*)payload, (unsigned)n, retained);
 }
 
 bool MqttManager::publishImmediate(const char *topic, const char *payload, bool retained) {
@@ -98,12 +105,21 @@ void MqttManager::publishDiscoveryOncePerBoot() {
 void MqttManager::publishHealthNow() {
     if (!_client.connected()) return;
 
-    JsonDocument doc;
+    StaticJsonDocument<768> doc;
     device_telemetry_fill_mqtt(doc);
 
-    String payload;
-    serializeJson(doc, payload);
-    _client.publish(_health_state_topic, payload.c_str(), true);
+    if (doc.overflowed()) {
+        Logger.logMessage("MQTT", "ERROR: health JSON overflow (StaticJsonDocument too small)");
+        return;
+    }
+
+    char payload[MQTT_MAX_PACKET_SIZE];
+    size_t n = serializeJson(doc, payload, sizeof(payload));
+    if (n == 0 || n >= sizeof(payload)) {
+        Logger.logMessagef("MQTT", "ERROR: health JSON payload too large for MQTT_MAX_PACKET_SIZE (%u)", (unsigned)sizeof(payload));
+        return;
+    }
+    _client.publish(_health_state_topic, (const uint8_t*)payload, (unsigned)n, true);
 }
 
 void MqttManager::publishHealthIfDue() {
@@ -114,12 +130,22 @@ void MqttManager::publishHealthIfDue() {
     unsigned long interval_ms = (unsigned long)_config->mqtt_interval_seconds * 1000UL;
 
     if (_last_health_publish_ms == 0 || (now - _last_health_publish_ms) >= interval_ms) {
-        JsonDocument doc;
+        StaticJsonDocument<768> doc;
         device_telemetry_fill_mqtt(doc);
 
-        String payload;
-        serializeJson(doc, payload);
-        bool ok = _client.publish(_health_state_topic, payload.c_str(), true);
+        if (doc.overflowed()) {
+            Logger.logMessage("MQTT", "ERROR: health JSON overflow (StaticJsonDocument too small)");
+            return;
+        }
+
+        char payload[MQTT_MAX_PACKET_SIZE];
+        size_t n = serializeJson(doc, payload, sizeof(payload));
+        if (n == 0 || n >= sizeof(payload)) {
+            Logger.logMessagef("MQTT", "ERROR: health JSON payload too large for MQTT_MAX_PACKET_SIZE (%u)", (unsigned)sizeof(payload));
+            return;
+        }
+
+        bool ok = _client.publish(_health_state_topic, (const uint8_t*)payload, (unsigned)n, true);
 
         if (ok) {
             _last_health_publish_ms = now;

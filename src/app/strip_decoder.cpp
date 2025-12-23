@@ -246,48 +246,110 @@ void StripDecoder::setDisplayDriver(DisplayDriver* drv) {
     driver = drv;
 }
 
-void StripDecoder::begin(int image_width, int image_height, int lcd_w, int lcd_h) {
-    width = image_width;
-    height = image_height;
-    lcd_width = lcd_w;
-    lcd_height = lcd_h;
-    current_y = 0;
-    
-    Logger.logMessagef("StripDecoder", "Begin decode: %dx%d image on %dx%d LCD", width, height, lcd_width, lcd_height);
+void StripDecoder::free_buffers() {
+    if (batch_buffer) {
+        #if defined(ARDUINO_ARCH_ESP32) || defined(ESP32)
+            heap_caps_free(batch_buffer);
+        #else
+            free(batch_buffer);
+        #endif
+        batch_buffer = nullptr;
+    }
+    batch_capacity_pixels = 0;
+    batch_max_rows = 0;
+
+    if (line_buffer) {
+        #if defined(ARDUINO_ARCH_ESP32) || defined(ESP32)
+            heap_caps_free(line_buffer);
+        #else
+            free(line_buffer);
+        #endif
+        line_buffer = nullptr;
+    }
+    line_buffer_width = 0;
+
+    if (work_buffer) {
+        #if defined(ARDUINO_ARCH_ESP32) || defined(ESP32)
+            heap_caps_free(work_buffer);
+        #else
+            free(work_buffer);
+        #endif
+        work_buffer = nullptr;
+    }
+    work_buffer_size = 0;
 }
 
-bool StripDecoder::decode_strip(const uint8_t* jpeg_data, size_t jpeg_size, int strip_index, bool output_bgr565) {
-    if (!driver) {
-        Logger.logMessage("StripDecoder", "ERROR: No display driver set");
-        return false;
-    }
-    
-    Logger.logBegin("Strip");
-    
-    // Allocate TJpgDec work area
-    // TJpgDec requires: 3100 + (width * height * 2 / MCU_size) bytes
-    // For 240x16: minimum ~3220 bytes, using 4096 for safety
-    const size_t work_size = 4096;
-    void* work = malloc(work_size);
-    if (!work) {
-        Logger.logEnd("ERROR: Failed to allocate work buffer");
-        return false;
-    }
-    
-    // Allocate line buffer for pixel conversion (fallback path)
-    uint16_t* line_buffer = (uint16_t*)malloc(width * sizeof(uint16_t));
-    if (!line_buffer) {
-        free(work);
-        Logger.logEnd("ERROR: Failed to allocate line buffer");
+bool StripDecoder::ensure_buffers() {
+    if (width <= 0) {
         return false;
     }
 
-    // Optional batch buffer to reduce LCD transactions.
-    // Most JPEG strip encoders output MCU blocks of 8 or 16 rows.
-    const int kBatchMaxRows = (int)IMAGE_STRIP_BATCH_MAX_ROWS;
-    uint16_t* batch_buffer = nullptr;
-    if (kBatchMaxRows > 1) {
-        const size_t batch_bytes = (size_t)width * (size_t)kBatchMaxRows * sizeof(uint16_t);
+    // Work buffer (fixed size)
+    if (!work_buffer) {
+        work_buffer_size = TJPGD_WORK_BUFFER_SIZE;
+        #if defined(ARDUINO_ARCH_ESP32) || defined(ESP32)
+            work_buffer = heap_caps_malloc(work_buffer_size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        #else
+            work_buffer = malloc(work_buffer_size);
+        #endif
+        if (!work_buffer) {
+            Logger.logMessage("StripDecoder", "ERROR: Failed to allocate TJpgDec work buffer");
+            return false;
+        }
+    }
+
+    // Line buffer (width-dependent)
+    if (!line_buffer || line_buffer_width != width) {
+        if (line_buffer) {
+            #if defined(ARDUINO_ARCH_ESP32) || defined(ESP32)
+                heap_caps_free(line_buffer);
+            #else
+                free(line_buffer);
+            #endif
+            line_buffer = nullptr;
+        }
+
+        const size_t bytes = (size_t)width * sizeof(uint16_t);
+        #if defined(ARDUINO_ARCH_ESP32) || defined(ESP32)
+            line_buffer = (uint16_t*)heap_caps_malloc(bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        #else
+            line_buffer = (uint16_t*)malloc(bytes);
+        #endif
+        if (!line_buffer) {
+            Logger.logMessage("StripDecoder", "ERROR: Failed to allocate line buffer");
+            return false;
+        }
+        line_buffer_width = width;
+    }
+
+    // Optional batch buffer (width- and config-dependent)
+    const int desired_rows = (int)IMAGE_STRIP_BATCH_MAX_ROWS;
+    if (desired_rows <= 1) {
+        // Batching disabled
+        if (batch_buffer) {
+            #if defined(ARDUINO_ARCH_ESP32) || defined(ESP32)
+                heap_caps_free(batch_buffer);
+            #else
+                free(batch_buffer);
+            #endif
+            batch_buffer = nullptr;
+        }
+        batch_capacity_pixels = 0;
+        batch_max_rows = 0;
+        return true;
+    }
+
+    const size_t batch_bytes = (size_t)width * (size_t)desired_rows * sizeof(uint16_t);
+    const bool needs_new_batch = (!batch_buffer) || (batch_max_rows != desired_rows) || (batch_capacity_pixels != (width * desired_rows));
+    if (needs_new_batch) {
+        if (batch_buffer) {
+            #if defined(ARDUINO_ARCH_ESP32) || defined(ESP32)
+                heap_caps_free(batch_buffer);
+            #else
+                free(batch_buffer);
+            #endif
+            batch_buffer = nullptr;
+        }
 
         #if defined(ARDUINO_ARCH_ESP32) || defined(ESP32)
             // Prefer PSRAM when available to avoid pressuring internal RAM.
@@ -298,7 +360,49 @@ bool StripDecoder::decode_strip(const uint8_t* jpeg_data, size_t jpeg_size, int 
         #else
             batch_buffer = (uint16_t*)malloc(batch_bytes);
         #endif
+
+        if (batch_buffer) {
+            batch_max_rows = desired_rows;
+            batch_capacity_pixels = width * desired_rows;
+        } else {
+            // Batch buffer is optional; fall back to line-by-line flush.
+            batch_max_rows = 0;
+            batch_capacity_pixels = 0;
+        }
     }
+
+    return true;
+}
+
+void StripDecoder::begin(int image_width, int image_height, int lcd_w, int lcd_h) {
+    width = image_width;
+    height = image_height;
+    lcd_width = lcd_w;
+    lcd_height = lcd_h;
+    current_y = 0;
+    
+    Logger.logMessagef("StripDecoder", "Begin decode: %dx%d image on %dx%d LCD", width, height, lcd_width, lcd_height);
+
+    // Allocate per-session buffers once and reuse across strips.
+    // If allocation fails, decoding will fail early in decode_strip().
+    (void)ensure_buffers();
+}
+
+bool StripDecoder::decode_strip(const uint8_t* jpeg_data, size_t jpeg_size, int strip_index, bool output_bgr565) {
+    if (!driver) {
+        Logger.logMessage("StripDecoder", "ERROR: No display driver set");
+        return false;
+    }
+
+    if (!ensure_buffers()) {
+        Logger.logMessage("StripDecoder", "ERROR: Decoder buffers not available");
+        return false;
+    }
+    
+    Logger.logBegin("Strip");
+    
+    // Buffers are allocated once per session (begin/end) to reduce heap churn.
+    const int kBatchMaxRows = batch_max_rows;
     
     JDEC jdec;
     JRESULT res;
@@ -322,20 +426,11 @@ bool StripDecoder::decode_strip(const uint8_t* jpeg_data, size_t jpeg_size, int 
     session_ctx.output.batch_max_rows = batch_buffer ? kBatchMaxRows : 0;
     
     // Prepare decoder
-    res = jd_prepare(&jdec, jpeg_input_func, work, work_size, &session_ctx);
+    res = jd_prepare(&jdec, jpeg_input_func, work_buffer, (UINT)work_buffer_size, &session_ctx);
     
     if (res != JDR_OK) {
         Logger.logLinef("ERROR: jd_prepare failed: %d", res);
         Logger.logEnd();
-        if (batch_buffer) {
-            #if defined(ARDUINO_ARCH_ESP32) || defined(ESP32)
-                heap_caps_free(batch_buffer);
-            #else
-                free(batch_buffer);
-            #endif
-        }
-        free(line_buffer);
-        free(work);
         return false;
     }
     
@@ -345,15 +440,6 @@ bool StripDecoder::decode_strip(const uint8_t* jpeg_data, size_t jpeg_size, int 
     if (res != JDR_OK) {
         Logger.logLinef("ERROR: jd_decomp failed: %d", res);
         Logger.logEnd();
-        if (batch_buffer) {
-            #if defined(ARDUINO_ARCH_ESP32) || defined(ESP32)
-                heap_caps_free(batch_buffer);
-            #else
-                free(batch_buffer);
-            #endif
-        }
-        free(line_buffer);
-        free(work);
         return false;
     }
 
@@ -366,22 +452,15 @@ bool StripDecoder::decode_strip(const uint8_t* jpeg_data, size_t jpeg_size, int 
     // Move Y position for next strip
     current_y += jdec.height;
     
-    // Cleanup
-    if (batch_buffer) {
-        #if defined(ARDUINO_ARCH_ESP32) || defined(ESP32)
-            heap_caps_free(batch_buffer);
-        #else
-            free(batch_buffer);
-        #endif
-    }
-    free(line_buffer);
-    free(work);
-    
     return true;
 }
 
 void StripDecoder::end() {
     Logger.logMessagef("StripDecoder", "Complete at Y=%d", current_y);
+
+    // Free session buffers so the heap can recover between image sessions.
+    free_buffers();
+
     current_y = 0;
     width = 0;
     height = 0;
