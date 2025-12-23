@@ -76,5 +76,19 @@ echo ""
 echo "=== Setup Complete ==="
 echo "ESP32 development environment is ready!"
 echo ""
+
+# Optional: PNG asset generation dependency (Pillow)
+# Used by tools/png2lvgl_assets.py when converting assets/png/*.png to LVGL C arrays.
+if command -v python3 >/dev/null 2>&1; then
+    if python3 -c "import PIL" >/dev/null 2>&1; then
+        echo "Python Pillow already available (PNG asset conversion enabled)."
+    else
+        echo "Installing Python Pillow (optional; enables PNG asset conversion)..."
+        python3 -m pip install --user pillow || echo "Warning: Failed to install Pillow. PNG conversion will be skipped/fail until installed."
+    fi
+else
+    echo "Note: python3 not found; PNG asset conversion tool will be unavailable."
+fi
+
 echo "To verify installation:"
 echo "  arduino-cli board listall esp32"

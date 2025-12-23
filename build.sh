@@ -20,6 +20,51 @@ TARGET_BOARD="$1"
 # Optional board profile for build properties (e.g., PSRAM/flash options)
 PROFILE="${BOARD_PROFILE:-${PROFILE:-}}"
 
+board_has_display() {
+    local board_name="$1"
+    local overrides_file="$SCRIPT_DIR/src/boards/$board_name/board_overrides.h"
+
+    # Default config has HAS_DISPLAY=false; require explicit override.
+    if [[ ! -f "$overrides_file" ]]; then
+        return 1
+    fi
+
+    # Match: #define HAS_DISPLAY true (allow whitespace)
+    if grep -qE '^[[:space:]]*#define[[:space:]]+HAS_DISPLAY[[:space:]]+true[[:space:]]*$' "$overrides_file"; then
+        return 0
+    fi
+
+    return 1
+}
+
+should_generate_png_assets() {
+    local target_board="$1"
+
+    # Only run if assets folder exists.
+    if [[ ! -d "$SCRIPT_DIR/assets/png" ]]; then
+        return 1
+    fi
+
+    # Only run if there is at least one PNG file at the top level.
+    if ! find "$SCRIPT_DIR/assets/png" -maxdepth 1 -type f \( -iname '*.png' \) -print -quit | grep -q .; then
+        return 1
+    fi
+
+    if [[ -n "$target_board" ]]; then
+        board_has_display "$target_board"
+        return $?
+    fi
+
+    # Building all boards: generate if ANY configured board has a display.
+    for board_name in "${!FQBN_TARGETS[@]}"; do
+        if board_has_display "$board_name"; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 # Build a single board
 build_board() {
     local fqbn="$1"
@@ -111,6 +156,20 @@ build_board() {
     ls -lh "$board_build_path"/*.bin 2>/dev/null || echo "Binary files generated"
     echo ""
 }
+
+# Generate LVGL PNG assets (only when building for a display-enabled board)
+if should_generate_png_assets "$TARGET_BOARD"; then
+    echo "Generating LVGL PNG assets from assets/png..."
+    python3 "$SCRIPT_DIR/tools/png2lvgl_assets.py" \
+        "$SCRIPT_DIR/assets/png" \
+        "$SCRIPT_DIR/src/app/png_assets.cpp" \
+        "$SCRIPT_DIR/src/app/png_assets.h" \
+        --prefix "img_"
+    echo ""
+else
+    echo "Skipping PNG asset generation (no display build or no PNGs)."
+    echo ""
+fi
 
 # Generate web assets (once for all builds)
 echo "Generating web assets..."
