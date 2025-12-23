@@ -117,6 +117,23 @@ python3 tools/generate-board-driver-table.py --update-file path/to/file.md
 
 ---
 
+## tools/portal_stress_test.py
+
+**Purpose:** Run repeatable stress scenarios against the web portal and REST API.
+
+**Usage (examples):**
+```bash
+python3 tools/portal_stress_test.py --host 192.168.1.111 --no-reboot --cycles 10 --scenario api
+python3 tools/portal_stress_test.py --host 192.168.1.111 --no-reboot --cycles 10 --scenario portal
+python3 tools/portal_stress_test.py --host 192.168.1.111 --no-reboot --cycles 5 --scenario image --image-generate 320x240
+```
+
+**Notes:**
+- `--scenario image` requires firmware built with `HAS_IMAGE_API` enabled.
+- Use `--no-reboot` when the device should remain up between cycles.
+
+---
+
 ## tools/install-custom-partitions.sh
 
 **Purpose:** Install/register template-provided custom partition tables into the Arduino ESP32 core.
