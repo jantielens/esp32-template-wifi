@@ -236,8 +236,15 @@ def main() -> int:
     _write_c(output_c, os.path.basename(output_h), images)
 
     print(f"✓ PNG assets: {len(images)} file(s)")
+    total_bytes = 0
     for img in images:
-        print(f"  - {os.path.basename(img.source_file)} -> {img.symbol} ({img.width}x{img.height})")
+        size_bytes = len(img.data)
+        total_bytes += size_bytes
+        print(
+            f"  - {os.path.basename(img.source_file)} -> {img.symbol} "
+            f"({img.width}x{img.height}) : {size_bytes} bytes in firmware"
+        )
+    print(f"✓ PNG assets total: {total_bytes} bytes in firmware")
     print(f"✓ Wrote {output_h}")
     print(f"✓ Wrote {output_c}")
 
