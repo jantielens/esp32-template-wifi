@@ -26,6 +26,9 @@
 #include <ArduinoJson.h>
 #include <string.h>
 
+#include <freertos/FreeRTOS.h>
+#include <freertos/portmacro.h>
+
 #include "lvgl_jpeg_decoder.h"
 
 #include <esp_heap_caps.h>
@@ -136,6 +139,10 @@ struct PendingUrlOp {
     unsigned long timeout_ms;
 };
 static PendingUrlOp pending_url_op = {false, {0}, 0};
+
+// AsyncWebServer handlers run on the AsyncTCP task; the main loop consumes this op.
+// Protect cross-task publication/consumption so we don't read stale url/timeout_ms.
+static portMUX_TYPE pending_url_op_mux = portMUX_INITIALIZER_UNLOCKED;
 
 // Small body buffer for /api/display/image_url to avoid heap allocation.
 // AsyncWebServer body callbacks can be interrupted by client disconnects; keeping this static
@@ -790,7 +797,12 @@ static void handleImageDelete(AsyncWebServerRequest *request) {
 static void handleImageUrl(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
     // Only accept small JSON payloads.
     if (index == 0) {
-        if (upload_state == UPLOAD_IN_PROGRESS || upload_state == UPLOAD_READY_TO_DISPLAY || pending_url_op.active || pending_strip_op.buffer) {
+        bool url_op_active = false;
+        portENTER_CRITICAL(&pending_url_op_mux);
+        url_op_active = pending_url_op.active;
+        portEXIT_CRITICAL(&pending_url_op_mux);
+
+        if (upload_state == UPLOAD_IN_PROGRESS || upload_state == UPLOAD_READY_TO_DISPLAY || url_op_active || pending_strip_op.buffer) {
             request->send(409, "application/json", "{\"success\":false,\"message\":\"Busy\"}");
             return;
         }
@@ -860,12 +872,14 @@ static void handleImageUrl(AsyncWebServerRequest *request, uint8_t *data, size_t
             pending_image_op.size = 0;
         }
 
-        // Publish the URL op atomically-ish: fill fields first, then flip `active` last.
-        // The AsyncTCP task writes these, while the main loop reads them.
+        // Publish the URL op: fill fields first, then flip `active` last.
+        // This is shared between the AsyncTCP task and the main loop.
+        portENTER_CRITICAL(&pending_url_op_mux);
         strncpy(pending_url_op.url, url, sizeof(pending_url_op.url));
         pending_url_op.url[sizeof(pending_url_op.url) - 1] = '\0';
         pending_url_op.timeout_ms = parse_timeout_ms(request);
         pending_url_op.active = true;
+        portEXIT_CRITICAL(&pending_url_op_mux);
 
         upload_state = UPLOAD_READY_TO_DISPLAY;
         pending_op_id++;
@@ -1136,21 +1150,32 @@ void image_api_process_pending(bool ota_in_progress) {
     last_processed_id = pending_op_id;
 
     // Handle queued HTTP(S) download
+    char url_to_download[IMAGE_API_URL_MAX_LEN];
+    unsigned long url_timeout_ms = 0;
+    bool has_url_op = false;
+    portENTER_CRITICAL(&pending_url_op_mux);
     if (pending_url_op.active) {
-        Logger.logMessagef("Portal", "Downloading image URL (%s)", pending_url_op.url);
+        strncpy(url_to_download, pending_url_op.url, sizeof(url_to_download));
+        url_to_download[sizeof(url_to_download) - 1] = '\0';
+        url_timeout_ms = pending_url_op.timeout_ms;
+        pending_url_op.active = false;
+        pending_url_op.url[0] = '\0';
+        has_url_op = true;
+    }
+    portEXIT_CRITICAL(&pending_url_op_mux);
+
+    if (has_url_op) {
+        Logger.logMessagef("Portal", "Downloading image URL (%s)", url_to_download);
         device_telemetry_log_memory_snapshot("urlimg pre-download");
 
         upload_state = UPLOAD_IN_PROGRESS;
 
-        const unsigned long timeout_ms = pending_url_op.timeout_ms;
+        const unsigned long timeout_ms = url_timeout_ms;
 
         uint8_t* downloaded = nullptr;
         size_t downloaded_sz = 0;
         char err[128];
-        const bool ok = download_jpeg_to_buffer(pending_url_op.url, timeout_ms, &downloaded, &downloaded_sz, err, sizeof(err));
-
-        pending_url_op.active = false;
-        pending_url_op.url[0] = '\0';
+        const bool ok = download_jpeg_to_buffer(url_to_download, timeout_ms, &downloaded, &downloaded_sz, err, sizeof(err));
 
         device_telemetry_log_memory_snapshot("urlimg post-download");
 
