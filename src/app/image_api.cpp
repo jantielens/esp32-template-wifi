@@ -137,6 +137,18 @@ struct PendingUrlOp {
 };
 static PendingUrlOp pending_url_op = {false, {0}, 0};
 
+// Small body buffer for /api/display/image_url to avoid heap allocation.
+// AsyncWebServer body callbacks can be interrupted by client disconnects; keeping this static
+// prevents leaks. We also add a timeout so a stalled upload doesn't block future requests.
+static bool image_url_body_in_use = false;
+static size_t image_url_body_expected_len = 0;
+static unsigned long image_url_body_start_ms = 0;
+static char image_url_body_buf[1024 + 1];
+
+// Track partial uploads so we can reclaim memory if the client disconnects mid-transfer.
+static unsigned long image_upload_start_ms = 0;
+static unsigned long strip_upload_last_activity_ms = 0;
+
 static bool is_jpeg_magic(const uint8_t* buf, size_t sz) {
     return (buf && sz >= 3 && buf[0] == 0xFF && buf[1] == 0xD8 && buf[2] == 0xFF);
 }
@@ -243,6 +255,7 @@ static bool parse_http_or_https_url(
 
 static bool download_jpeg_to_buffer(
     const char* url,
+    unsigned long timeout_ms,
     uint8_t** out_buf,
     size_t* out_sz,
     char* err,
@@ -284,14 +297,34 @@ static bool download_jpeg_to_buffer(
     }
 #endif
 
-    // Conservative per-operation deadline.
+    // Conservative per-operation timeout.
+    // Note: `millis()` wraps; use wrap-safe elapsed checks.
     const unsigned long start_ms = millis();
-    const unsigned long deadline_ms = start_ms + 15000UL;
+    unsigned long effective_timeout_ms = timeout_ms;
+    if (effective_timeout_ms == 0) effective_timeout_ms = 15000UL;
+    // Clamp to avoid stalling the main loop for too long.
+    if (effective_timeout_ms > 30000UL) effective_timeout_ms = 30000UL;
+
+    const auto timed_out = [&]() -> bool {
+        return (unsigned long)(millis() - start_ms) >= effective_timeout_ms;
+    };
 
     WiFiClientSecure client_tls;
     WiFiClient client_plain;
     Client* client = nullptr;
     if (scheme == URL_SCHEME_HTTPS) {
+        // SECURITY NOTE:
+        // We intentionally use insecure TLS mode for now (no certificate validation)
+        // to allow downloads from any host without shipping a CA bundle.
+        // This protects against passive eavesdropping but NOT active MITM attacks.
+        static bool warned_insecure_tls = false;
+        if (!warned_insecure_tls) {
+            warned_insecure_tls = true;
+            Logger.logMessage(
+                "ImageApi",
+                "WARNING: HTTPS image_url uses insecure TLS (no certificate validation). A MITM can spoof content. Use only on trusted networks, or implement CA verification/pinning."
+            );
+        }
         client_tls.setInsecure();
         client = &client_tls;
     } else {
@@ -313,7 +346,7 @@ static bool download_jpeg_to_buffer(
     char header[2048];
     size_t header_len = 0;
     bool header_done = false;
-    while (!header_done && millis() < deadline_ms) {
+    while (!header_done && !timed_out()) {
         int b = client->read();
         if (b < 0) {
             delay(1);
@@ -409,7 +442,7 @@ static bool download_jpeg_to_buffer(
     }
 
     size_t pos = 0;
-    while (pos < content_length && millis() < deadline_ms) {
+    while (pos < content_length && !timed_out()) {
         const int r = client->read(buf + pos, (int)min((size_t)1024, content_length - pos));
         if (r > 0) {
             pos += (size_t)r;
@@ -453,6 +486,7 @@ static void handleImageUpload(AsyncWebServerRequest *request, String filename, s
         Logger.logLinef("Total size: %u bytes", request->contentLength());
 
         image_upload_timeout_ms = parse_timeout_ms(request);
+        image_upload_start_ms = millis();
         Logger.logLinef("Timeout: %lu ms", image_upload_timeout_ms);
 
         device_telemetry_log_memory_snapshot("img pre-clear");
@@ -736,29 +770,45 @@ static void handleImageUrl(AsyncWebServerRequest *request, uint8_t *data, size_t
             request->send(413, "application/json", "{\"success\":false,\"message\":\"Body too large\"}");
             return;
         }
-        char* body = (char*)malloc(total + 1);
-        if (!body) {
-            request->send(507, "application/json", "{\"success\":false,\"message\":\"Out of memory\"}");
-            return;
+        // If a previous request stalled (e.g., disconnect mid-body), reclaim after a short timeout.
+        if (image_url_body_in_use) {
+            const unsigned long elapsed = (unsigned long)(millis() - image_url_body_start_ms);
+            if (elapsed > 3000UL) {
+                image_url_body_in_use = false;
+                image_url_body_expected_len = 0;
+                image_url_body_buf[0] = '\0';
+            } else {
+                request->send(409, "application/json", "{\"success\":false,\"message\":\"Busy\"}");
+                return;
+            }
         }
-        request->_tempObject = body;
-        ((char*)request->_tempObject)[0] = '\0';
+
+        image_url_body_in_use = true;
+        image_url_body_expected_len = total;
+        image_url_body_start_ms = millis();
+        image_url_body_buf[0] = '\0';
     }
 
-    if (!request->_tempObject) {
-        request->send(500, "application/json", "{\"success\":false,\"message\":\"Internal error\"}");
+    if (!image_url_body_in_use || total == 0 || total != image_url_body_expected_len) {
+        request->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid body state\"}");
         return;
     }
 
-    char* body = (char*)request->_tempObject;
-    memcpy(body + index, data, len);
+    if (index + len > sizeof(image_url_body_buf) - 1) {
+        image_url_body_in_use = false;
+        image_url_body_expected_len = 0;
+        request->send(413, "application/json", "{\"success\":false,\"message\":\"Body too large\"}");
+        return;
+    }
+
+    memcpy(image_url_body_buf + index, data, len);
     if (index + len >= total) {
-        body[total] = '\0';
+        image_url_body_buf[total] = '\0';
 
         StaticJsonDocument<512> doc;
-        const DeserializationError jerr = deserializeJson(doc, body);
-        free(body);
-        request->_tempObject = nullptr;
+        const DeserializationError jerr = deserializeJson(doc, image_url_body_buf);
+        image_url_body_in_use = false;
+        image_url_body_expected_len = 0;
 
         if (jerr) {
             request->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid JSON\"}");
@@ -782,10 +832,12 @@ static void handleImageUrl(AsyncWebServerRequest *request, uint8_t *data, size_t
             pending_image_op.size = 0;
         }
 
-        pending_url_op.active = true;
+        // Publish the URL op atomically-ish: fill fields first, then flip `active` last.
+        // The AsyncTCP task writes these, while the main loop reads them.
         strncpy(pending_url_op.url, url, sizeof(pending_url_op.url));
         pending_url_op.url[sizeof(pending_url_op.url) - 1] = '\0';
         pending_url_op.timeout_ms = parse_timeout_ms(request);
+        pending_url_op.active = true;
 
         upload_state = UPLOAD_READY_TO_DISPLAY;
         pending_op_id++;
@@ -866,11 +918,13 @@ static void handleStripUpload(AsyncWebServerRequest *request, uint8_t *data, siz
         }
 
         current_strip_size = 0;
+        strip_upload_last_activity_ms = millis();
     }
 
     if (current_strip_buffer && current_strip_size + len <= total) {
         memcpy((uint8_t*)current_strip_buffer + current_strip_size, data, len);
         current_strip_size += len;
+        strip_upload_last_activity_ms = millis();
     }
 
     // Final chunk: decode synchronously before returning
@@ -1014,6 +1068,35 @@ void image_api_register_routes(AsyncWebServer* server) {
 void image_api_process_pending(bool ota_in_progress) {
     static unsigned long last_processed_id = 0;
 
+    // Reclaim memory from interrupted uploads.
+    // AsyncWebServer may stop calling the upload handlers if the client disconnects mid-transfer.
+    if (upload_state == UPLOAD_IN_PROGRESS && !ota_in_progress) {
+        // Full-image multipart upload stuck.
+        if (image_upload_buffer && image_upload_timeout_ms > 0) {
+            const unsigned long elapsed = (unsigned long)(millis() - image_upload_start_ms);
+            // Give the client a little extra beyond the configured display timeout.
+            if (elapsed > (image_upload_timeout_ms + 3000UL)) {
+                Logger.logMessage("ImageApi", "WARNING: Aborting stuck image upload; freeing buffer");
+                image_api_free((void*)image_upload_buffer);
+                image_upload_buffer = nullptr;
+                image_upload_size = 0;
+                upload_state = UPLOAD_IDLE;
+            }
+        }
+
+        // Strip upload stuck.
+        if (current_strip_buffer) {
+            const unsigned long elapsed = (unsigned long)(millis() - strip_upload_last_activity_ms);
+            if (elapsed > 3000UL) {
+                Logger.logMessage("ImageApi", "WARNING: Aborting stuck strip upload; freeing buffer");
+                image_api_free((void*)current_strip_buffer);
+                current_strip_buffer = nullptr;
+                current_strip_size = 0;
+                upload_state = UPLOAD_IDLE;
+            }
+        }
+    }
+
     if (upload_state != UPLOAD_READY_TO_DISPLAY || ota_in_progress) {
         return;
     }
@@ -1036,7 +1119,7 @@ void image_api_process_pending(bool ota_in_progress) {
         uint8_t* downloaded = nullptr;
         size_t downloaded_sz = 0;
         char err[128];
-        const bool ok = download_jpeg_to_buffer(pending_url_op.url, &downloaded, &downloaded_sz, err, sizeof(err));
+        const bool ok = download_jpeg_to_buffer(pending_url_op.url, timeout_ms, &downloaded, &downloaded_sz, err, sizeof(err));
 
         pending_url_op.active = false;
         pending_url_op.url[0] = '\0';

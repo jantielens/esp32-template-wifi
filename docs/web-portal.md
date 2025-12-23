@@ -627,7 +627,9 @@ This endpoint returns quickly (it only queues the job). The actual HTTP/HTTPS do
 **Notes:**
 - Supports `http://...` and `https://...`.
 - Current implementation requires a `Content-Length` header and does not support `Transfer-Encoding: chunked`.
-- For `https://` URLs, the firmware currently uses an insecure TLS mode (no certificate validation). Treat this as a PoC until CA/pinning is implemented.
+- SECURITY WARNING: For `https://` URLs, the firmware currently uses an insecure TLS mode (no certificate validation / `setInsecure()`).
+  This encrypts traffic but does **not** authenticate the server: an active attacker on the network (MITM) can spoof the server and deliver arbitrary content.
+  Use this only on trusted networks until proper TLS verification (CA bundle) or host pinning is implemented.
 - Flow control: returns HTTP 409 if an image upload/decode is already in progress; clients should retry with a short delay.
 
 #### Home Assistant (AppDaemon): Send Camera Snapshots to ESP32
