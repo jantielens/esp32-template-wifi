@@ -371,7 +371,7 @@ static bool download_jpeg_to_buffer(
         while (!timed_out()) {
             int b = client->read();
             if (b < 0) {
-                delay(1);
+                yield();
                 continue;
             }
 
