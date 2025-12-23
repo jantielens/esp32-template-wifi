@@ -251,6 +251,77 @@ bool connect_wifi() {
   Logger.logBegin("WiFi Connection");
   Logger.logLinef("SSID: %s", device_config.wifi_ssid);
 
+  // Helper: format BSSID as string
+  auto format_bssid = [](const uint8_t *bssid, char *out, size_t out_len) {
+    if (!out || out_len < 18) return;
+    if (!bssid) {
+      snprintf(out, out_len, "--:--:--:--:--:--");
+      return;
+    }
+    snprintf(out, out_len, "%02X:%02X:%02X:%02X:%02X:%02X",
+      bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]);
+  };
+
+  // Best-effort: when multiple APs share the same SSID, explicitly connect to the strongest one.
+  auto select_strongest_ap = [&](const char *target_ssid, uint8_t out_bssid[6], int *out_channel, int *out_rssi) -> bool {
+    if (!target_ssid || strlen(target_ssid) == 0) return false;
+
+    // Clear prior results to avoid stale entries and reduce memory usage.
+    WiFi.scanDelete();
+
+    Logger.logBegin("WiFi Scan");
+    const int16_t n = WiFi.scanNetworks();
+    if (n < 0) {
+      Logger.logEnd("Scan failed");
+      return false;
+    }
+
+    int best_index = -1;
+    int best_rssi = -1000;
+    int matches = 0;
+
+    for (int i = 0; i < n; i++) {
+      if (WiFi.SSID(i) == target_ssid) {
+        matches++;
+        const int rssi = WiFi.RSSI(i);
+        if (best_index < 0 || rssi > best_rssi) {
+          best_index = i;
+          best_rssi = rssi;
+        }
+      }
+    }
+
+    Logger.logLinef("Found %d networks (%d matching SSID)", (int)n, matches);
+
+    if (best_index < 0) {
+      Logger.logEnd("No matching SSID");
+      WiFi.scanDelete();
+      return false;
+    }
+
+    const uint8_t *best_bssid_ptr = WiFi.BSSID(best_index);
+    const int best_channel = WiFi.channel(best_index);
+
+    if (!best_bssid_ptr || best_channel <= 0) {
+      Logger.logEnd("Missing BSSID/channel");
+      WiFi.scanDelete();
+      return false;
+    }
+
+    memcpy(out_bssid, best_bssid_ptr, 6);
+    if (out_channel) *out_channel = best_channel;
+    if (out_rssi) *out_rssi = best_rssi;
+
+    char bssid_str[18];
+    format_bssid(out_bssid, bssid_str, sizeof(bssid_str));
+    Logger.logLinef("Selected AP: %s | Ch %d | RSSI %d dBm", bssid_str, best_channel, best_rssi);
+    Logger.logEnd();
+
+    // Free scan results to save memory.
+    WiFi.scanDelete();
+    return true;
+  };
+
   // === WiFi Hardware Reset Sequence ===
   // Disable persistent WiFi config (we manage our own via NVS)
   WiFi.persistent(false);
@@ -262,6 +333,10 @@ bool connect_wifi() {
   delay(500);             // Wait for hardware to settle
   WiFi.mode(WIFI_STA);    // Back to station mode
   delay(100);
+
+  // Disable WiFi sleep (power-save). Improves latency and often stability,
+  // at the cost of higher power consumption.
+  WiFi.setSleep(false);
 
   // Enable auto-reconnect at WiFi stack level
   WiFi.setAutoReconnect(true);
@@ -334,7 +409,16 @@ bool connect_wifi() {
     Logger.logEnd();
   }
 
-  WiFi.begin(device_config.wifi_ssid, device_config.wifi_password);
+  // Prefer the strongest AP when multiple BSSIDs exist for the same SSID.
+  uint8_t best_bssid[6];
+  int best_channel = 0;
+  int best_rssi = 0;
+  const bool has_best_ap = select_strongest_ap(device_config.wifi_ssid, best_bssid, &best_channel, &best_rssi);
+  if (has_best_ap) {
+    WiFi.begin(device_config.wifi_ssid, device_config.wifi_password, best_channel, best_bssid);
+  } else {
+    WiFi.begin(device_config.wifi_ssid, device_config.wifi_password);
+  }
 
   // Try to connect with exponential backoff
   for (int attempt = 0; attempt < WIFI_MAX_ATTEMPTS; attempt++) {

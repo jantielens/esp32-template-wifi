@@ -116,6 +116,17 @@ function showRebootDialog(options) {
     const progressContainer = document.getElementById('reboot-progress-container');
     const spinner = document.getElementById('reboot-spinner');
 
+    // Robustness: if the overlay template isn't present for some reason, fail gracefully.
+    if (!overlay || !titleElement || !rebootMsg || !rebootSubMsg || !reconnectStatus) {
+        console.error('Reboot overlay elements missing; cannot show reboot dialog');
+        try {
+            alert(message);
+        } catch (_) {
+            // ignore
+        }
+        return;
+    }
+
     // Set dialog content
     titleElement.textContent = title;
     rebootMsg.textContent = message;
@@ -148,11 +159,25 @@ function showRebootDialog(options) {
     
     // For save/reboot cases, show best-effort reconnection message and start polling
     const targetAddress = newDeviceName ? `http://${sanitizeForMDNS(newDeviceName)}.local` : window.location.origin;
+
+    // Special case: when saving from AP/core mode, the client usually must switch WiFi networks.
+    // Automatic polling from this browser session is unlikely to succeed until the user reconnects.
+    if (context === 'save' && (portalMode === 'core' || isInCaptivePortal())) {
+        rebootSubMsg.innerHTML = `Device will restart and may switch networks.<br>` +
+            `<small style="color: #888; margin-top: 8px; display: block;">` +
+            `Reconnect your phone/PC to the configured WiFi, then open: ` +
+            `<code style="color: #667eea; font-weight: 600;">${targetAddress}</code>` +
+            `</small>`;
+        reconnectStatus.style.display = 'none';
+        overlay.style.display = 'flex';
+        return;
+    }
+
     rebootSubMsg.innerHTML = `Attempting automatic reconnection...<br><small style="color: #888; margin-top: 8px; display: block;">If this fails, manually navigate to: <code style="color: #667eea; font-weight: 600;">${targetAddress}</code></small>`;
     reconnectStatus.style.display = 'block';
-    
+
     overlay.style.display = 'flex';
-    
+
     // Start unified reconnection process
     startReconnection({
         context,
@@ -704,15 +729,8 @@ async function rebootDevice() {
     if (!confirm('Reboot the device without saving any changes?')) {
         return;
     }
-    
-    try {
-        // Send reboot request
-        await fetch(API_REBOOT, { method: 'POST' });
-    } catch (error) {
-        // Expected to fail as device reboots
-    }
-    
-    // Show unified dialog
+
+    // Show unified dialog immediately (do not wait on network)
     showRebootDialog({
         title: 'Device Rebooting',
         message: 'Device is rebooting...',
@@ -720,18 +738,21 @@ async function rebootDevice() {
     });
     
     try {
-        const response = await fetch('/api/reboot', {
-            method: 'POST'
+        const response = await fetch(API_REBOOT, {
+            method: 'POST',
+            signal: AbortSignal.timeout(1500)
         });
-        
+
+        // If the device responds with an explicit error, surface it.
         if (!response.ok) {
             throw new Error('Failed to reboot device');
         }
     } catch (error) {
-        // If reboot request fails (e.g., device already rebooting), that's expected
-        if (!error.message.includes('Failed to fetch') && !error.message.includes('NetworkError')) {
-            // Only show error for non-network errors
-            document.getElementById('reboot-overlay').style.display = 'none';
+        // Network failure/timeout is expected when the device reboots quickly.
+        // Only surface errors that clearly indicate the reboot request was rejected.
+        if (error.message && error.message.includes('Failed to reboot device')) {
+            const overlay = document.getElementById('reboot-overlay');
+            if (overlay) overlay.style.display = 'none';
             showMessage('Error rebooting device: ' + error.message, 'error');
             console.error('Reboot error:', error);
         }

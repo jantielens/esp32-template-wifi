@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.23] - 2025-12-23
+
+### Changed
+- WiFi station mode disables power-save sleep to improve stability/latency
+
+### Fixed
+- WiFi connection now prefers the strongest AP when multiple BSSIDs share the same SSID (Fixes #25)
+- Web portal reboot flow no longer triggers a double reboot; reboot overlay is more robust, including AP/core-mode guidance (Fixes #27)
+
+---
+
 ## [0.0.22] - 2025-12-23
 
 ### Added
