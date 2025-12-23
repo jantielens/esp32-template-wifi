@@ -342,85 +342,81 @@ static bool download_jpeg_to_buffer(
     client->print("Accept: image/jpeg, */*\r\n");
     client->print("Connection: close\r\n\r\n");
 
-    // Read headers into a fixed buffer
-    char header[2048];
-    size_t header_len = 0;
-    bool header_done = false;
-    while (!header_done && !timed_out()) {
-        int b = client->read();
-        if (b < 0) {
-            delay(1);
-            continue;
+    // Read status + headers line-by-line to reduce stack usage.
+    // (Avoids buffering the entire header block.)
+    auto read_http_line = [&](char* out, size_t out_len) -> bool {
+        if (!out || out_len == 0) return false;
+        size_t n = 0;
+        while (!timed_out()) {
+            int b = client->read();
+            if (b < 0) {
+                delay(1);
+                continue;
+            }
+
+            if (b == '\r') {
+                continue;
+            }
+
+            if (b == '\n') {
+                out[n] = '\0';
+                return true;
+            }
+
+            if (n + 1 >= out_len) {
+                snprintf(err, err_len, "HTTP header line too long");
+                return false;
+            }
+
+            out[n++] = (char)b;
         }
-        if (header_len + 1 >= sizeof(header)) {
-            snprintf(err, err_len, "HTTP headers too large");
-            return false;
-        }
-        header[header_len++] = (char)b;
-        if (header_len >= 4 && memcmp(header + header_len - 4, "\r\n\r\n", 4) == 0) {
-            header_done = true;
-            break;
-        }
-    }
-    if (!header_done) {
+
         snprintf(err, err_len, "Timeout waiting for headers");
         return false;
-    }
-    header[header_len] = '\0';
+    };
 
-    // Parse status code
+    char line[256];
     int status = 0;
-    {
-        const char* eol = strstr(header, "\r\n");
-        if (!eol) {
-            snprintf(err, err_len, "Invalid HTTP response");
+    if (!read_http_line(line, sizeof(line))) {
+        return false;
+    }
+    if (line[0] == '\0') {
+        snprintf(err, err_len, "Invalid HTTP response");
+        return false;
+    }
+    // Example: HTTP/1.1 200 OK
+    if (sscanf(line, "HTTP/%*s %d", &status) != 1) {
+        snprintf(err, err_len, "Failed to parse HTTP status");
+        return false;
+    }
+
+    bool chunked = false;
+    size_t content_length = 0;
+    while (true) {
+        if (!read_http_line(line, sizeof(line))) {
             return false;
         }
-        char status_line[128];
-        const size_t slen = min((size_t)(eol - header), sizeof(status_line) - 1);
-        memcpy(status_line, header, slen);
-        status_line[slen] = '\0';
-        // HTTP/1.1 200 OK
-        if (sscanf(status_line, "HTTP/%*s %d", &status) != 1) {
-            snprintf(err, err_len, "Failed to parse HTTP status");
-            return false;
+
+        // Empty line = end of headers
+        if (line[0] == '\0') {
+            break;
+        }
+
+        if (starts_with_ignore_case(line, "Content-Length:")) {
+            const char* v = line + strlen("Content-Length:");
+            while (*v == ' ' || *v == '\t') v++;
+            content_length = (size_t)strtoul(v, nullptr, 10);
+        } else if (starts_with_ignore_case(line, "Transfer-Encoding:")) {
+            // If chunked, we bail for now (keeps implementation small + memory-predictable).
+            if (strstr(line, "chunked") || strstr(line, "Chunked") || strstr(line, "CHUNKED")) {
+                chunked = true;
+            }
         }
     }
+
     if (status != 200) {
         snprintf(err, err_len, "HTTP status %d", status);
         return false;
-    }
-
-    // Parse headers
-    bool chunked = false;
-    size_t content_length = 0;
-    {
-        const char* p = strstr(header, "\r\n");
-        if (!p) {
-            snprintf(err, err_len, "Invalid HTTP headers");
-            return false;
-        }
-        p += 2;
-        while (*p) {
-            const char* next = strstr(p, "\r\n");
-            if (!next) break;
-            if (next == p) break; // end of headers
-
-            const size_t line_len = (size_t)(next - p);
-            if (line_len > 0) {
-                if (starts_with_ignore_case(p, "Content-Length:")) {
-                    const char* v = p + strlen("Content-Length:");
-                    while (*v == ' ' || *v == '\t') v++;
-                    content_length = (size_t)strtoul(v, nullptr, 10);
-                } else if (starts_with_ignore_case(p, "Transfer-Encoding:")) {
-                    // If chunked, we bail for now (keeps implementation small + memory-predictable).
-                    if (strstr(p, "chunked") || strstr(p, "Chunked") || strstr(p, "CHUNKED")) {
-                        chunked = true;
-                    }
-                }
-            }
-            p = next + 2;
-        }
     }
     if (chunked) {
         snprintf(err, err_len, "Chunked transfer unsupported");
