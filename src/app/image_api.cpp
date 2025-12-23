@@ -181,6 +181,19 @@ static bool starts_with_ignore_case(const char* s, const char* prefix) {
     return true;
 }
 
+static bool equals_ignore_case_n(const char* a, const char* b, size_t n) {
+    if (!a || !b) return false;
+    for (size_t i = 0; i < n; i++) {
+        const char ca = a[i];
+        const char cb = b[i];
+        if (!ca || !cb) return false;
+        const char al = (ca >= 'A' && ca <= 'Z') ? (char)(ca - 'A' + 'a') : ca;
+        const char bl = (cb >= 'A' && cb <= 'Z') ? (char)(cb - 'A' + 'a') : cb;
+        if (al != bl) return false;
+    }
+    return true;
+}
+
 enum UrlScheme {
     URL_SCHEME_HTTP = 0,
     URL_SCHEME_HTTPS = 1,
@@ -408,8 +421,27 @@ static bool download_jpeg_to_buffer(
             content_length = (size_t)strtoul(v, nullptr, 10);
         } else if (starts_with_ignore_case(line, "Transfer-Encoding:")) {
             // If chunked, we bail for now (keeps implementation small + memory-predictable).
-            if (strstr(line, "chunked") || strstr(line, "Chunked") || strstr(line, "CHUNKED")) {
-                chunked = true;
+            const char* v = line + strlen("Transfer-Encoding:");
+            while (*v == ' ' || *v == '\t') v++;
+
+            // Parse comma-separated transfer-coding tokens.
+            // We only match a standalone token "chunked" (case-insensitive) to avoid false positives
+            // like "not-chunked".
+            const char* p = v;
+            while (*p && !chunked) {
+                while (*p == ' ' || *p == '\t' || *p == ',') p++;
+                if (!*p) break;
+
+                const char* token_start = p;
+                while (*p && *p != ',' && *p != ';' && *p != ' ' && *p != '\t') p++;
+                const size_t len = (size_t)(p - token_start);
+
+                if (len == 7 && equals_ignore_case_n(token_start, "chunked", 7)) {
+                    chunked = true;
+                    break;
+                }
+
+                while (*p && *p != ',') p++;
             }
         }
     }
