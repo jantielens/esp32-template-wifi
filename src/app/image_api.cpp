@@ -150,7 +150,8 @@ static portMUX_TYPE pending_url_op_mux = portMUX_INITIALIZER_UNLOCKED;
 static bool image_url_body_in_use = false;
 static size_t image_url_body_expected_len = 0;
 static unsigned long image_url_body_start_ms = 0;
-static char image_url_body_buf[1024 + 1];
+static constexpr size_t IMAGE_URL_BODY_MAX_SIZE = 1024;
+static char image_url_body_buf[IMAGE_URL_BODY_MAX_SIZE + 1];
 
 // Track partial uploads so we can reclaim memory if the client disconnects mid-transfer.
 static unsigned long image_upload_start_ms = 0;
@@ -806,7 +807,7 @@ static void handleImageUrl(AsyncWebServerRequest *request, uint8_t *data, size_t
             request->send(409, "application/json", "{\"success\":false,\"message\":\"Busy\"}");
             return;
         }
-        if (total == 0 || total > 1024) {
+        if (total == 0 || total > IMAGE_URL_BODY_MAX_SIZE) {
             request->send(413, "application/json", "{\"success\":false,\"message\":\"Body too large\"}");
             return;
         }
@@ -834,7 +835,8 @@ static void handleImageUrl(AsyncWebServerRequest *request, uint8_t *data, size_t
         return;
     }
 
-    if (index + len > sizeof(image_url_body_buf) - 1) {
+    // Never accept more bytes than the buffer's data capacity (excluding the null terminator).
+    if (index + len > IMAGE_URL_BODY_MAX_SIZE) {
         image_url_body_in_use = false;
         image_url_body_expected_len = 0;
         request->send(413, "application/json", "{\"success\":false,\"message\":\"Body too large\"}");
