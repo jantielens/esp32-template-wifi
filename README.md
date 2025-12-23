@@ -19,6 +19,7 @@ Skip the boilerplate and start building. ESP32 Arduino template with automated b
   - **Works With or Without a Display**: Devices without displays build and run normally
   - **Display/Touch HAL**: Unified `DisplayDriver` / `TouchDriver` interfaces with `DisplayManager` / `TouchManager` lifecycle
   - **LVGL UI Framework**: Multi-screen UI support (when `HAS_DISPLAY` is enabled for a board)
+  - **PNG Assets (LVGL)**: Top-level PNGs in `assets/png/` are converted to LVGL `lv_img_dsc_t` symbols (e.g. `img_logo`) during build for display-enabled boards
 
 - **🎯 Multi-Board Made Easy**
   - **Flexible Build System**: Add ESP32 variants with single config line
@@ -79,6 +80,8 @@ Edit `src/app/app.ino` with your code and repeat step 2.
 
 ```
 esp32-template-wifi/
+├── assets/
+│   └── png/                       # Optional PNG assets (top-level only; converted to LVGL C arrays at build time)
 ├── bin/                           # Local arduino-cli installation
 ├── build/                         # Compiled firmware binaries
 │   ├── esp32-nodisplay/           # ESP32 Dev Module builds (no display)
@@ -92,6 +95,7 @@ esp32-template-wifi/
 │   ├── app/
 │   │   ├── app.ino                # Main sketch file
 │   │   ├── board_config.h         # Default board configuration
+│   │   ├── png_assets.cpp/h        # Generated LVGL PNG assets (auto-generated when assets/png exists)
 │   │   ├── config_manager.cpp/h   # NVS config storage
 │   │   ├── web_portal.cpp/h       # Web server & API
 │   │   ├── web_assets.h           # Embedded HTML/CSS/JS (auto-generated)
@@ -125,6 +129,30 @@ esp32-template-wifi/
 ├── setup.sh                       # Environment setup
 └── arduino-libraries.txt          # Library dependencies
 ```
+
+## 🖼️ PNG Assets (LVGL)
+
+If you add PNG files to `assets/png/`, the build can auto-generate LVGL image descriptors.
+
+- **Folder**: `assets/png/*.png` (top-level only; no recursion)
+- **Generated output**: `src/app/png_assets.cpp` and `src/app/png_assets.h`
+- **Naming**: each file `name.png` becomes `img_name` (so it’s predictable in code)
+- **Resolution**: preserved from the PNG (no resizing)
+- **When included**: only for boards that set `#define HAS_DISPLAY true` in `src/boards/<board>/board_overrides.h` (and compiled out when `HAS_DISPLAY` is false)
+
+Usage example:
+
+```cpp
+#include "png_assets.h"
+
+lv_obj_t* img = lv_img_create(parent);
+lv_img_set_src(img, &img_logo);
+```
+
+Constraints:
+
+- Filenames must already be “C identifier safe” (letters/digits/underscore, not starting with a digit). If not, the generator fails with a descriptive error.
+- The generator requires Python + Pillow. Run `./setup.sh` (tries to install Pillow), or install manually with `python3 -m pip install --user pillow`.
 
 ## 🌐 Web Configuration Portal
 

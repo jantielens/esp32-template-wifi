@@ -46,6 +46,7 @@ declare -A FQBN_TARGETS=(
 - Installs ESP32 core platform
 - Installs optional custom partition tables used by example board targets (if present)
 - Installs libraries from `arduino-libraries.txt`
+- Optionally installs Python Pillow (enables PNG→LVGL asset conversion during build)
 
 **When to use:** Run once when setting up the project, or after a clean checkout.
 
@@ -65,6 +66,7 @@ BOARD_PROFILE=psram ./build.sh esp32-nodisplay  # Optional build profile (if def
 ```
 
 **What it does:**
+- Optionally generates LVGL PNG assets from `assets/png/*.png` into `src/app/png_assets.cpp` + `src/app/png_assets.h` (only when building for at least one display-enabled board)
 - Generates minified web assets (once for all builds)
 - Compiles `src/app/app.ino` for specified board(s)
 - Creates board-specific directories: `./build/esp32-nodisplay/`, `./build/esp32c3-waveshare-169-st7789v2/`, etc.
@@ -94,6 +96,29 @@ build/
 ```
 
 **Requirements:** Must run `setup.sh` first.
+
+---
+
+## tools/png2lvgl_assets.py
+
+**Purpose:** Convert top-level PNG files to LVGL 8.x `lv_img_dsc_t` symbols for use in the UI.
+
+This is invoked automatically by `build.sh` when:
+- `assets/png/` exists and contains at least one `*.png` at the top level, and
+- you are building a display-enabled board (`#define HAS_DISPLAY true` in `src/boards/<board>/board_overrides.h`).
+
+**Generated output:**
+- `src/app/png_assets.h`
+- `src/app/png_assets.cpp`
+
+**Naming:** `assets/png/logo.png` → `img_logo`
+
+**Manual usage:**
+```bash
+python3 tools/png2lvgl_assets.py assets/png src/app/png_assets.cpp src/app/png_assets.h --prefix img_
+```
+
+**Requirements:** Python 3 + Pillow (`python3 -m pip install --user pillow`).
 
 ---
 

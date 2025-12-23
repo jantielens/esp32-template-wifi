@@ -2,6 +2,10 @@
 build/
 bin/arduino-cli
 
+# Generated LVGL PNG assets
+src/app/png_assets.cpp
+src/app/png_assets.h
+
 # Auto-generated web assets
 src/app/web_assets.h
 src/app/project_branding.h
