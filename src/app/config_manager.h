@@ -19,6 +19,7 @@
 #define CONFIG_MANAGER_H
 
 #include <Arduino.h>
+#include "board_config.h"
 
 // Maximum string lengths
 #define CONFIG_SSID_MAX_LEN 32
@@ -60,6 +61,15 @@ struct DeviceConfig {
     
     // Display settings
     uint8_t backlight_brightness;  // 0-100%, default 100
+
+#if HAS_DISPLAY
+    // Screen saver (burn-in prevention v1): backlight sleep on inactivity
+    bool screen_saver_enabled;               // default false
+    uint16_t screen_saver_timeout_seconds;   // default 300 (5 min)
+    uint16_t screen_saver_fade_out_ms;       // default 800
+    uint16_t screen_saver_fade_in_ms;        // default 400
+    bool screen_saver_wake_on_touch;         // default true (when HAS_TOUCH)
+#endif
     
     // Validation flag (magic number to detect valid config)
     uint32_t magic;

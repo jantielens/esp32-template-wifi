@@ -19,6 +19,7 @@
 
 #if HAS_DISPLAY
 #include "display_manager.h"
+#include "screen_saver_manager.h"
 #endif
 
 #if HAS_IMAGE_API
@@ -48,6 +49,10 @@ void handleGetMode(AsyncWebServerRequest *request);
 void handleGetHealth(AsyncWebServerRequest *request);
 void handleReboot(AsyncWebServerRequest *request);
 void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
+void handleGetDisplaySleep(AsyncWebServerRequest *request);
+void handlePostDisplaySleep(AsyncWebServerRequest *request);
+void handlePostDisplayWake(AsyncWebServerRequest *request);
+void handlePostDisplayActivity(AsyncWebServerRequest *request);
 
 // Web server on port 80 (pointer to avoid constructor issues)
 AsyncWebServer *server = nullptr;
@@ -207,7 +212,7 @@ void handleGetConfig(AsyncWebServerRequest *request) {
     }
     
     // Create JSON response (don't include passwords)
-    StaticJsonDocument<2048> doc;
+    StaticJsonDocument<2304> doc;
     doc["wifi_ssid"] = current_config->wifi_ssid;
     doc["wifi_password"] = ""; // Don't send password
     doc["device_name"] = current_config->device_name;
@@ -237,6 +242,15 @@ void handleGetConfig(AsyncWebServerRequest *request) {
     // Display settings
     doc["backlight_brightness"] = current_config->backlight_brightness;
 
+    #if HAS_DISPLAY
+    // Screen saver settings
+    doc["screen_saver_enabled"] = current_config->screen_saver_enabled;
+    doc["screen_saver_timeout_seconds"] = current_config->screen_saver_timeout_seconds;
+    doc["screen_saver_fade_out_ms"] = current_config->screen_saver_fade_out_ms;
+    doc["screen_saver_fade_in_ms"] = current_config->screen_saver_fade_in_ms;
+    doc["screen_saver_wake_on_touch"] = current_config->screen_saver_wake_on_touch;
+    #endif
+
     if (doc.overflowed()) {
         Logger.logMessage("Portal", "ERROR: /api/config JSON overflow (StaticJsonDocument too small)");
         request->send(500, "application/json", "{\"success\":false,\"message\":\"Response too large\"}");
@@ -257,7 +271,7 @@ void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len,
     }
     
     // Parse JSON body
-    StaticJsonDocument<2048> doc;
+    StaticJsonDocument<2304> doc;
     DeserializationError error = deserializeJson(doc, data, len);
     
     if (error) {
@@ -361,23 +375,73 @@ void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len,
         if (doc["backlight_brightness"].is<const char*>()) {
             const char* brightness_str = doc["backlight_brightness"];
             brightness = (uint8_t)atoi(brightness_str ? brightness_str : "100");
-            Logger.logLinef("Config: Brightness from string '%s' -> %d", brightness_str, brightness);
         } else {
             brightness = (uint8_t)(doc["backlight_brightness"] | 100);
-            Logger.logLinef("Config: Brightness from int -> %d", brightness);
         }
         
         if (brightness > 100) brightness = 100;
         current_config->backlight_brightness = brightness;
         
-        Logger.logLinef("Config: Backlight brightness set to %d%% (current_config->backlight_brightness = %d)", 
-                        brightness, current_config->backlight_brightness);
+        Logger.logLinef("Config: Backlight brightness set to %d%%", brightness);
         
         // Apply brightness immediately (will also be persisted when config saved)
         #if HAS_DISPLAY
         display_manager_set_backlight_brightness(brightness);
+
+        // Edge case: if the device was in screen saver (backlight at 0), changing brightness
+        // externally would light the screen without updating the screen saver state.
+        // Treat this as explicit activity+wake so auto-sleep keeps working.
+        screen_saver_manager_notify_activity(true);
         #endif
     }
+
+    #if HAS_DISPLAY
+    // Screen saver settings
+    if (doc.containsKey("screen_saver_enabled")) {
+        if (doc["screen_saver_enabled"].is<const char*>()) {
+            const char* v = doc["screen_saver_enabled"];
+            current_config->screen_saver_enabled = (v && (strcmp(v, "1") == 0 || strcasecmp(v, "true") == 0 || strcasecmp(v, "on") == 0));
+        } else {
+            current_config->screen_saver_enabled = (bool)(doc["screen_saver_enabled"] | false);
+        }
+    }
+
+    if (doc.containsKey("screen_saver_timeout_seconds")) {
+        if (doc["screen_saver_timeout_seconds"].is<const char*>()) {
+            const char* v = doc["screen_saver_timeout_seconds"];
+            current_config->screen_saver_timeout_seconds = (uint16_t)atoi(v ? v : "0");
+        } else {
+            current_config->screen_saver_timeout_seconds = (uint16_t)(doc["screen_saver_timeout_seconds"] | 0);
+        }
+    }
+
+    if (doc.containsKey("screen_saver_fade_out_ms")) {
+        if (doc["screen_saver_fade_out_ms"].is<const char*>()) {
+            const char* v = doc["screen_saver_fade_out_ms"];
+            current_config->screen_saver_fade_out_ms = (uint16_t)atoi(v ? v : "0");
+        } else {
+            current_config->screen_saver_fade_out_ms = (uint16_t)(doc["screen_saver_fade_out_ms"] | 0);
+        }
+    }
+
+    if (doc.containsKey("screen_saver_fade_in_ms")) {
+        if (doc["screen_saver_fade_in_ms"].is<const char*>()) {
+            const char* v = doc["screen_saver_fade_in_ms"];
+            current_config->screen_saver_fade_in_ms = (uint16_t)atoi(v ? v : "0");
+        } else {
+            current_config->screen_saver_fade_in_ms = (uint16_t)(doc["screen_saver_fade_in_ms"] | 0);
+        }
+    }
+
+    if (doc.containsKey("screen_saver_wake_on_touch")) {
+        if (doc["screen_saver_wake_on_touch"].is<const char*>()) {
+            const char* v = doc["screen_saver_wake_on_touch"];
+            current_config->screen_saver_wake_on_touch = (v && (strcmp(v, "1") == 0 || strcasecmp(v, "true") == 0 || strcasecmp(v, "on") == 0));
+        } else {
+            current_config->screen_saver_wake_on_touch = (bool)(doc["screen_saver_wake_on_touch"] | false);
+        }
+    }
+    #endif
     
     current_config->magic = CONFIG_MAGIC;
     
@@ -565,16 +629,87 @@ void handleSetDisplayBrightness(AsyncWebServerRequest *request, uint8_t *data, s
     uint8_t brightness = (uint8_t)(doc["brightness"] | 100);
     if (brightness > 100) brightness = 100;
     
-    // Apply brightness immediately (does not persist to NVS)
     #if HAS_DISPLAY
-    display_manager_set_backlight_brightness(brightness);
-    Logger.logLinef("Display brightness: %d%%", brightness);
+    // Update the in-RAM target brightness (does not persist to NVS).
+    // This keeps the screen saver target consistent with what the user sees.
+    if (current_config) {
+        current_config->backlight_brightness = brightness;
+    }
+
+    // Edge case: if the screen saver is dimming/asleep/fading, directly setting the
+    // backlight would show the UI again without updating the screen saver state.
+    // Easiest fix: when not Awake, route through the screen saver wake path.
+    const ScreenSaverState state = screen_saver_manager_get_status().state;
+    if (state != ScreenSaverState::Awake) {
+        screen_saver_manager_wake();
+    } else {
+        display_manager_set_backlight_brightness(brightness);
+        screen_saver_manager_notify_activity(false);
+    }
+
     #endif
     
     // Return success
     char response[64];
     snprintf(response, sizeof(response), "{\"success\":true,\"brightness\":%d}", brightness);
     request->send(200, "application/json", response);
+}
+
+// GET /api/display/sleep - Screen saver status snapshot
+void handleGetDisplaySleep(AsyncWebServerRequest *request) {
+    #if HAS_DISPLAY
+    ScreenSaverStatus status = screen_saver_manager_get_status();
+
+    StaticJsonDocument<256> doc;
+    doc["enabled"] = status.enabled;
+    doc["state"] = (uint8_t)status.state;
+    doc["current_brightness"] = status.current_brightness;
+    doc["target_brightness"] = status.target_brightness;
+    doc["seconds_until_sleep"] = status.seconds_until_sleep;
+
+    AsyncResponseStream *response = request->beginResponseStream("application/json");
+    serializeJson(doc, *response);
+    request->send(response);
+    #else
+    request->send(404, "application/json", "{\"success\":false,\"message\":\"No display\"}");
+    #endif
+}
+
+// POST /api/display/sleep - Sleep now
+void handlePostDisplaySleep(AsyncWebServerRequest *request) {
+    #if HAS_DISPLAY
+    Logger.logMessage("API", "POST /api/display/sleep");
+    screen_saver_manager_sleep_now();
+    request->send(200, "application/json", "{\"success\":true}");
+    #else
+    request->send(404, "application/json", "{\"success\":false,\"message\":\"No display\"}");
+    #endif
+}
+
+// POST /api/display/wake - Wake now
+void handlePostDisplayWake(AsyncWebServerRequest *request) {
+    #if HAS_DISPLAY
+    Logger.logMessage("API", "POST /api/display/wake");
+    screen_saver_manager_wake();
+    request->send(200, "application/json", "{\"success\":true}");
+    #else
+    request->send(404, "application/json", "{\"success\":false,\"message\":\"No display\"}");
+    #endif
+}
+
+// POST /api/display/activity - Reset idle timer; optionally wake
+void handlePostDisplayActivity(AsyncWebServerRequest *request) {
+    #if HAS_DISPLAY
+    bool wake = false;
+    if (request->hasParam("wake")) {
+        wake = (request->getParam("wake")->value() == "1");
+    }
+    Logger.logMessagef("API", "POST /api/display/activity (wake=%d)", (int)wake);
+    screen_saver_manager_notify_activity(wake);
+    request->send(200, "application/json", "{\"success\":true}");
+    #else
+    request->send(404, "application/json", "{\"success\":false,\"message\":\"No display\"}");
+    #endif
 }
 
 #if HAS_DISPLAY
@@ -611,6 +746,11 @@ void handleSetDisplayScreen(AsyncWebServerRequest *request, uint8_t *data, size_
     // Switch to requested screen
     bool success = false;
     display_manager_show_screen(screen_id, &success);
+
+    // Screen-affecting action counts as explicit activity and should wake.
+    if (success) {
+        screen_saver_manager_notify_activity(true);
+    }
     
     if (success) {
         // Build success response with new screen ID
@@ -756,14 +896,21 @@ void web_portal_init(DeviceConfig *config) {
     server->on("/api/health", HTTP_GET, handleGetHealth);
     server->on("/api/reboot", HTTP_POST, handleReboot);
     
+    #if HAS_DISPLAY
     // Display API endpoints
     server->on("/api/display/brightness", HTTP_PUT,
         [](AsyncWebServerRequest *request) {},
         NULL,
         handleSetDisplayBrightness
     );
-    
-    #if HAS_DISPLAY
+
+    // Screen saver API endpoints
+    server->on("/api/display/sleep", HTTP_GET, handleGetDisplaySleep);
+    server->on("/api/display/sleep", HTTP_POST, handlePostDisplaySleep);
+    server->on("/api/display/wake", HTTP_POST, handlePostDisplayWake);
+    server->on("/api/display/activity", HTTP_POST, handlePostDisplayActivity);
+
+    // Runtime-only screen switch
     server->on("/api/display/screen", HTTP_PUT,
         [](AsyncWebServerRequest *request) {},
         NULL,
@@ -803,6 +950,9 @@ void web_portal_init(DeviceConfig *config) {
         // Now called from main loop with proper task context
         // Show the DirectImageScreen first
         display_manager_show_direct_image();
+
+        // Screen-affecting action counts as explicit activity and should wake.
+        screen_saver_manager_notify_activity(true);
         
         // Configure timeout and start session
         screen->set_timeout(timeout_ms);

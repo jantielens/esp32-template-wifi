@@ -31,6 +31,13 @@
 #define KEY_MQTT_PASS      "mqtt_pass"
 #define KEY_MQTT_INTERVAL  "mqtt_int"
 #define KEY_BACKLIGHT_BRIGHTNESS "bl_bright"
+#if HAS_DISPLAY
+#define KEY_SCREEN_SAVER_ENABLED "ss_en"
+#define KEY_SCREEN_SAVER_TIMEOUT "ss_to"
+#define KEY_SCREEN_SAVER_FADE_OUT "ss_fo"
+#define KEY_SCREEN_SAVER_FADE_IN "ss_fi"
+#define KEY_SCREEN_SAVER_WAKE_TOUCH "ss_wt"
+#endif
 #define KEY_MAGIC          "magic"
 
 static Preferences preferences;
@@ -121,6 +128,19 @@ bool config_manager_load(DeviceConfig *config) {
         config->backlight_brightness = 100;  // Default to full brightness
         config->mqtt_port = 0;
         config->mqtt_interval_seconds = 0;
+
+        #if HAS_DISPLAY
+        // Screen saver defaults
+        config->screen_saver_enabled = false;
+        config->screen_saver_timeout_seconds = 300;
+        config->screen_saver_fade_out_ms = 800;
+        config->screen_saver_fade_in_ms = 400;
+        #if HAS_TOUCH
+        config->screen_saver_wake_on_touch = true;
+        #else
+        config->screen_saver_wake_on_touch = false;
+        #endif
+        #endif
         
         return false;
     }
@@ -156,6 +176,19 @@ bool config_manager_load(DeviceConfig *config) {
     // Load display settings
     config->backlight_brightness = preferences.getUChar(KEY_BACKLIGHT_BRIGHTNESS, 100);
     Logger.logLinef("Loaded brightness: %d%%", config->backlight_brightness);
+
+    #if HAS_DISPLAY
+    // Load screen saver settings
+    config->screen_saver_enabled = preferences.getBool(KEY_SCREEN_SAVER_ENABLED, false);
+    config->screen_saver_timeout_seconds = preferences.getUShort(KEY_SCREEN_SAVER_TIMEOUT, 300);
+    config->screen_saver_fade_out_ms = preferences.getUShort(KEY_SCREEN_SAVER_FADE_OUT, 800);
+    config->screen_saver_fade_in_ms = preferences.getUShort(KEY_SCREEN_SAVER_FADE_IN, 400);
+    #if HAS_TOUCH
+    config->screen_saver_wake_on_touch = preferences.getBool(KEY_SCREEN_SAVER_WAKE_TOUCH, true);
+    #else
+    config->screen_saver_wake_on_touch = preferences.getBool(KEY_SCREEN_SAVER_WAKE_TOUCH, false);
+    #endif
+    #endif
     
     config->magic = magic;
     
@@ -215,6 +248,15 @@ bool config_manager_save(const DeviceConfig *config) {
     // Save display settings
     Logger.logLinef("Saving brightness: %d%%", config->backlight_brightness);
     preferences.putUChar(KEY_BACKLIGHT_BRIGHTNESS, config->backlight_brightness);
+
+    #if HAS_DISPLAY
+    // Save screen saver settings
+    preferences.putBool(KEY_SCREEN_SAVER_ENABLED, config->screen_saver_enabled);
+    preferences.putUShort(KEY_SCREEN_SAVER_TIMEOUT, config->screen_saver_timeout_seconds);
+    preferences.putUShort(KEY_SCREEN_SAVER_FADE_OUT, config->screen_saver_fade_out_ms);
+    preferences.putUShort(KEY_SCREEN_SAVER_FADE_IN, config->screen_saver_fade_in_ms);
+    preferences.putBool(KEY_SCREEN_SAVER_WAKE_TOUCH, config->screen_saver_wake_on_touch);
+    #endif
     
     // Save magic number last (indicates valid config)
     preferences.putUInt(KEY_MAGIC, CONFIG_MAGIC);
