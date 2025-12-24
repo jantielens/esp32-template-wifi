@@ -430,9 +430,22 @@ Returns current device configuration (passwords excluded).
   "gateway": "",
   "dns1": "",
   "dns2": "",
-  "dummy_setting": ""
+  "dummy_setting": "",
+
+  "backlight_brightness": 100,
+
+  "screen_saver_enabled": false,
+  "screen_saver_timeout_seconds": 300,
+  "screen_saver_fade_out_ms": 800,
+  "screen_saver_fade_in_ms": 400,
+  "screen_saver_wake_on_touch": true
 }
 ```
+
+**Notes:**
+- Some fields are build-time gated.
+  - Display-related fields (backlight + screen saver) are present when `HAS_DISPLAY` is enabled.
+  - Other feature-specific fields may be present depending on firmware configuration.
 
 #### `POST /api/config`
 
@@ -449,7 +462,15 @@ Save new configuration. Device reboots after successful save.
   "gateway": "192.168.1.1",
   "dns1": "8.8.8.8",
   "dns2": "8.8.4.4",
-  "dummy_setting": "value"
+  "dummy_setting": "value",
+
+  "backlight_brightness": 70,
+
+  "screen_saver_enabled": true,
+  "screen_saver_timeout_seconds": 300,
+  "screen_saver_fade_out_ms": 800,
+  "screen_saver_fade_in_ms": 400,
+  "screen_saver_wake_on_touch": true
 }
 ```
 
@@ -549,6 +570,68 @@ Upload new firmware binary for over-the-air update.
 - Device automatically reboots after successful update
 - Progress logged to serial monitor
 - Web portal shows upload progress bar, then automatically polls for reconnection (see [Automatic Reconnection](#automatic-reconnection-after-reboot))
+
+### Display Control (HAS_DISPLAY enabled)
+
+These endpoints are only available when the firmware is compiled with `HAS_DISPLAY`.
+
+#### `PUT /api/display/brightness`
+
+Set backlight brightness immediately (does not persist to NVS).
+
+**Request Body:**
+```json
+{ "brightness": 80 }
+```
+
+#### `GET /api/display/sleep`
+
+Get screen saver status.
+
+**Response:**
+```json
+{
+  "enabled": true,
+  "state": 0,
+  "current_brightness": 100,
+  "target_brightness": 100,
+  "seconds_until_sleep": 42
+}
+```
+
+`state` values:
+- `0` = Awake
+- `1` = FadingOut
+- `2` = Asleep
+- `3` = FadingIn
+
+#### `POST /api/display/sleep`
+
+Force the screen saver to sleep now (fade backlight to 0).
+
+#### `POST /api/display/wake`
+
+Force wake now (fade backlight back to configured brightness).
+
+#### `POST /api/display/activity`
+
+Reset the idle timer; optionally request wake.
+
+- `POST /api/display/activity` (just resets timer)
+- `POST /api/display/activity?wake=1` (resets timer + wake)
+
+#### `PUT /api/display/screen`
+
+Switch the active runtime screen (no persistence).
+
+**Request Body:**
+```json
+{ "screen": "info" }
+```
+
+**Notes:**
+- Screen-affecting actions count as user activity and will reset the screen saver timer.
+- When the screen saver is dimming/asleep/fading in, touch input is intentionally suppressed to avoid “wake gestures” clicking through into the UI. A second tap may be required after wake.
 
 ### Image Display (HAS_DISPLAY enabled)
 
