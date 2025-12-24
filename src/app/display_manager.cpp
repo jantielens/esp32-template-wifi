@@ -196,6 +196,11 @@ void DisplayManager::unlock() {
     }
 }
 
+bool DisplayManager::tryLock(uint32_t timeoutMs) {
+    if (!lvglMutex) return false;
+    return xSemaphoreTake(lvglMutex, pdMS_TO_TICKS(timeoutMs)) == pdTRUE;
+}
+
 // FreeRTOS task for continuous LVGL rendering
 void DisplayManager::lvglTask(void* pvParameter) {
     DisplayManager* mgr = (DisplayManager*)pvParameter;
@@ -560,6 +565,11 @@ void display_manager_unlock() {
     if (displayManager) {
         displayManager->unlock();
     }
+}
+
+bool display_manager_try_lock(uint32_t timeout_ms) {
+    if (!displayManager) return false;
+    return displayManager->tryLock(timeout_ms);
 }
 
 #if HAS_IMAGE_API
