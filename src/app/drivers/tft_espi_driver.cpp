@@ -62,13 +62,10 @@ void TFT_eSPI_Driver::setBacklightBrightness(uint8_t brightness) {
     // Map 0-100% to 0-255 PWM duty cycle
     uint32_t dutyCycle = (brightness * 255) / 100;
     
-    Logger.logLinef("TFT_eSPI: Setting brightness %d%% (duty: %d)", brightness, dutyCycle);
-    
     // Handle active low vs active high backlight
     #ifdef TFT_BACKLIGHT_ON
     if (!TFT_BACKLIGHT_ON) {
         dutyCycle = 255 - dutyCycle;  // Invert for active-low
-        Logger.logLinef("TFT_eSPI: Inverted for active-low (duty: %d)", dutyCycle);
     }
     #endif
     

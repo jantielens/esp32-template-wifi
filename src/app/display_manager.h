@@ -147,6 +147,10 @@ public:
     void lock();
     void unlock();
 
+    // Attempt to lock the LVGL mutex with a timeout (in milliseconds).
+    // Returns true if the lock was acquired.
+    bool tryLock(uint32_t timeoutMs);
+
     // Active LVGL logical resolution (post driver->configureLVGL()).
     // Prefer using these instead of calling LVGL APIs from non-LVGL tasks.
     int getActiveWidth() const { return (int)disp_drv.hor_res; }
@@ -187,6 +191,7 @@ void display_manager_set_backlight_brightness(uint8_t brightness);  // 0-100%
 // Use these to avoid concurrent access to buffered display backends (e.g., Arduino_GFX canvas).
 void display_manager_lock();
 void display_manager_unlock();
+bool display_manager_try_lock(uint32_t timeout_ms);
 
 #if HAS_IMAGE_API
 // C-style interface for image API

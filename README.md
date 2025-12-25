@@ -205,7 +205,8 @@ The hostname is automatically set from the device name and includes the last 4 h
 ### REST API Endpoints
 
 Build-time gating:
-- Display/image endpoints require `HAS_DISPLAY` + `HAS_IMAGE_API` (typically set per-board in `src/boards/<board>/board_overrides.h`).
+- Display endpoints require `HAS_DISPLAY` (typically set per-board in `src/boards/<board>/board_overrides.h`).
+- Image endpoints require `HAS_DISPLAY` + `HAS_IMAGE_API`.
 - When `HAS_IMAGE_API` is enabled, an optional LVGL image screen (`lvgl_image`) is also compiled and can be selected via `PUT /api/display/screen`.
 
 | Method | Endpoint | Purpose |
@@ -219,6 +220,12 @@ Build-time gating:
 | GET | `/api/mode` | Portal mode (core vs full) |
 | POST | `/api/update` | OTA firmware upload |
 | POST | `/api/reboot` | Reboot device without saving |
+| PUT | `/api/display/brightness` | Set backlight brightness immediately (no persist) |
+| GET | `/api/display/sleep` | Screen saver status snapshot |
+| POST | `/api/display/sleep` | Force screen saver sleep now |
+| POST | `/api/display/wake` | Force wake now |
+| POST | `/api/display/activity` | Reset idle timer; optionally wake (`?wake=1`) |
+| PUT | `/api/display/screen` | Switch runtime screen (no persist) |
 | POST | `/api/display/image` | Upload JPEG image for display (full mode - deferred decode) |
 | POST | `/api/display/image_url` | Queue HTTP/HTTPS JPEG download for display (deferred download+decode) |
 | POST | `/api/display/image/strips` | Upload JPEG image strips (memory efficient - async decode) |

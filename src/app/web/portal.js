@@ -499,6 +499,13 @@ async function loadConfig() {
             const element = document.getElementById(id);
             if (element) element.value = (value === 0 ? '0' : (value || ''));
         };
+
+        const setCheckedIfExists = (id, checked) => {
+            const element = document.getElementById(id);
+            if (element && element.type === 'checkbox') {
+                element.checked = !!checked;
+            }
+        };
         
         const setTextIfExists = (id, text) => {
             const element = document.getElementById(id);
@@ -544,6 +551,13 @@ async function loadConfig() {
         setValueIfExists('backlight_brightness', brightness);
         setTextIfExists('brightness-value', brightness);
         updateBrightnessSliderBackground(brightness);
+
+        // Screen saver settings
+        setCheckedIfExists('screen_saver_enabled', config.screen_saver_enabled);
+        setValueIfExists('screen_saver_timeout_seconds', config.screen_saver_timeout_seconds);
+        setValueIfExists('screen_saver_fade_out_ms', config.screen_saver_fade_out_ms);
+        setValueIfExists('screen_saver_fade_in_ms', config.screen_saver_fade_in_ms);
+        setCheckedIfExists('screen_saver_wake_on_touch', config.screen_saver_wake_on_touch);
         
         // Hide loading overlay (silent load)
         const overlay = document.getElementById('form-loading-overlay');
@@ -568,16 +582,26 @@ function extractFormFields(formData) {
         const element = document.querySelector(`[name="${name}"]`);
         return element ? formData.get(name) : null;
     };
+
+    const getCheckboxValue = (name) => {
+        const element = document.querySelector(`[name="${name}"]`);
+        if (!element) return null;
+        if (element.type !== 'checkbox') return formData.get(name);
+        // Explicit boolean so unchecked can be persisted as false.
+        return element.checked;
+    };
     
     // Build config from only the fields that exist on this page
     const config = {};
     const fields = ['wifi_ssid', 'wifi_password', 'device_name', 'fixed_ip', 
                     'subnet_mask', 'gateway', 'dns1', 'dns2', 'dummy_setting',
                     'mqtt_host', 'mqtt_port', 'mqtt_username', 'mqtt_password', 'mqtt_interval_seconds',
-                    'backlight_brightness'];
+                    'backlight_brightness',
+                    'screen_saver_enabled', 'screen_saver_timeout_seconds', 'screen_saver_fade_out_ms', 'screen_saver_fade_in_ms', 'screen_saver_wake_on_touch'];
     
     fields.forEach(field => {
-        const value = getFieldValue(field);
+        const element = document.querySelector(`[name="${field}"]`);
+        const value = (element && element.type === 'checkbox') ? getCheckboxValue(field) : getFieldValue(field);
         if (value !== null) config[field] = value;
     });
     

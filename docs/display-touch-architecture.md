@@ -254,6 +254,24 @@ virtual bool hasBacklightControl();                               // Feature det
 void display_manager_set_backlight_brightness(uint8_t brightness_percent);
 ```
 
+### Screen Saver (Burn-In Prevention v1)
+
+When `HAS_DISPLAY` is enabled, the firmware includes a screen saver manager that reduces burn-in risk by turning the backlight off after a period of inactivity.
+
+**Behavior:**
+- After `screen_saver_timeout_seconds` of inactivity, the backlight fades to 0.
+- Wake fades back to the configured `backlight_brightness`.
+- On touch devices, wake can optionally be triggered by touch (`screen_saver_wake_on_touch`).
+- While dimming/asleep/fading in, touch input is suppressed so “wake gestures” can’t click through into LVGL UI navigation.
+
+**Configuration / APIs:**
+- Config fields are exposed via `GET/POST /api/config` (only when `HAS_DISPLAY`).
+- Runtime control endpoints:
+    - `GET /api/display/sleep` (status)
+    - `POST /api/display/sleep` (sleep now)
+    - `POST /api/display/wake` (wake now)
+    - `POST /api/display/activity` (reset timer; optional `?wake=1`)
+
 **Example Implementation (TFT_eSPI_Driver):**
 ```cpp
 void TFT_eSPI_Driver::setBacklightBrightness(uint8_t brightness_percent) {

@@ -11,6 +11,7 @@
 
 #if HAS_DISPLAY
 #include "display_manager.h"
+#include "screen_saver_manager.h"
 #endif
 
 #if HAS_TOUCH
@@ -92,6 +93,19 @@ void setup()
   device_config.mqtt_port = 0;
   device_config.mqtt_interval_seconds = 0;
 
+  #if HAS_DISPLAY
+  // Screen saver defaults (v1)
+  device_config.screen_saver_enabled = false;
+  device_config.screen_saver_timeout_seconds = 300;
+  device_config.screen_saver_fade_out_ms = 800;
+  device_config.screen_saver_fade_in_ms = 400;
+  #if HAS_TOUCH
+  device_config.screen_saver_wake_on_touch = true;
+  #else
+  device_config.screen_saver_wake_on_touch = false;
+  #endif
+  #endif
+
   // Initialize board-specific hardware
   #if HAS_BUILTIN_LED
   pinMode(LED_PIN, OUTPUT);
@@ -138,6 +152,11 @@ void setup()
   #if HAS_DISPLAY && HAS_BACKLIGHT
   Logger.logLinef("Main: Applying loaded brightness: %d%%", device_config.backlight_brightness);
   display_manager_set_backlight_brightness(device_config.backlight_brightness);
+  #endif
+
+  #if HAS_DISPLAY
+  // Initialize screen saver manager after config is loaded.
+  screen_saver_manager_init(&device_config);
   #endif
 
   // Start WiFi BEFORE initializing web server (critical for ESP32-C3)
@@ -195,11 +214,23 @@ void setup()
 
   // Navigate to info screen
   display_manager_show_info();
+
+  // Start the screen saver inactivity timer after the first runtime screen is visible.
+  // This avoids counting boot + splash time as "inactivity".
+  screen_saver_manager_notify_activity(false);
   #endif
 }
 
 void loop()
 {
+  #if HAS_DISPLAY
+  screen_saver_manager_loop();
+  #endif
+
+  #if HAS_TOUCH
+  touch_manager_loop();
+  #endif
+
   // Handle web portal (DNS for captive portal)
   web_portal_handle();
 
