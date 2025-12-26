@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Set, Tuple
@@ -358,13 +359,52 @@ def parse_define_descriptions(header: Path) -> Dict[str, str]:
     return descriptions
 
 
-def iter_source_files(src_root: Path) -> Iterable[Path]:
+def _iter_git_tracked_files(root: Path, under: Path) -> Optional[List[Path]]:
+    """Return a list of git-tracked files under 'under', or None if unavailable."""
+
+    git_dir = root / ".git"
+    if not git_dir.exists():
+        return None
+
+    under_rel = rel_posix(under, root)
+    try:
+        p = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "-z", "--", under_rel],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError:
+        return None
+
+    if p.returncode != 0:
+        return None
+
+    out = p.stdout
+    if not out:
+        return []
+
+    files: List[Path] = []
+    for raw in out.split(b"\x00"):
+        if not raw:
+            continue
+        rel = raw.decode("utf-8", errors="replace")
+        files.append(root / rel)
+    return files
+
+
+def iter_source_files(src_root: Path, root: Path) -> Iterable[Path]:
     ex_dirs = {
         "vendor",  # driver-scoped vendored code
         "__pycache__",
     }
 
-    for path in src_root.rglob("*"):
+    # Prefer git-tracked files so local-only generated/ignored files don't affect output.
+    candidates = _iter_git_tracked_files(root, src_root)
+    if candidates is None:
+        candidates = list(src_root.rglob("*"))
+
+    for path in candidates:
         if not path.is_file():
             continue
         if any(part in ex_dirs for part in path.parts):
@@ -382,7 +422,7 @@ def scan_preprocessor_macro_usage(src_root: Path, root: Path) -> Tuple[Dict[str,
 
     re_directive = re.compile(r"^\s*#\s*(if|ifdef|ifndef|elif)\b(.*)$")
 
-    for file_path in iter_source_files(src_root):
+    for file_path in iter_source_files(src_root, root):
         rel = rel_posix(file_path, root)
         for line in read_text(file_path).splitlines():
             m = re_directive.match(line)

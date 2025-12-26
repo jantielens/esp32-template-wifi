@@ -159,8 +159,6 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/image_api.cpp
   - src/app/lvgl_jpeg_decoder.cpp
   - src/app/lvgl_jpeg_decoder.h
-  - src/app/png_assets.cpp
-  - src/app/png_assets.h
   - src/app/screen_saver_manager.cpp
   - src/app/screen_saver_manager.h
   - src/app/screens.cpp
@@ -245,7 +243,6 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/board_config.h
 - **PROJECT_DISPLAY_NAME**
   - src/app/board_config.h
-  - src/app/project_branding.h
 - **TFT_BACKLIGHT_ON**
   - src/app/drivers/arduino_gfx_driver.cpp
   - src/app/drivers/tft_espi_driver.cpp
