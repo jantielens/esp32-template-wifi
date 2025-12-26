@@ -93,6 +93,10 @@ build_board() {
         echo "Config:    Using default configuration"
     fi
     echo ""
+
+    # Print active compile-time flags for this board (for build logs)
+    python3 "$SCRIPT_DIR/tools/compile_flags_report.py" build --board "$board_name"
+    echo ""
     
     # Create board-specific build directory
     mkdir -p "$board_build_path"

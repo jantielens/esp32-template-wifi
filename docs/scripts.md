@@ -68,6 +68,7 @@ BOARD_PROFILE=psram ./build.sh esp32-nodisplay  # Optional build profile (if def
 **What it does:**
 - Optionally generates LVGL PNG assets from `assets/png/*.png` into `src/app/png_assets.cpp` + `src/app/png_assets.h` (only when building for at least one display-enabled board)
 - Generates minified web assets (once for all builds)
+- Prints a per-board "Compile-time flags summary" (active `HAS_*` features + key selectors) to make it clear what the build will include
 - Compiles `src/app/app.ino` for specified board(s)
 - Creates board-specific directories: `./build/esp32-nodisplay/`, `./build/esp32c3-waveshare-169-st7789v2/`, etc.
 - Generates `.bin`, `.bootloader.bin`, `.merged.bin`, and `.partitions.bin` files per board
@@ -139,6 +140,27 @@ python3 tools/generate-board-driver-table.py --update-drivers-readme
 # Update an arbitrary markdown file (path relative to repo root)
 python3 tools/generate-board-driver-table.py --update-file path/to/file.md
 ```
+
+---
+
+## tools/compile_flags_report.py
+
+**Purpose:** Generate a compile-time flags report (flag list + per-board matrices + per-file preprocessor usage map) and print the active flags for a specific board.
+
+**Outputs:**
+- Documentation report: `docs/compile-time-flags.md`
+- Build-time summary: printed to stdout
+
+**Usage:**
+```bash
+# Update docs/compile-time-flags.md (updates marker sections in-place)
+python3 tools/compile_flags_report.py md --out docs/compile-time-flags.md
+
+# Print active flags for a board (useful for build logs)
+python3 tools/compile_flags_report.py build --board cyd-v2
+```
+
+**CI enforcement:** GitHub Actions regenerates `docs/compile-time-flags.md` and fails if it differs, so changes to compile-time flags must be accompanied by a regenerated doc.
 
 ---
 

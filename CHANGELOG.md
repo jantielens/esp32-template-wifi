@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.25] - 2025-12-26
+
+### Added
+- Compile-time flags reporting tool (`tools/compile_flags_report.py`) that generates `docs/compile-time-flags.md` (flag list, board matrices, and per-file preprocessor usage map)
+- Build-time “active flags” summary printed during `./build.sh` per board
+
+### Changed
+- CI board build matrix ordering is now deterministic (sorted board names)
+- Compile-time flags documentation generation is enforced in CI (fails when generated doc differs)
+
 ## [0.0.24] - 2025-12-24
 
 ### Added
