@@ -284,6 +284,19 @@ This template automates the installation:
 - Clear separation of common vs board-specific settings
 - Compile-time optimization (zero runtime overhead)
 
+### Compile-Time Flags Reporting
+
+This repository includes tooling to keep compile-time configuration discoverable and auditable.
+
+- Generated report: `docs/compile-time-flags.md` (flag list, per-board matrices, and per-file preprocessor usage map)
+- Generator: `tools/compile_flags_report.py`
+- Build logs: `build.sh` prints a per-board "Compile-time flags summary" so you can see which `HAS_*` features and key selectors are active for the board being built
+
+**Update the report locally:**
+```bash
+python3 tools/compile_flags_report.py md --out docs/compile-time-flags.md
+```
+
 ### Template Syntax
 
 HTML files use simple placeholder syntax:
@@ -685,6 +698,10 @@ Follow [Semantic Versioning](https://semver.org/):
 - Manual trigger
 
 **Purpose**: Validate code compiles before merge
+
+**Notes**:
+- The board build matrix order is deterministic (board names are sorted) so CI output is stable.
+- CI regenerates `docs/compile-time-flags.md` and fails if the generated output differs (keeps the report in sync with code).
 
 ### Release Workflow (`.github/workflows/release.yml`)
 
