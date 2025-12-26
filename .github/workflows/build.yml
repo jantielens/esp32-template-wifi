@@ -103,10 +103,11 @@ jobs:
         # Export PROJECT_NAME for artifact naming
         echo "project_name=$PROJECT_NAME" >> $GITHUB_OUTPUT
         
-        # Build JSON array for matrix
+        # Build JSON array for matrix (deterministic order)
         boards_json="["
         first=true
-        for board_name in "${!FQBN_TARGETS[@]}"; do
+        mapfile -t board_names < <(printf '%s\n' "${!FQBN_TARGETS[@]}" | sort)
+        for board_name in "${board_names[@]}"; do
           fqbn="${FQBN_TARGETS[$board_name]}"
           if [ "$first" = true ]; then
             first=false
@@ -120,8 +121,34 @@ jobs:
         echo "matrix={\"board\":$boards_json}" >> $GITHUB_OUTPUT
         echo "Generated matrix: {\"board\":$boards_json}"
 
+  compile-flags-doc:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+
+    - name: Regenerate compile-time flags doc
+      run: |
+        python3 tools/compile_flags_report.py md --out docs/compile-time-flags.md
+
+    - name: Ensure docs are up to date
+      run: |
+        if ! git diff --exit-code -- docs/compile-time-flags.md; then
+          echo "docs/compile-time-flags.md is out of date." >&2
+          echo "Run: python3 tools/compile_flags_report.py md --out docs/compile-time-flags.md" >&2
+          echo "Then commit the updated docs/compile-time-flags.md to your branch." >&2
+          echo "" >&2
+          git --no-pager diff -- docs/compile-time-flags.md | head -n 200 >&2
+          exit 1
+        fi
+
   build:
-    needs: prepare-matrix
+    needs: [prepare-matrix, compile-flags-doc]
     runs-on: ubuntu-latest
     strategy:
       matrix: ${{ fromJson(needs.prepare-matrix.outputs.matrix) }}
