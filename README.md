@@ -444,7 +444,7 @@ This repo includes a GitHub Pages installer site powered by ESP Web Tools, so us
 
 - The release workflow builds firmware for all configured boards.
 - It attaches both app-only and **merged** firmware binaries to the GitHub Release.
-- For **stable tags only** (e.g. `v1.2.3`, not `v1.2.3-beta.1`), it also generates and deploys the installer site to GitHub Pages.
+- For **stable releases only** (non-prerelease), a separate Pages workflow runs when the release is published and deploys the installer site to GitHub Pages.
 - Pages deployment is **latest-only**: each stable release overwrites what’s hosted.
 
 ### Enable + Deploy
@@ -525,18 +525,20 @@ When you push a tag matching `v*.*.*`:
 2. **Builds firmware** for all board variants
 3. **Creates GitHub Release** with:
    - Release notes extracted from CHANGELOG.md
-   - Firmware binaries: `<board>-firmware-vX.Y.Z.bin`
-   - Debug symbols: `<board>-firmware-vX.Y.Z.elf`
+  - Firmware binaries: `$PROJECT_NAME-<board>-vX.Y.Z.bin` (app-only)
+  - Firmware binaries: `$PROJECT_NAME-<board>-vX.Y.Z-merged.bin` (merged; browser flasher)
+  - Debug symbols: `$PROJECT_NAME-<board>-vX.Y.Z.elf`
    - Build metadata: `build-info-<board>.txt`
    - SHA256 checksums: `SHA256SUMS.txt`
 4. **Marks as pre-release** if version contains hyphen (e.g., `v1.0.0-beta.1`)
 
+For stable releases, after the GitHub Release is published, `.github/workflows/pages-from-release.yml` deploys the GitHub Pages installer.
+
 ### Release Artifacts
 
 Each release includes firmware binaries for all board variants:
-- `esp32-firmware-v0.0.5.bin` - Ready to flash
-- `esp32c3-firmware-v0.0.5.bin`
-- `esp32c6-firmware-v0.0.5.bin`
+- `$PROJECT_NAME-esp32-nodisplay-v0.0.5.bin` (app-only)
+- `$PROJECT_NAME-esp32-nodisplay-v0.0.5-merged.bin` (merged; flashes at offset 0)
 - `SHA256SUMS.txt` - Checksums for verification
 
 Debug symbols (`.elf`) and build metadata (`.txt`) are available in the workflow artifacts but not included in releases to keep downloads lightweight.
