@@ -90,6 +90,23 @@ SHA_SHORT="${SHA_SHORT:0:7}"
 SITE_VERSION="$VERSION+$SHA_SHORT"
 DISPLAY_VERSION="$VERSION"
 
+# Link the displayed version to something useful.
+# Preference order:
+#  1) Release tag (when generating from a published release)
+#  2) Commit SHA (when running in GitHub Actions)
+#  3) Repo homepage
+
+VERSION_HREF="#"
+if [[ -n "${GITHUB_SERVER_URL:-}" && -n "${GITHUB_REPOSITORY:-}" ]]; then
+  VERSION_HREF="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+
+  if [[ -n "${RELEASE_TAG:-}" ]]; then
+    VERSION_HREF="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$RELEASE_TAG"
+  elif [[ -n "${GITHUB_SHA:-}" ]]; then
+    VERSION_HREF="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA"
+  fi
+fi
+
 render_index() {
   local template_path="$1"
   local out_path="$2"
@@ -98,12 +115,14 @@ render_index() {
   awk -v display_name="$PROJECT_DISPLAY_NAME" \
       -v site_version="$SITE_VERSION" \
       -v display_version="$DISPLAY_VERSION" \
+      -v version_href="$VERSION_HREF" \
       -v frag="$board_fragment" \
       '
         {
           gsub(/{{PROJECT_DISPLAY_NAME}}/, display_name)
           gsub(/{{SITE_VERSION}}/, site_version)
           gsub(/{{DISPLAY_VERSION}}/, display_version)
+          gsub(/{{VERSION_HREF}}/, version_href)
         }
         /{{BOARD_ENTRIES}}/ {
           while ((getline line < frag) > 0) print line
