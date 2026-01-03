@@ -1,0 +1,71 @@
+name: Firmware Installer (GitHub Pages)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Cache arduino-cli
+        uses: actions/cache@v4
+        with:
+          path: |
+            bin/arduino-cli
+            ~/.arduino15
+          key: ${{ runner.os }}-arduino-cli-${{ hashFiles('setup.sh', 'arduino-libraries.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-arduino-cli-
+
+      - name: Install toolchain + libraries
+        run: |
+          chmod +x setup.sh
+          ./setup.sh
+
+      - name: Install custom partition tables
+        run: |
+          chmod +x tools/install-custom-partitions.sh
+          ./tools/install-custom-partitions.sh
+
+      - name: Build all boards
+        run: |
+          chmod +x build.sh
+          ./build.sh
+
+      - name: Build installer site (latest only)
+        run: |
+          chmod +x tools/build-esp-web-tools-site.sh
+          ./tools/build-esp-web-tools-site.sh site
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

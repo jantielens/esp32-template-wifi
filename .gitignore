@@ -2,6 +2,9 @@
 build/
 bin/arduino-cli
 
+# Generated ESP Web Tools installer site
+site/
+
 # Generated LVGL PNG assets
 src/app/png_assets.cpp
 src/app/png_assets.h
