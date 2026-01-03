@@ -1,7 +1,9 @@
 :root {
   --bg: #0b1020;
-  --panel: rgba(255, 255, 255, 0.06);
-  --panel-border: rgba(255, 255, 255, 0.10);
+  --panel: rgba(255, 255, 255, 0.10);
+  --panel-2: rgba(255, 255, 255, 0.07);
+  --notes: rgba(0, 0, 0, 0.22);
+  --panel-border: rgba(255, 255, 255, 0.16);
   --text: rgba(255, 255, 255, 0.92);
   --muted: rgba(255, 255, 255, 0.66);
   --brand: #7c5cff;
@@ -12,8 +14,10 @@
 @media (prefers-color-scheme: light) {
   :root {
     --bg: #f7f8fb;
-    --panel: rgba(0, 0, 0, 0.03);
-    --panel-border: rgba(0, 0, 0, 0.07);
+    --panel: rgba(255, 255, 255, 0.92);
+    --panel-2: rgba(0, 0, 0, 0.035);
+    --notes: rgba(0, 0, 0, 0.05);
+    --panel-border: rgba(0, 0, 0, 0.10);
     --text: rgba(0, 0, 0, 0.88);
     --muted: rgba(0, 0, 0, 0.62);
     --shadow: rgba(0, 0, 0, 0.08);
@@ -128,7 +132,7 @@ code {
   padding: 12px;
   border-radius: 12px;
   border: 1px solid var(--panel-border);
-  background: rgba(127, 127, 127, 0.10);
+  background: var(--notes);
   color: var(--text);
   max-height: 320px;
   overflow: auto;
@@ -185,7 +189,7 @@ code {
   padding: 10px 12px;
   border-radius: 12px;
   border: 1px solid var(--panel-border);
-  background: rgba(127, 127, 127, 0.10);
+  background: var(--panel-2);
   color: var(--text);
   outline: none;
 }
@@ -219,7 +223,7 @@ code {
   padding: 14px;
   border-radius: 14px;
   border: 1px solid var(--panel-border);
-  background: rgba(127, 127, 127, 0.08);
+  background: var(--panel-2);
 }
 
 @media (min-width: 520px) {
