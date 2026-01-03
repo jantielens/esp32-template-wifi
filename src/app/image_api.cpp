@@ -1093,7 +1093,7 @@ void image_api_register_routes(AsyncWebServer* server, bool (*auth_gate)(AsyncWe
         "/api/display/image/strips",
         HTTP_POST,
         [](AsyncWebServerRequest *request) {
-            if (g_auth_gate) (void)g_auth_gate(request);
+            if (g_auth_gate && !g_auth_gate(request)) return;
         },
         NULL,
         handleStripUpload
@@ -1103,7 +1103,7 @@ void image_api_register_routes(AsyncWebServer* server, bool (*auth_gate)(AsyncWe
         "/api/display/image",
         HTTP_POST,
         [](AsyncWebServerRequest *request) {
-            if (g_auth_gate) (void)g_auth_gate(request);
+            if (g_auth_gate && !g_auth_gate(request)) return;
         },
         handleImageUpload
     );
@@ -1112,7 +1112,7 @@ void image_api_register_routes(AsyncWebServer* server, bool (*auth_gate)(AsyncWe
         "/api/display/image_url",
         HTTP_POST,
         [](AsyncWebServerRequest *request) {
-            if (g_auth_gate) (void)g_auth_gate(request);
+            if (g_auth_gate && !g_auth_gate(request)) return;
         },
         NULL,
         handleImageUrl

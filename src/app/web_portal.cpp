@@ -1425,7 +1425,7 @@ void web_portal_init(DeviceConfig *config) {
     
     server->on("/api/config", HTTP_POST, 
         [](AsyncWebServerRequest *request) {
-            (void)portal_auth_gate(request);
+            if (!portal_auth_gate(request)) return;
         },
         NULL,
         handlePostConfig
@@ -1445,7 +1445,7 @@ void web_portal_init(DeviceConfig *config) {
     // Display API endpoints
     server->on("/api/display/brightness", HTTP_PUT,
         [](AsyncWebServerRequest *request) {
-            (void)portal_auth_gate(request);
+            if (!portal_auth_gate(request)) return;
         },
         NULL,
         handleSetDisplayBrightness
@@ -1460,7 +1460,7 @@ void web_portal_init(DeviceConfig *config) {
     // Runtime-only screen switch
     server->on("/api/display/screen", HTTP_PUT,
         [](AsyncWebServerRequest *request) {
-            (void)portal_auth_gate(request);
+            if (!portal_auth_gate(request)) return;
         },
         NULL,
         handleSetDisplayScreen
@@ -1470,7 +1470,7 @@ void web_portal_init(DeviceConfig *config) {
     // OTA upload endpoint
     server->on("/api/update", HTTP_POST,
         [](AsyncWebServerRequest *request) {
-            (void)portal_auth_gate(request);
+            if (!portal_auth_gate(request)) return;
         },
         handleOTAUpload
     );
