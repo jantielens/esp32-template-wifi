@@ -26,6 +26,10 @@ Skip the boilerplate and start building. ESP32 Arduino template with automated b
   - **Board-Specific Code**: Optional overrides for different GPIO pins and hardware
   - **Matrix Builds**: GitHub Actions compiles all boards in parallel
 
+- **🌍 Web Firmware Installer**
+  - **Browser Flashing**: GitHub Pages + ESP Web Tools (no backend required)
+  - **Release-Driven Deploy**: Hosted installer updates on stable releases (see [Web Firmware Installer](#web-firmware-installer-esp-web-tools))
+
 - **⚙️ Professional Development Workflow**
   - **Automated Releases**: Tag-based releases with firmware binaries and changelogs
   - **CI/CD Integration**: Same build scripts work locally and in GitHub Actions

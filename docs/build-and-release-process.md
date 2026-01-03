@@ -320,10 +320,36 @@ The project uses an automated release workflow that triggers on version tags. Re
 
 - **`config.sh`** - Project branding configuration
 - **`.github/workflows/release.yml`** - Automated release pipeline triggered by version tags
+- **`.github/workflows/pages-from-release.yml`** - Deploys the GitHub Pages firmware installer for stable releases
 - **`tools/extract-changelog.sh`** - Parses CHANGELOG.md for version-specific notes
 - **`create-release.sh`** - Helper script to automate release preparation
+- **`tools/build-esp-web-tools-site.sh`** - Builds the static installer site (HTML + manifests + firmware copies)
 - **`src/version.h`** - Firmware version tracking
 - **`CHANGELOG.md`** - Release notes in Keep a Changelog format
+
+---
+
+## Web Firmware Installer (GitHub Pages / ESP Web Tools)
+
+This repository includes a static firmware installer site (no backend) powered by ESP Web Tools. It is deployed to GitHub Pages from **stable GitHub Releases**.
+
+### Why merged firmware is required
+
+The browser installer flashes a single firmware image at offset `0`. For this, the installer uses the Arduino build output `app.ino.merged.bin` (bootloader + partitions + app).
+
+### Same-origin requirement (CORS)
+
+To avoid CORS issues in browsers, the **installer page**, **manifest JSON**, and **firmware `.bin` files** must be served from the same GitHub Pages origin.
+
+### How Pages deployment works
+
+- **Trigger**: `.github/workflows/pages-from-release.yml` runs on `release.published` and refuses pre-releases.
+- **Manual deploy**: The same workflow supports `workflow_dispatch` with a `tag_name` input (still refuses pre-releases).
+- **Inputs**:
+  - Downloads `*-merged.bin` assets from the release.
+  - Fetches the release body into `release-notes.md`.
+  - Rehydrates `build/<board>/app.ino.merged.bin` so the site generator can run without rebuilding firmware.
+- **Output**: `tools/build-esp-web-tools-site.sh` generates `site/` (HTML, `manifests/*.json`, `firmware/<board>/firmware.bin`) which is deployed via GitHub Pages “Source: GitHub Actions”.
 
 ---
 
@@ -373,12 +399,14 @@ git push origin v0.0.5
 - GitHub Actions builds firmware for all boards (e.g., esp32-nodisplay, esp32c3-waveshare-169-st7789v2, cyd-v2)
 - Extracts changelog section for v0.0.5
 - Creates GitHub Release with:
-  - `esp32-nodisplay-firmware-v0.0.5.bin`
-  - `esp32c3-waveshare-169-st7789v2-firmware-v0.0.5.bin`
-  - `esp32c6-firmware-v0.0.5.bin`
+  - `esp32-template-esp32-nodisplay-v0.0.5.bin` (app-only)
+  - `esp32-template-esp32-nodisplay-v0.0.5-merged.bin` (ESP Web Tools / flashes at offset 0)
   - `SHA256SUMS.txt`
 - Release notes populated from CHANGELOG.md
 - Debug symbols (`.elf`) and build metadata available in workflow artifacts
+
+**Additional automation for stable releases**:
+- After the GitHub Release is published (and is not a prerelease), `.github/workflows/pages-from-release.yml` deploys the GitHub Pages firmware installer.
 
 ### Step 4: Verify
 
@@ -578,7 +606,8 @@ git pull
 ### What's in GitHub Releases (Public)
 
 Each release includes:
-- **Firmware binaries**: `<board>-firmware-vX.Y.Z.bin` for each board variant
+- **Firmware binaries** (app-only): `$PROJECT_NAME-<board>-vX.Y.Z.bin` for each board variant
+- **Firmware binaries** (merged; browser installer): `$PROJECT_NAME-<board>-vX.Y.Z-merged.bin`
 - **Checksums**: `SHA256SUMS.txt` for verification
 - **Release notes**: Extracted from CHANGELOG.md
 
@@ -687,6 +716,19 @@ Follow [Semantic Versioning](https://semver.org/):
    git push origin v0.0.6
    ```
 
+### Release Published but Pages Installer Didn't Deploy
+
+**Symptoms**: The GitHub Release exists, but the GitHub Pages installer site did not update.
+
+**Checklist**:
+1. Confirm the release is **stable** (not marked as prerelease). The Pages workflow refuses prereleases.
+2. Check `.github/workflows/pages-from-release.yml` ran (Actions → workflow runs).
+3. Ensure the release was created using a token that can emit downstream events:
+  - The release workflow prefers `PAT_TOKEN` when creating the GitHub Release.
+  - If the release was created with `GITHUB_TOKEN` only, `release.published` may not reliably trigger downstream workflows.
+
+**Fix**: Configure `PAT_TOKEN` and re-publish the release (or recreate the release) so `release.published` triggers the Pages deploy.
+
 ---
 
 ## CI/CD Pipeline Summary
@@ -717,6 +759,20 @@ Follow [Semantic Versioning](https://semver.org/):
 4. Create GitHub Release
 5. Upload firmware binaries
 6. Generate checksums
+
+### Pages Installer Deploy Workflow (`.github/workflows/pages-from-release.yml`)
+
+**Triggers**:
+- On stable release publish (`release.published` where `prerelease == false`)
+- Manual trigger with `workflow_dispatch` (requires a stable `tag_name`)
+
+**Purpose**: Deploy a static ESP Web Tools installer to GitHub Pages without rebuilding firmware.
+
+**Process**:
+1. Download `*-merged.bin` assets from the release
+2. Rehydrate `build/<board>/app.ino.merged.bin`
+3. Run `tools/build-esp-web-tools-site.sh` to produce `site/`
+4. Deploy `site/` to GitHub Pages via GitHub Actions artifacts
 
 ### PR Commands Workflow (`.github/workflows/pr-commands.yml`)
 
