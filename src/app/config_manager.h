@@ -33,6 +33,10 @@
 #define CONFIG_MQTT_USERNAME_MAX_LEN 32
 #define CONFIG_MQTT_PASSWORD_MAX_LEN 64
 
+// Web portal Basic Auth (STA/full mode only)
+#define CONFIG_BASIC_AUTH_USERNAME_MAX_LEN 32
+#define CONFIG_BASIC_AUTH_PASSWORD_MAX_LEN 64
+
 // Configuration structure
 struct DeviceConfig {
     // WiFi credentials
@@ -61,6 +65,11 @@ struct DeviceConfig {
     
     // Display settings
     uint8_t backlight_brightness;  // 0-100%, default 100
+
+    // Web portal Basic Auth (optional; enforced in STA/full mode only)
+    bool basic_auth_enabled;
+    char basic_auth_username[CONFIG_BASIC_AUTH_USERNAME_MAX_LEN];
+    char basic_auth_password[CONFIG_BASIC_AUTH_PASSWORD_MAX_LEN];
 
 #if HAS_DISPLAY
     // Screen saver (burn-in prevention v1): backlight sleep on inactivity

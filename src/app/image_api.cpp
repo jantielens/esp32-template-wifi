@@ -89,6 +89,7 @@ static size_t image_api_no_psram_effective_headroom_bytes(size_t base_headroom, 
 
 static ImageApiConfig g_cfg;
 static ImageApiBackend g_backend = {nullptr, nullptr, nullptr};
+static bool (*g_auth_gate)(AsyncWebServerRequest* request) = nullptr;
 
 // Image upload buffer (allocated temporarily during upload)
 static uint8_t* image_upload_buffer = nullptr;
@@ -508,6 +509,7 @@ static bool download_jpeg_to_buffer(
 
 // POST /api/display/image - Upload and display JPEG image (deferred decode)
 static void handleImageUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+    if (g_auth_gate && !g_auth_gate(request)) return;
     (void)filename;
 
     // First chunk - initialize upload
@@ -779,6 +781,7 @@ static void handleImageUpload(AsyncWebServerRequest *request, String filename, s
 
 // DELETE /api/display/image - Manually dismiss image
 static void handleImageDelete(AsyncWebServerRequest *request) {
+    if (g_auth_gate && !g_auth_gate(request)) return;
     Logger.logMessage("Portal", "Image dismiss requested");
 
     if (pending_image_op.buffer) {
@@ -796,6 +799,7 @@ static void handleImageDelete(AsyncWebServerRequest *request) {
 // POST /api/display/image_url - Queue HTTP(S) JPEG download for display
 // Body: {"url":"https://example.com/image.jpg"}
 static void handleImageUrl(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+    if (g_auth_gate && !g_auth_gate(request)) return;
     // Only accept small JSON payloads.
     if (index == 0) {
         bool url_op_active = false;
@@ -893,6 +897,7 @@ static void handleImageUrl(AsyncWebServerRequest *request, uint8_t *data, size_t
 // POST /api/display/image/strips?strip_index=N&strip_count=T&width=W&height=H[&timeout=seconds]
 // Upload a single JPEG strip; decode is deferred to the main loop.
 static void handleStripUpload(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+    if (g_auth_gate && !g_auth_gate(request)) return;
     // Validate required params
     if (index == 0) {
         const bool has_required =
@@ -1081,12 +1086,15 @@ void image_api_init(const ImageApiConfig& cfg, const ImageApiBackend& backend) {
     image_upload_size = 0;
 }
 
-void image_api_register_routes(AsyncWebServer* server) {
+void image_api_register_routes(AsyncWebServer* server, bool (*auth_gate)(AsyncWebServerRequest* request)) {
+    g_auth_gate = auth_gate;
     // Register the more specific /strips endpoint before /image.
     server->on(
         "/api/display/image/strips",
         HTTP_POST,
-        [](AsyncWebServerRequest *request) {},
+        [](AsyncWebServerRequest *request) {
+            if (g_auth_gate) (void)g_auth_gate(request);
+        },
         NULL,
         handleStripUpload
     );
@@ -1094,14 +1102,18 @@ void image_api_register_routes(AsyncWebServer* server) {
     server->on(
         "/api/display/image",
         HTTP_POST,
-        [](AsyncWebServerRequest *request) {},
+        [](AsyncWebServerRequest *request) {
+            if (g_auth_gate) (void)g_auth_gate(request);
+        },
         handleImageUpload
     );
 
     server->on(
         "/api/display/image_url",
         HTTP_POST,
-        [](AsyncWebServerRequest *request) {},
+        [](AsyncWebServerRequest *request) {
+            if (g_auth_gate) (void)g_auth_gate(request);
+        },
         NULL,
         handleImageUrl
     );

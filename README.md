@@ -186,6 +186,21 @@ The template includes a full-featured web portal with multi-page architecture fo
 - Real-time health monitoring
 - Manual firmware upload + optional GitHub online updates
 
+### Security (Optional Basic Auth)
+
+The portal supports optional HTTP Basic Authentication:
+
+- **AP/Core mode**: always open (no auth) to keep onboarding and recovery simple.
+- **STA/Full mode**: when enabled, the web portal pages and all `/api/*` endpoints require Basic Auth.
+
+Configure it on the Network page under **Security**.
+
+Example (external systems / scripts):
+
+```bash
+curl -u username:password http://device.local/api/info
+```
+
 ### Features
 
 - **Multi-Page Architecture**: Organized into Home, Network, and Firmware pages

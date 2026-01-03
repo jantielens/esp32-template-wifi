@@ -404,6 +404,16 @@ async function loadMode() {
             if (submitBtn) {
                 submitBtn.textContent = 'Save & Connect';
             }
+
+            // Hide security settings in AP/core mode
+            // (auth is intentionally disabled during onboarding/recovery)
+            const securitySection = document.getElementById('security-section');
+            if (securitySection) {
+                securitySection.style.display = 'none';
+                securitySection.querySelectorAll('input, select, textarea').forEach(el => {
+                    el.disabled = true;
+                });
+            }
         }
     } catch (error) {
         console.error('Error loading mode:', error);
@@ -702,6 +712,8 @@ async function loadConfig() {
         }
         
         const config = await response.json();
+        // Cache for validation logic (e.g., whether passwords are already set)
+        window.deviceConfig = config;
         const hasConfig = config.wifi_ssid && config.wifi_ssid !== '';
         
         // Helper to safely set element value
@@ -755,6 +767,16 @@ async function loadConfig() {
             mqttPwdField.value = '';
             mqttPwdField.placeholder = hasConfig ? '(saved - leave blank to keep)' : '';
         }
+
+        // Basic Auth settings
+        setCheckedIfExists('basic_auth_enabled', config.basic_auth_enabled);
+        setValueIfExists('basic_auth_username', config.basic_auth_username);
+        const authPwdField = document.getElementById('basic_auth_password');
+        if (authPwdField) {
+            authPwdField.value = '';
+            const saved = config.basic_auth_password_set === true;
+            authPwdField.placeholder = saved ? '(saved - leave blank to keep)' : '';
+        }
         
         // Display settings - backlight brightness
         const brightness = config.backlight_brightness !== undefined ? config.backlight_brightness : 100;
@@ -790,12 +812,13 @@ function extractFormFields(formData) {
     // Helper to get value only if field exists
     const getFieldValue = (name) => {
         const element = document.querySelector(`[name="${name}"]`);
+        if (!element || element.disabled) return null;
         return element ? formData.get(name) : null;
     };
 
     const getCheckboxValue = (name) => {
         const element = document.querySelector(`[name="${name}"]`);
-        if (!element) return null;
+        if (!element || element.disabled) return null;
         if (element.type !== 'checkbox') return formData.get(name);
         // Explicit boolean so unchecked can be persisted as false.
         return element.checked;
@@ -806,6 +829,7 @@ function extractFormFields(formData) {
     const fields = ['wifi_ssid', 'wifi_password', 'device_name', 'fixed_ip', 
                     'subnet_mask', 'gateway', 'dns1', 'dns2', 'dummy_setting',
                     'mqtt_host', 'mqtt_port', 'mqtt_username', 'mqtt_password', 'mqtt_interval_seconds',
+                    'basic_auth_enabled', 'basic_auth_username', 'basic_auth_password',
                     'backlight_brightness',
                     'screen_saver_enabled', 'screen_saver_timeout_seconds', 'screen_saver_fade_out_ms', 'screen_saver_fade_in_ms', 'screen_saver_wake_on_touch'];
     
@@ -840,6 +864,21 @@ function validateConfig(config) {
         }
         if (!config.gateway || config.gateway.trim() === '') {
             return { valid: false, message: 'Gateway is required when using fixed IP' };
+        }
+    }
+
+    // Validate Basic Auth only if fields exist on this page
+    if (config.basic_auth_enabled === true) {
+        const user = (config.basic_auth_username || '').trim();
+        const pass = (config.basic_auth_password || '').trim();
+        const passwordAlreadySet = !!(window.deviceConfig && window.deviceConfig.basic_auth_password_set === true);
+
+        if (!user) {
+            return { valid: false, message: 'Basic Auth username is required when enabled' };
+        }
+        // Only require a password if none is already set.
+        if (!passwordAlreadySet && !pass) {
+            return { valid: false, message: 'Basic Auth password is required the first time you enable it' };
         }
     }
     

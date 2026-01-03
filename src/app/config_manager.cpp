@@ -31,6 +31,11 @@
 #define KEY_MQTT_PASS      "mqtt_pass"
 #define KEY_MQTT_INTERVAL  "mqtt_int"
 #define KEY_BACKLIGHT_BRIGHTNESS "bl_bright"
+
+// Web portal Basic Auth
+#define KEY_BASIC_AUTH_ENABLED "ba_en"
+#define KEY_BASIC_AUTH_USER    "ba_user"
+#define KEY_BASIC_AUTH_PASS    "ba_pass"
 #if HAS_DISPLAY
 #define KEY_SCREEN_SAVER_ENABLED "ss_en"
 #define KEY_SCREEN_SAVER_TIMEOUT "ss_to"
@@ -129,6 +134,11 @@ bool config_manager_load(DeviceConfig *config) {
         config->mqtt_port = 0;
         config->mqtt_interval_seconds = 0;
 
+        // Basic Auth defaults
+        config->basic_auth_enabled = false;
+        config->basic_auth_username[0] = '\0';
+        config->basic_auth_password[0] = '\0';
+
         #if HAS_DISPLAY
         // Screen saver defaults
         config->screen_saver_enabled = false;
@@ -176,6 +186,11 @@ bool config_manager_load(DeviceConfig *config) {
     // Load display settings
     config->backlight_brightness = preferences.getUChar(KEY_BACKLIGHT_BRIGHTNESS, 100);
     Logger.logLinef("Loaded brightness: %d%%", config->backlight_brightness);
+
+    // Load Basic Auth settings
+    config->basic_auth_enabled = preferences.getBool(KEY_BASIC_AUTH_ENABLED, false);
+    preferences.getString(KEY_BASIC_AUTH_USER, config->basic_auth_username, CONFIG_BASIC_AUTH_USERNAME_MAX_LEN);
+    preferences.getString(KEY_BASIC_AUTH_PASS, config->basic_auth_password, CONFIG_BASIC_AUTH_PASSWORD_MAX_LEN);
 
     #if HAS_DISPLAY
     // Load screen saver settings
@@ -249,6 +264,11 @@ bool config_manager_save(const DeviceConfig *config) {
     Logger.logLinef("Saving brightness: %d%%", config->backlight_brightness);
     preferences.putUChar(KEY_BACKLIGHT_BRIGHTNESS, config->backlight_brightness);
 
+    // Save Basic Auth settings
+    preferences.putBool(KEY_BASIC_AUTH_ENABLED, config->basic_auth_enabled);
+    preferences.putString(KEY_BASIC_AUTH_USER, config->basic_auth_username);
+    preferences.putString(KEY_BASIC_AUTH_PASS, config->basic_auth_password);
+
     #if HAS_DISPLAY
     // Save screen saver settings
     preferences.putBool(KEY_SCREEN_SAVER_ENABLED, config->screen_saver_enabled);
@@ -291,6 +311,11 @@ bool config_manager_is_valid(const DeviceConfig *config) {
     if (config->magic != CONFIG_MAGIC) return false;
     if (strlen(config->wifi_ssid) == 0) return false;
     if (strlen(config->device_name) == 0) return false;
+
+    if (config->basic_auth_enabled) {
+        if (strlen(config->basic_auth_username) == 0) return false;
+        if (strlen(config->basic_auth_password) == 0) return false;
+    }
     return true;
 }
 
