@@ -119,7 +119,7 @@ The web portal is organized into three separate pages for better organization an
 |------|-----|-------------|--------------|
 | **Home** | `/` or `/home.html` | Additional/custom settings and welcome message | Full Mode only |
 | **Network** | `/network.html` | WiFi, device, and network configuration | Both modes |
-| **Firmware** | `/firmware.html` | OTA updates and factory reset | Full Mode only |
+| **Firmware** | `/firmware.html` | Online update, manual upload, and factory reset | Full Mode only |
 
 **Navigation:**
 - Tabbed navigation at top of page
@@ -228,7 +228,12 @@ Real-time device health monitoring integrated as a header badge with expandable 
 **Available In:** Full Mode only (redirects to Network page in AP mode)
 
 **Sections:**
-- **📦 Firmware Update (OTA)**: Upload .bin firmware file
+- **🌐 Online Update (GitHub)**: Download and install the latest stable firmware directly from GitHub Releases (device-side)
+  - Only available when built from a GitHub repo with a detectable `remote.origin.url` (auto-generated into `src/app/github_release_config.h`)
+  - Stable releases only (`/releases/latest`)
+  - Selects an **app-only** asset for the current board: `<PROJECT_NAME>-<board>-vX.Y.Z.bin`
+  - Shows current vs latest version and whether an update is available
+- **📦 Manual Update (Upload)**: Upload .bin firmware file
   - Select .bin file from build directory
   - Upload progress bar
   - Automatic reboot and reconnection
@@ -570,6 +575,70 @@ Upload new firmware binary for over-the-air update.
 - Device automatically reboots after successful update
 - Progress logged to serial monitor
 - Web portal shows upload progress bar, then automatically polls for reconnection (see [Automatic Reconnection](#automatic-reconnection-after-reboot))
+
+### GitHub Releases Online Update
+
+These endpoints support a device-side firmware update flow (no browser download / CORS needed): the device queries GitHub Releases for the latest stable version and then downloads the matching `.bin` asset directly.
+
+Availability is compile-time gated by `GITHUB_UPDATES_ENABLED` in `src/app/github_release_config.h` (auto-generated during `./build.sh`). The firmware will select the **app-only** binary for the current board (embedded at build time via `BUILD_BOARD_NAME`).
+
+#### `GET /api/firmware/latest`
+
+Query the latest stable release and compare with the current firmware.
+
+**Response (Success):**
+```json
+{
+  "success": true,
+  "current_version": "0.0.1",
+  "latest_version": "0.0.2",
+  "update_available": true
+}
+```
+
+**Notes:**
+- Uses GitHub API: `https://api.github.com/repos/<owner>/<repo>/releases/latest`
+- Finds an asset named: `<PROJECT_NAME>-<board>-vX.Y.Z.bin`
+
+#### `POST /api/firmware/update`
+
+Start a background download+flash task for the latest stable firmware.
+
+**Response (Success, started):**
+```json
+{
+  "success": true,
+  "update_started": true,
+  "current_version": "0.0.1",
+  "latest_version": "0.0.2"
+}
+```
+
+**Response (Success, already up to date):**
+```json
+{
+  "success": true,
+  "message": "Already up to date",
+  "update_started": false
+}
+```
+
+#### `GET /api/firmware/update/status`
+
+Get current progress/state of the online update task.
+
+**Response (Example):**
+```json
+{
+  "enabled": true,
+  "in_progress": true,
+  "state": "writing",
+  "progress": 262144,
+  "total": 1215439,
+  "latest_version": "0.0.2",
+  "error": ""
+}
+```
 
 ### Display Control (HAS_DISPLAY enabled)
 

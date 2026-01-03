@@ -29,6 +29,7 @@ Skip the boilerplate and start building. ESP32 Arduino template with automated b
 - **🌍 Web Firmware Installer**
   - **Browser Flashing**: GitHub Pages + ESP Web Tools (no backend required)
   - **Release-Driven Deploy**: Hosted installer updates on stable releases (see [Web Firmware Installer](#web-firmware-installer-esp-web-tools))
+  - **Device-Side Online Update**: Firmware page can download/install the latest stable release directly from GitHub Releases (board-specific app-only `.bin`, no browser download/CORS; requires build-time detection of `remote.origin.url`)
 
 - **⚙️ Professional Development Workflow**
   - **Automated Releases**: Tag-based releases with firmware binaries and changelogs
@@ -168,7 +169,8 @@ The template includes a full-featured web portal with multi-page architecture fo
 |------|-----|--------------|---------|
 | **Home** | `/` or `/home.html` | Full Mode | Custom settings and welcome message |
 | **Network** | `/network.html` | Both modes | WiFi, device, and network configuration |
-| **Firmware** | `/firmware.html` | Full Mode | OTA updates and factory reset |
+| **Firmware** | `/firmware.html` | Full Mode | Online update, manual upload, and factory reset |
+
 
 ### Portal Modes
 
@@ -182,7 +184,7 @@ The template includes a full-featured web portal with multi-page architecture fo
 - Access at device IP or mDNS hostname
 - All three pages accessible
 - Real-time health monitoring
-- OTA firmware updates
+- Manual firmware upload + optional GitHub online updates
 
 ### Features
 
@@ -223,6 +225,9 @@ Build-time gating:
 | DELETE | `/api/config` | Reset to defaults (triggers reboot) |
 | GET | `/api/mode` | Portal mode (core vs full) |
 | POST | `/api/update` | OTA firmware upload |
+| GET | `/api/firmware/latest` | Check latest stable firmware from GitHub Releases (device-side) |
+| POST | `/api/firmware/update` | Start GitHub Releases download+install (device-side) |
+| GET | `/api/firmware/update/status` | Online update status/progress |
 | POST | `/api/reboot` | Reboot device without saving |
 | PUT | `/api/display/brightness` | Set backlight brightness immediately (no persist) |
 | GET | `/api/display/sleep` | Screen saver status snapshot |
@@ -466,6 +471,8 @@ After the run finishes, the installer will be available at:
 - This works without CORS issues because the page, manifest, and firmware `.bin` files are all served from the same GitHub Pages origin.
 - The installer uses each board’s `app.ino.merged.bin` output and flashes it at offset `0`.
 - Boards with names containing `beta` or `experimental` are excluded from the hosted installer list.
+
+Separately from the browser installer, the device web portal also supports a **device-side online update** (Firmware page → “Online Update (GitHub)”). That flow downloads the board-specific **app-only** release asset (`$PROJECT_NAME-<board>-vX.Y.Z.bin`) directly from GitHub Releases and installs it on the device.
 
 ## 🚀 Release Process
 
