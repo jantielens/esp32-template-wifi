@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.27] - 2026-01-03
+
+### Added
+- Device-side firmware online update from GitHub Releases (Firmware page → “Online Update (GitHub)”, stable releases only)
+  - Board-specific app-only asset selection: `<PROJECT_NAME>-<board>-vX.Y.Z.bin`
+  - New APIs: `GET /api/firmware/latest`, `POST /api/firmware/update`, `GET /api/firmware/update/status`
+
+### Changed
+- Build embeds board name as `BUILD_BOARD_NAME` and auto-detects GitHub repo from `git remote origin` to enable online updates
+
+### Fixed
+- Improve GitHub API JSON parsing reliability for `/api/firmware/latest`
+
 ---
 
 ## [0.0.26] - 2026-01-03

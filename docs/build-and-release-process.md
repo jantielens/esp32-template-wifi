@@ -86,7 +86,9 @@ The build system automatically applies project branding during compilation:
 2. (Optional) If `assets/png/*.png` exists and you are building a display-enabled board, `build.sh` generates LVGL image assets into `src/app/png_assets.cpp` and `src/app/png_assets.h`
 3. `tools/minify-web-assets.sh` performs template substitution in HTML files
 4. Branding C++ `#define` statements are generated in `src/app/project_branding.h` (and `web_assets.h` includes it)
-5. Firmware compiles with branded values embedded
+5. If the repo was built from a GitHub checkout with a detectable `remote.origin.url`, GitHub update config is generated into `src/app/github_release_config.h` (used for device-side “Online Update (GitHub)”)
+6. `build.sh` also embeds the board name as a compile-time string define (`BUILD_BOARD_NAME`) so the firmware can select the correct per-board release asset
+7. Firmware compiles with branded values embedded
 
 ### Board-Specific Configuration
 
@@ -410,7 +412,7 @@ git push origin v0.0.5
 
 ### Step 4: Verify
 
-Check the release page: `https://github.com/jantielens/esp32-template/releases/tag/v0.0.5`
+Check the release page: `https://github.com/<owner>/<repo>/releases/tag/v0.0.5`
 
 Verify:
 - ✅ Release notes match CHANGELOG
@@ -533,7 +535,7 @@ git push origin v1.0.0
 git tag -a v0.0.0-test.1 -m "Testing release workflow"
 git push origin v0.0.0-test.1
 
-# Watch GitHub Actions: https://github.com/jantielens/esp32-template/actions
+# Watch GitHub Actions: https://github.com/<owner>/<repo>/actions
 
 # If successful, delete test release and tag
 # Via GitHub UI: Delete the release
@@ -587,7 +589,7 @@ git pull
 
 ```bash
 # Option 1: Delete the release (GitHub UI or API)
-# Go to: https://github.com/jantielens/esp32-template/releases
+# Go to: https://github.com/<owner>/<repo>/releases
 # Edit release → Delete release
 
 # Option 2: Mark release as "Pre-release" to hide from latest
@@ -670,7 +672,7 @@ Follow [Semantic Versioning](https://semver.org/):
 
 ### Release Workflow Fails
 
-1. Check GitHub Actions logs: `https://github.com/jantielens/esp32-template/actions`
+1. Check GitHub Actions logs: `https://github.com/<owner>/<repo>/actions`
 2. Common issues:
    - **Compilation error**: Fix code and push new tag
    - **Changelog parsing error**: Verify CHANGELOG.md format

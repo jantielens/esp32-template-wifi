@@ -79,6 +79,11 @@ build_board() {
     
     # Check for board-specific configuration overrides
     EXTRA_FLAGS=()
+
+    # Always embed board name for runtime identification (used by firmware update UX).
+    # Use a string literal define: BUILD_BOARD_NAME="cyd-v2".
+    # Important: do NOT include backslashes in the final define value.
+    local BOARD_NAME_DEFINE="-DBUILD_BOARD_NAME=\"$board_name\""
     
     if [[ -d "$board_override_dir" ]]; then
         echo -e "${YELLOW}Config:    Using board-specific overrides from src/boards/$board_name/${NC}"
@@ -87,10 +92,12 @@ build_board() {
         # Sanitize board name for valid C++ macro (alphanumeric + underscore only)
         board_macro="BOARD_${board_name^^}"
         board_macro="${board_macro//[^A-Z0-9_]/_}"
-        EXTRA_FLAGS+=(--build-property "compiler.cpp.extra_flags=-I$board_override_dir -D$board_macro -DBOARD_HAS_OVERRIDE=1")
-        EXTRA_FLAGS+=(--build-property "compiler.c.extra_flags=-I$board_override_dir -D$board_macro -DBOARD_HAS_OVERRIDE=1")
+        EXTRA_FLAGS+=(--build-property "compiler.cpp.extra_flags=-I$board_override_dir -D$board_macro -DBOARD_HAS_OVERRIDE=1 $BOARD_NAME_DEFINE")
+        EXTRA_FLAGS+=(--build-property "compiler.c.extra_flags=-I$board_override_dir -D$board_macro -DBOARD_HAS_OVERRIDE=1 $BOARD_NAME_DEFINE")
     else
         echo "Config:    Using default configuration"
+        EXTRA_FLAGS+=(--build-property "compiler.cpp.extra_flags=$BOARD_NAME_DEFINE")
+        EXTRA_FLAGS+=(--build-property "compiler.c.extra_flags=$BOARD_NAME_DEFINE")
     fi
     echo ""
 
