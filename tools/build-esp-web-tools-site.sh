@@ -4,6 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+TEMPLATE_DIR="$REPO_ROOT/tools/esp-web-tools-site"
+
 source "$REPO_ROOT/config.sh"
 
 OUT_DIR="${1:-$REPO_ROOT/site}"
@@ -14,6 +16,11 @@ mkdir -p "$OUT_DIR/manifests" "$OUT_DIR/firmware"
 
 # Prevent GitHub Pages from invoking Jekyll processing
 : > "$OUT_DIR/.nojekyll"
+
+if [[ ! -d "$TEMPLATE_DIR" ]]; then
+  echo "ERROR: Missing template directory: $TEMPLATE_DIR" >&2
+  exit 1
+fi
 
 get_version() {
   local major minor patch
@@ -82,6 +89,28 @@ SHA_SHORT="${GITHUB_SHA:-local}"
 SHA_SHORT="${SHA_SHORT:0:7}"
 SITE_VERSION="$VERSION+$SHA_SHORT"
 
+render_index() {
+  local template_path="$1"
+  local out_path="$2"
+  local board_fragment="$3"
+
+  awk -v display_name="$PROJECT_DISPLAY_NAME" \
+      -v site_version="$SITE_VERSION" \
+      -v frag="$board_fragment" \
+      '
+        {
+          gsub(/{{PROJECT_DISPLAY_NAME}}/, display_name)
+          gsub(/{{SITE_VERSION}}/, site_version)
+        }
+        /{{BOARD_ENTRIES}}/ {
+          while ((getline line < frag) > 0) print line
+          close(frag)
+          next
+        }
+        { print }
+      ' "$template_path" > "$out_path"
+}
+
 # Build list of boards for the index
 boards=()
 for board_name in "${!FQBN_TARGETS[@]}"; do
@@ -97,6 +126,9 @@ IFS=$'\n' boards=($(sort <<<"${boards[*]}"))
 unset IFS
 
 # Copy firmware + generate manifests
+board_fragment_tmp="$(mktemp)"
+trap 'rm -f "$board_fragment_tmp"' EXIT
+
 for board_name in "${boards[@]}"; do
   fqbn="${FQBN_TARGETS[$board_name]}"
   chip_family="$(get_chip_family_for_fqbn "$fqbn")"
@@ -134,49 +166,28 @@ for board_name in "${boards[@]}"; do
 }
 EOF
 
-done
-
-# Minimal index page (UI intentionally simple for now)
-cat > "$OUT_DIR/index.html" <<EOF
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${PROJECT_DISPLAY_NAME} Firmware Installer</title>
-    <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; max-width: 900px; }
-      h1 { margin: 0 0 8px 0; }
-      .muted { color: #666; }
-      .board { padding: 12px 0; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 16px; }
-      .board-name { width: 360px; font-weight: 600; }
-      code { background: #f6f6f6; padding: 2px 6px; border-radius: 6px; }
-    </style>
-    <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
-  </head>
-  <body>
-    <h1>${PROJECT_DISPLAY_NAME} Firmware Installer</h1>
-    <p class="muted">Version: <code>${SITE_VERSION}</code>. Use Chrome/Edge over HTTPS.</p>
-
-    <h2>Choose your board</h2>
-EOF
-
-for board_name in "${boards[@]}"; do
-  cat >> "$OUT_DIR/index.html" <<EOF
-    <div class="board">
-      <div class="board-name">${board_name}</div>
-      <esp-web-install-button manifest="./manifests/${board_name}.json"></esp-web-install-button>
-    </div>
+  cat >> "$board_fragment_tmp" <<EOF
+          <div class="board" data-board="${board_name}" data-chip="${chip_family}">
+            <div>
+              <div class="board-title">${board_name}</div>
+              <div class="board-sub">Chip: <code>${chip_family}</code></div>
+              <div class="board-links">
+                <a href="./manifests/${board_name}.json">manifest</a>
+                <a href="./firmware/${board_name}/firmware.bin">firmware</a>
+              </div>
+            </div>
+            <div>
+              <esp-web-install-button manifest="./manifests/${board_name}.json"></esp-web-install-button>
+            </div>
+          </div>
 EOF
 
 done
 
-cat >> "$OUT_DIR/index.html" <<'EOF'
-
-    <p class="muted">If you flash the wrong board variant, reflash with the correct one.</p>
-  </body>
-</html>
-EOF
+# Copy static assets and render index.html from template
+cp "$TEMPLATE_DIR/style.css" "$OUT_DIR/style.css"
+cp "$TEMPLATE_DIR/app.js" "$OUT_DIR/app.js"
+render_index "$TEMPLATE_DIR/index.template.html" "$OUT_DIR/index.html" "$board_fragment_tmp"
 
 echo "Built ESP Web Tools site at: $OUT_DIR" >&2
 echo "Manifests: $OUT_DIR/manifests" >&2
