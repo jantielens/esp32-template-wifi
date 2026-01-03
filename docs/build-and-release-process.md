@@ -404,7 +404,7 @@ git push origin v0.0.5
   - `esp32-template-esp32-nodisplay-v0.0.5.bin` (app-only)
   - `esp32-template-esp32-nodisplay-v0.0.5-merged.bin` (ESP Web Tools / flashes at offset 0)
   - `SHA256SUMS.txt`
-- Release notes populated from CHANGELOG.md
+- Release notes populated from CHANGELOG.md (no auto-generated “What’s Changed” section)
 - Debug symbols (`.elf`) and build metadata available in workflow artifacts
 
 **Additional automation for stable releases**:

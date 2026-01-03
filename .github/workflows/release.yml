@@ -268,6 +268,6 @@ jobs:
         files: release-files/*
         draft: false
         prerelease: ${{ needs.prepare-matrix.outputs.is_prerelease }}
-        generate_release_notes: true  # Append auto-generated notes
+        generate_release_notes: false # Keep release notes strictly from CHANGELOG.md
       env:
         GITHUB_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
