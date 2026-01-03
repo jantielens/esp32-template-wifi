@@ -438,21 +438,20 @@ GitHub Actions automatically validates builds on push:
 
 This repo includes a GitHub Pages installer site powered by ESP Web Tools, so users can flash firmware from the browser (no backend required).
 
-- Workflow: [.github/workflows/pages-firmware-installer.yml](.github/workflows/pages-firmware-installer.yml)
 - Site generator: [tools/build-esp-web-tools-site.sh](tools/build-esp-web-tools-site.sh)
 
 ### How it works
 
-- A manually-triggered GitHub Actions workflow builds firmware for all configured boards in `config.sh`.
-- It generates a static site containing `index.html`, per-board manifests, and the merged firmware binaries.
-- The site is deployed to GitHub Pages using the GitHub Actions “Pages artifact” flow (no `gh-pages` branch, and no firmware binaries committed to git).
-- The deployment is **latest-only**: each run overwrites what’s hosted.
+- The release workflow builds firmware for all configured boards.
+- It attaches both app-only and **merged** firmware binaries to the GitHub Release.
+- For **stable tags only** (e.g. `v1.2.3`, not `v1.2.3-beta.1`), it also generates and deploys the installer site to GitHub Pages.
+- Pages deployment is **latest-only**: each stable release overwrites what’s hosted.
 
 ### Enable + Deploy
 
 1. In the GitHub repo settings, go to **Settings → Pages**.
 2. Set **Build and deployment → Source** to **GitHub Actions**.
-3. Go to **Actions → Firmware Installer (GitHub Pages)** and click **Run workflow**.
+3. Push a stable tag (e.g. `vX.Y.Z`) to run the release workflow.
 
 After the run finishes, the installer will be available at:
 

@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*.*.*'  # Matches v0.0.1, v1.0.0, v1.2.3-beta.1, etc.
 
+permissions:
+  contents: read
+
 jobs:
   # Generate build matrix from config.sh
   prepare-matrix:
@@ -116,13 +119,28 @@ jobs:
         VERSION="${{ needs.prepare-matrix.outputs.version }}"
         PROJECT_NAME="${{ needs.prepare-matrix.outputs.project_name }}"
         BOARD_DIR="build/${{ matrix.board.name }}"
-        
-        # Find and rename .bin file
-        BIN_FILE=$(find "$BOARD_DIR" -name "*.bin" -type f | head -n 1)
-        if [ -n "$BIN_FILE" ]; then
-          cp "$BIN_FILE" "$BOARD_DIR/$PROJECT_NAME-${{ matrix.board.name }}-v$VERSION.bin"
-          echo "Created: $PROJECT_NAME-${{ matrix.board.name }}-v$VERSION.bin"
+
+        # Explicitly package the correct firmware images.
+        # - app.ino.bin: app-only image
+        # - app.ino.merged.bin: merged image (ESP Web Tools-friendly, flash at offset 0)
+
+        APP_BIN="$BOARD_DIR/app.ino.bin"
+        MERGED_BIN="$BOARD_DIR/app.ino.merged.bin"
+
+        if [ ! -f "$APP_BIN" ]; then
+          echo "Error: app-only firmware not found: $APP_BIN"
+          exit 1
         fi
+        if [ ! -f "$MERGED_BIN" ]; then
+          echo "Error: merged firmware not found: $MERGED_BIN"
+          exit 1
+        fi
+
+        cp "$APP_BIN" "$BOARD_DIR/$PROJECT_NAME-${{ matrix.board.name }}-v$VERSION.bin"
+        echo "Created: $PROJECT_NAME-${{ matrix.board.name }}-v$VERSION.bin"
+
+        cp "$MERGED_BIN" "$BOARD_DIR/$PROJECT_NAME-${{ matrix.board.name }}-v$VERSION-merged.bin"
+        echo "Created: $PROJECT_NAME-${{ matrix.board.name }}-v$VERSION-merged.bin"
         
         # Find and rename .elf file
         ELF_FILE=$(find "$BOARD_DIR" -name "*.elf" -type f | head -n 1)
@@ -154,7 +172,8 @@ jobs:
         Workflow: ${{ github.workflow }}
         
         Firmware Files:
-        - $PROJECT_NAME-${{ matrix.board.name }}-v$VERSION.bin (flash image)
+        - $PROJECT_NAME-${{ matrix.board.name }}-v$VERSION.bin (app-only image)
+        - $PROJECT_NAME-${{ matrix.board.name }}-v$VERSION-merged.bin (merged image; ESP Web Tools)
         - $PROJECT_NAME-${{ matrix.board.name }}-v$VERSION.elf (debug symbols)
         
         Flash Command:
@@ -169,15 +188,17 @@ jobs:
         name: ${{ needs.prepare-matrix.outputs.project_name }}-${{ matrix.board.name }}-v${{ needs.prepare-matrix.outputs.version }}
         path: |
           build/${{ matrix.board.name }}/${{ needs.prepare-matrix.outputs.project_name }}-*-v${{ needs.prepare-matrix.outputs.version }}.bin
+          build/${{ matrix.board.name }}/${{ needs.prepare-matrix.outputs.project_name }}-*-v${{ needs.prepare-matrix.outputs.version }}-merged.bin
           build/${{ matrix.board.name }}/${{ needs.prepare-matrix.outputs.project_name }}-*-v${{ needs.prepare-matrix.outputs.version }}.elf
           build/${{ matrix.board.name }}/build-info-*.txt
         retention-days: 90
     
-    - name: Prepare release files (bin only)
+    - name: Prepare release files (app + merged)
       run: |
         PROJECT_NAME="${{ needs.prepare-matrix.outputs.project_name }}"
         mkdir -p release-files-${{ matrix.board.name }}
         cp build/${{ matrix.board.name }}/$PROJECT_NAME-*-v${{ needs.prepare-matrix.outputs.version }}.bin release-files-${{ matrix.board.name }}/
+        cp build/${{ matrix.board.name }}/$PROJECT_NAME-*-v${{ needs.prepare-matrix.outputs.version }}-merged.bin release-files-${{ matrix.board.name }}/
     
     - name: Upload release files
       uses: actions/upload-artifact@v4
@@ -225,8 +246,8 @@ jobs:
     - name: Organize release files
       run: |
         mkdir -p release-files
-        
-        # Move only .bin files to release-files directory
+
+        # Move .bin files (includes app-only and merged) to release-files directory
         find release-artifacts -type f -name "*.bin" -exec mv {} release-files/ \;
         
         echo "Release files:"
@@ -250,3 +271,91 @@ jobs:
         generate_release_notes: true  # Append auto-generated notes
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  pages:
+    name: Deploy firmware installer (Pages)
+    needs: [prepare-matrix, build]
+    if: needs.prepare-matrix.outputs.is_prerelease == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download merged firmware artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ${{ needs.prepare-matrix.outputs.project_name }}-release-*-v${{ needs.prepare-matrix.outputs.version }}
+          path: release-artifacts
+
+      - name: Rehydrate build/ folders for site generator
+        run: |
+          set -euo pipefail
+          source config.sh
+
+          VERSION="${{ needs.prepare-matrix.outputs.version }}"
+          PROJECT_NAME="${{ needs.prepare-matrix.outputs.project_name }}"
+
+          for board_name in "${!FQBN_TARGETS[@]}"; do
+            shopt -s nocasematch
+            if [[ "$board_name" == *"beta"* ]] || [[ "$board_name" == *"experimental"* ]]; then
+              echo "Skipping beta board: $board_name"
+              continue
+            fi
+
+            expected_name="$PROJECT_NAME-$board_name-v$VERSION-merged.bin"
+            merged_path=$(find release-artifacts -type f -name "$expected_name" -print -quit || true)
+
+            if [[ -z "$merged_path" ]]; then
+              echo "Error: merged firmware not found for $board_name (expected $expected_name)"
+              exit 1
+            fi
+
+            mkdir -p "build/$board_name"
+            cp "$merged_path" "build/$board_name/app.ino.merged.bin"
+          done
+
+      - name: Build installer site (latest stable)
+        run: |
+          chmod +x tools/build-esp-web-tools-site.sh
+          ./tools/build-esp-web-tools-site.sh site
+
+      - name: Configure Pages
+        id: pages_config
+        uses: actions/configure-pages@v5
+        continue-on-error: true
+
+      - name: Upload Pages artifact
+        id: pages_upload
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+        continue-on-error: true
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      - name: Pages deploy summary
+        if: always()
+        run: |
+          echo "## Firmware installer (GitHub Pages)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "This step is best-effort and does not block the release." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- configure-pages: ${{ steps.pages_config.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- upload-pages-artifact: ${{ steps.pages_upload.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- deploy-pages: ${{ steps.deployment.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ steps.deployment.outcome }}" == "success" ]]; then
+            echo "✅ Pages deploy succeeded" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Pages deploy did not complete. Check repo Settings → Pages (Source = GitHub Actions)." >> $GITHUB_STEP_SUMMARY
+          fi
