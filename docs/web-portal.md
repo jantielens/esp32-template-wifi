@@ -9,6 +9,7 @@ The web portal provides:
 - Real-time device health monitoring
 - Over-the-air (OTA) firmware updates
 - REST API for programmatic access
+- Optional HTTP Basic Authentication (Full Mode only)
 - Responsive web interface (desktop & mobile)
 
 ## Portal Modes
@@ -44,6 +45,10 @@ The web portal provides:
 - Real-time health monitoring
 - OTA firmware updates
 - Device reboot
+
+**Optional Authentication:**
+- If HTTP Basic Auth is enabled in configuration, the portal UI pages and all REST API endpoints require credentials.
+- Authentication is only enforced in Full Mode.
 
 ## Device Discovery
 
@@ -215,6 +220,9 @@ Real-time device health monitoring integrated as a header badge with expandable 
   - Gateway (required if fixed IP set)
   - DNS Server 1 (optional, defaults to gateway)
   - DNS Server 2 (optional)
+- **🔒 Security (Optional)**: HTTP Basic Authentication
+  - Configure in Full Mode only (hidden/locked in Core Mode)
+  - Enable, set username, and set/update password
 - **📡 MQTT Settings (Optional)**: MQTT broker settings
   - Only shown when MQTT support is enabled in firmware (`HAS_MQTT`)
   - Host, port, username/password, publish interval
@@ -344,6 +352,11 @@ or device taking longer to boot.
 
 All endpoints return JSON responses with proper HTTP status codes.
 
+**Authentication (Optional):**
+- If HTTP Basic Auth is enabled (Full Mode only), requests must include an `Authorization: Basic ...` header.
+- Example: `curl -u username:password http://<device-ip>/api/info`
+- In Core Mode (AP + captive portal), endpoints are intentionally unauthenticated to allow initial setup.
+
 ### Device Information
 
 #### `GET /api/info`
@@ -437,6 +450,10 @@ Returns current device configuration (passwords excluded).
   "dns2": "",
   "dummy_setting": "",
 
+  "basic_auth_enabled": false,
+  "basic_auth_username": "",
+  "basic_auth_password_set": false,
+
   "backlight_brightness": 100,
 
   "screen_saver_enabled": false,
@@ -469,6 +486,10 @@ Save new configuration. Device reboots after successful save.
   "dns2": "8.8.4.4",
   "dummy_setting": "value",
 
+  "basic_auth_enabled": true,
+  "basic_auth_username": "admin",
+  "basic_auth_password": "change-me",
+
   "backlight_brightness": 70,
 
   "screen_saver_enabled": true,
@@ -490,6 +511,8 @@ Save new configuration. Device reboots after successful save.
 **Notes:**
 - Only fields present in request are updated
 - Password field: empty string = no change, non-empty = update
+- Basic Auth password is never returned by `GET /api/config`.
+- In Core Mode (AP mode), Basic Auth settings cannot be changed via `POST /api/config`.
 - Device automatically reboots after successful save
 - Web portal automatically polls for reconnection (see [Automatic Reconnection](#automatic-reconnection-after-reboot))
 
@@ -1123,13 +1146,16 @@ If WiFi fails to connect after firmware update or reboot:
 ## Security Considerations
 
 **Current Implementation:**
-- No authentication required
-- Suitable for local/trusted networks only
-- Configuration API accessible to all clients
+- Optional HTTP Basic Authentication for the portal UI pages and all `/api/*` endpoints (Full Mode only)
+- In Core Mode (AP + captive portal), authentication is intentionally disabled to allow initial provisioning
+- Basic Auth credentials cannot be changed via the web UI/API while in Core Mode
+
+**Limitations:**
+- The portal uses plain HTTP by default; HTTP Basic Auth does not provide transport encryption. Use only on trusted networks, or put the device behind a VPN/reverse proxy/TLS terminator.
 
 **Production Recommendations:**
-- Add HTTP Basic Auth or API keys
-- Use HTTPS with self-signed certificates
+- Enable HTTP Basic Auth when the device is reachable on a shared network
+- Prefer HTTPS (with real certificate validation) when feasible
 - Implement rate limiting on sensitive endpoints
 - Add CSRF protection for POST/DELETE operations
 - Whitelist allowed WiFi SSIDs (prevent evil twin attacks)

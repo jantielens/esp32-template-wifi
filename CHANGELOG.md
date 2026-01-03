@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.28] - 2026-01-03
+
+### Added
+- Optional HTTP Basic Authentication for the device web portal (STA/full mode only)
+  - Protects portal HTML pages and all `/api/*` endpoints
+  - Configurable via the Network page and persisted in NVS
+  - Image API endpoints are also protected when enabled
+
+### Documentation
+- Updated `README.md` and `docs/web-portal.md` with Basic Auth behavior and API examples
+
 ## [0.0.27] - 2026-01-03
 
 ### Added

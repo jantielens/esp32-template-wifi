@@ -81,6 +81,27 @@ static bool ota_in_progress = false;
 static size_t ota_progress = 0;
 static size_t ota_total = 0;
 
+// ===== Basic Auth (optional; STA/full mode only) =====
+static bool portal_auth_required() {
+    if (ap_mode_active) return false;
+    if (!current_config) return false;
+    return current_config->basic_auth_enabled;
+}
+
+static bool portal_auth_gate(AsyncWebServerRequest *request) {
+    if (!portal_auth_required()) return true;
+
+    const char *user = current_config->basic_auth_username;
+    const char *pass = current_config->basic_auth_password;
+
+    if (request->authenticate(user, pass)) {
+        return true;
+    }
+
+    request->requestAuthentication(PROJECT_DISPLAY_NAME);
+    return false;
+}
+
 // ===== GitHub Releases firmware update (app-only) =====
 static TaskHandle_t firmware_update_task_handle = nullptr;
 static volatile bool firmware_update_in_progress = false;
@@ -399,6 +420,7 @@ static void firmware_update_task(void *pv) {
 
 // GET /api/firmware/latest - Query GitHub releases/latest and compare with current firmware.
 void handleGetFirmwareLatest(AsyncWebServerRequest *request) {
+    if (!portal_auth_gate(request)) return;
 #if !GITHUB_UPDATES_ENABLED
     request->send(404, "application/json", "{\"success\":false,\"message\":\"GitHub updates disabled\"}");
     return;
@@ -431,6 +453,7 @@ void handleGetFirmwareLatest(AsyncWebServerRequest *request) {
 
 // POST /api/firmware/update - Start background download+OTA of latest app-only firmware from GitHub.
 void handlePostFirmwareUpdate(AsyncWebServerRequest *request) {
+    if (!portal_auth_gate(request)) return;
 #if !GITHUB_UPDATES_ENABLED
     request->send(404, "application/json", "{\"success\":false,\"message\":\"GitHub updates disabled\"}");
     return;
@@ -499,6 +522,7 @@ void handlePostFirmwareUpdate(AsyncWebServerRequest *request) {
 
 // GET /api/firmware/update/status - Progress snapshot for online update.
 void handleGetFirmwareUpdateStatus(AsyncWebServerRequest *request) {
+    if (!portal_auth_gate(request)) return;
     StaticJsonDocument<384> doc;
     doc["enabled"] = (GITHUB_UPDATES_ENABLED ? true : false);
     doc["in_progress"] = firmware_update_in_progress;
@@ -547,6 +571,7 @@ static AsyncWebServerResponse *begin_gzipped_asset_response(
 
 // Handle root - redirect to network.html in AP mode, serve home in full mode
 void handleRoot(AsyncWebServerRequest *request) {
+    if (!portal_auth_gate(request)) return;
     if (ap_mode_active) {
         // In AP mode, redirect to network configuration page
         request->redirect("/network.html");
@@ -565,6 +590,7 @@ void handleRoot(AsyncWebServerRequest *request) {
 
 // Serve home page
 void handleHome(AsyncWebServerRequest *request) {
+    if (!portal_auth_gate(request)) return;
     if (ap_mode_active) {
         // In AP mode, redirect to network configuration page
         request->redirect("/network.html");
@@ -582,6 +608,7 @@ void handleHome(AsyncWebServerRequest *request) {
 
 // Serve network configuration page
 void handleNetwork(AsyncWebServerRequest *request) {
+    if (!portal_auth_gate(request)) return;
     AsyncWebServerResponse *response = begin_gzipped_asset_response(
         request,
         "text/html",
@@ -594,6 +621,7 @@ void handleNetwork(AsyncWebServerRequest *request) {
 
 // Serve firmware update page
 void handleFirmware(AsyncWebServerRequest *request) {
+    if (!portal_auth_gate(request)) return;
     if (ap_mode_active) {
         // In AP mode, redirect to network configuration page
         request->redirect("/network.html");
@@ -635,6 +663,7 @@ void handleJS(AsyncWebServerRequest *request) {
 
 // GET /api/mode - Return portal mode (core vs full)
 void handleGetMode(AsyncWebServerRequest *request) {
+    if (!portal_auth_gate(request)) return;
     
     AsyncResponseStream *response = request->beginResponseStream("application/json");
     response->print("{\"mode\":\"");
@@ -647,6 +676,7 @@ void handleGetMode(AsyncWebServerRequest *request) {
 
 // GET /api/config - Return current configuration
 void handleGetConfig(AsyncWebServerRequest *request) {
+    if (!portal_auth_gate(request)) return;
     
     if (!current_config) {
         request->send(500, "application/json", "{\"error\":\"Config not initialized\"}");
@@ -680,6 +710,12 @@ void handleGetConfig(AsyncWebServerRequest *request) {
     doc["mqtt_username"] = current_config->mqtt_username;
     doc["mqtt_password"] = "";
     doc["mqtt_interval_seconds"] = current_config->mqtt_interval_seconds;
+
+    // Web portal Basic Auth (password not returned)
+    doc["basic_auth_enabled"] = current_config->basic_auth_enabled;
+    doc["basic_auth_username"] = current_config->basic_auth_username;
+    doc["basic_auth_password"] = "";
+    doc["basic_auth_password_set"] = (strlen(current_config->basic_auth_password) > 0);
     
     // Display settings
     doc["backlight_brightness"] = current_config->backlight_brightness;
@@ -706,6 +742,7 @@ void handleGetConfig(AsyncWebServerRequest *request) {
 
 // POST /api/config - Save new configuration
 void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+    if (!portal_auth_gate(request)) return;
     
     if (!current_config) {
         request->send(500, "application/json", "{\"success\":false,\"message\":\"Config not initialized\"}");
@@ -728,6 +765,13 @@ void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len,
     
     // Partial update: only update fields that are present in the request
     // This allows different pages to update only their relevant fields
+
+    // Security hardening: never allow changing Basic Auth settings in AP/core mode.
+    // Otherwise, an attacker near the device could wait for fallback AP mode and lock out the owner.
+    if (ap_mode_active && (doc.containsKey("basic_auth_enabled") || doc.containsKey("basic_auth_username") || doc.containsKey("basic_auth_password"))) {
+        request->send(403, "application/json", "{\"success\":false,\"message\":\"Basic Auth settings cannot be changed in AP mode\"}");
+        return;
+    }
     
     // WiFi SSID - only update if field exists in JSON
     if (doc.containsKey("wifi_ssid")) {
@@ -807,6 +851,29 @@ void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len,
             current_config->mqtt_interval_seconds = (uint16_t)atoi(int_str ? int_str : "0");
         } else {
             current_config->mqtt_interval_seconds = (uint16_t)(doc["mqtt_interval_seconds"] | 0);
+        }
+    }
+
+    // Basic Auth enabled
+    if (doc.containsKey("basic_auth_enabled")) {
+        if (doc["basic_auth_enabled"].is<const char*>()) {
+            const char* v = doc["basic_auth_enabled"];
+            current_config->basic_auth_enabled = (v && (strcmp(v, "1") == 0 || strcasecmp(v, "true") == 0 || strcasecmp(v, "on") == 0));
+        } else {
+            current_config->basic_auth_enabled = (bool)(doc["basic_auth_enabled"] | false);
+        }
+    }
+
+    // Basic Auth username
+    if (doc.containsKey("basic_auth_username")) {
+        strlcpy(current_config->basic_auth_username, doc["basic_auth_username"] | "", CONFIG_BASIC_AUTH_USERNAME_MAX_LEN);
+    }
+
+    // Basic Auth password (only update if provided and not empty)
+    if (doc.containsKey("basic_auth_password")) {
+        const char* pass = doc["basic_auth_password"];
+        if (pass && strlen(pass) > 0) {
+            strlcpy(current_config->basic_auth_password, pass, CONFIG_BASIC_AUTH_PASSWORD_MAX_LEN);
         }
     }
     
@@ -913,6 +980,7 @@ void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len,
 
 // DELETE /api/config - Reset configuration
 void handleDeleteConfig(AsyncWebServerRequest *request) {
+    if (!portal_auth_gate(request)) return;
     
     if (config_manager_reset()) {
         request->send(200, "application/json", "{\"success\":true,\"message\":\"Configuration reset\"}");
@@ -927,6 +995,7 @@ void handleDeleteConfig(AsyncWebServerRequest *request) {
 
 // GET /api/info - Get device information
 void handleGetVersion(AsyncWebServerRequest *request) {
+    if (!portal_auth_gate(request)) return;
     AsyncResponseStream *response = request->beginResponseStream("application/json");
     response->print("{\"version\":\"");
     response->print(FIRMWARE_VERSION);
@@ -1037,6 +1106,7 @@ void handleGetVersion(AsyncWebServerRequest *request) {
 
 // GET /api/health - Get device health statistics
 void handleGetHealth(AsyncWebServerRequest *request) {
+    if (!portal_auth_gate(request)) return;
     StaticJsonDocument<1024> doc;
 
     device_telemetry_fill_api(doc);
@@ -1054,6 +1124,7 @@ void handleGetHealth(AsyncWebServerRequest *request) {
 
 // POST /api/reboot - Reboot device without saving
 void handleReboot(AsyncWebServerRequest *request) {
+    if (!portal_auth_gate(request)) return;
     Logger.logMessage("API", "POST /api/reboot");
     
     request->send(200, "application/json", "{\"success\":true,\"message\":\"Rebooting device...\"}");
@@ -1066,6 +1137,7 @@ void handleReboot(AsyncWebServerRequest *request) {
 
 // PUT /api/display/brightness - Set backlight brightness immediately (no persist)
 void handleSetDisplayBrightness(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+    if (!portal_auth_gate(request)) return;
     // Only handle the complete request (index == 0 && index + len == total)
     if (index != 0 || index + len != total) {
         return;
@@ -1117,6 +1189,7 @@ void handleSetDisplayBrightness(AsyncWebServerRequest *request, uint8_t *data, s
 
 // GET /api/display/sleep - Screen saver status snapshot
 void handleGetDisplaySleep(AsyncWebServerRequest *request) {
+    if (!portal_auth_gate(request)) return;
     #if HAS_DISPLAY
     ScreenSaverStatus status = screen_saver_manager_get_status();
 
@@ -1137,6 +1210,7 @@ void handleGetDisplaySleep(AsyncWebServerRequest *request) {
 
 // POST /api/display/sleep - Sleep now
 void handlePostDisplaySleep(AsyncWebServerRequest *request) {
+    if (!portal_auth_gate(request)) return;
     #if HAS_DISPLAY
     Logger.logMessage("API", "POST /api/display/sleep");
     screen_saver_manager_sleep_now();
@@ -1148,6 +1222,7 @@ void handlePostDisplaySleep(AsyncWebServerRequest *request) {
 
 // POST /api/display/wake - Wake now
 void handlePostDisplayWake(AsyncWebServerRequest *request) {
+    if (!portal_auth_gate(request)) return;
     #if HAS_DISPLAY
     Logger.logMessage("API", "POST /api/display/wake");
     screen_saver_manager_wake();
@@ -1159,6 +1234,7 @@ void handlePostDisplayWake(AsyncWebServerRequest *request) {
 
 // POST /api/display/activity - Reset idle timer; optionally wake
 void handlePostDisplayActivity(AsyncWebServerRequest *request) {
+    if (!portal_auth_gate(request)) return;
     #if HAS_DISPLAY
     bool wake = false;
     if (request->hasParam("wake")) {
@@ -1175,6 +1251,7 @@ void handlePostDisplayActivity(AsyncWebServerRequest *request) {
 #if HAS_DISPLAY
 // PUT /api/display/screen - Switch to a different screen (runtime only, no persist)
 void handleSetDisplayScreen(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+    if (!portal_auth_gate(request)) return;
     // Only handle the complete request (index == 0 && index + len == total)
     if (index != 0 || index + len != total) {
         return;
@@ -1225,6 +1302,7 @@ void handleSetDisplayScreen(AsyncWebServerRequest *request, uint8_t *data, size_
 
 // POST /api/update - Handle OTA firmware upload
 void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+    if (!portal_auth_gate(request)) return;
     // First chunk - initialize OTA
     if (index == 0) {
 
@@ -1346,7 +1424,9 @@ void web_portal_init(DeviceConfig *config) {
     server->on("/api/config", HTTP_GET, handleGetConfig);
     
     server->on("/api/config", HTTP_POST, 
-        [](AsyncWebServerRequest *request) {},
+        [](AsyncWebServerRequest *request) {
+            if (!portal_auth_gate(request)) return;
+        },
         NULL,
         handlePostConfig
     );
@@ -1364,7 +1444,9 @@ void web_portal_init(DeviceConfig *config) {
     #if HAS_DISPLAY
     // Display API endpoints
     server->on("/api/display/brightness", HTTP_PUT,
-        [](AsyncWebServerRequest *request) {},
+        [](AsyncWebServerRequest *request) {
+            if (!portal_auth_gate(request)) return;
+        },
         NULL,
         handleSetDisplayBrightness
     );
@@ -1377,7 +1459,9 @@ void web_portal_init(DeviceConfig *config) {
 
     // Runtime-only screen switch
     server->on("/api/display/screen", HTTP_PUT,
-        [](AsyncWebServerRequest *request) {},
+        [](AsyncWebServerRequest *request) {
+            if (!portal_auth_gate(request)) return;
+        },
         NULL,
         handleSetDisplayScreen
     );
@@ -1385,7 +1469,9 @@ void web_portal_init(DeviceConfig *config) {
     
     // OTA upload endpoint
     server->on("/api/update", HTTP_POST,
-        [](AsyncWebServerRequest *request) {},
+        [](AsyncWebServerRequest *request) {
+            if (!portal_auth_gate(request)) return;
+        },
         handleOTAUpload
     );
     
@@ -1467,7 +1553,7 @@ void web_portal_init(DeviceConfig *config) {
     Logger.logMessage("Portal", "Calling image_api_init...");
     image_api_init(image_cfg, backend);
     Logger.logMessage("Portal", "Calling image_api_register_routes...");
-    image_api_register_routes(server);
+    image_api_register_routes(server, portal_auth_gate);
     Logger.logMessage("Portal", "Image API initialized");
     #endif // HAS_IMAGE_API && HAS_DISPLAY
     
