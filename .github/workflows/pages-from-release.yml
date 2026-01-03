@@ -3,6 +3,12 @@ name: Deploy firmware installer (Pages)
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag to deploy (e.g. v0.0.26)'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -17,11 +23,35 @@ jobs:
   deploy:
     name: Deploy (stable releases only)
     runs-on: ubuntu-latest
-    if: github.event.release.prerelease == false
+    if: github.event_name != 'release' || github.event.release.prerelease == false
 
     steps:
       - name: Checkout (default branch)
         uses: actions/checkout@v4
+
+      - name: Resolve tag + ensure stable
+        id: release_meta
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            tag_name="${{ github.event.release.tag_name }}"
+          else
+            tag_name="${{ inputs.tag_name }}"
+          fi
+
+          echo "tag_name=$tag_name" >> "$GITHUB_OUTPUT"
+
+          # Enforce stable releases only, even when run manually.
+          is_prerelease=$(gh release view "$tag_name" --repo "${{ github.repository }}" --json isPrerelease --jq '.isPrerelease')
+          echo "is_prerelease=$is_prerelease" >> "$GITHUB_OUTPUT"
+
+          if [[ "$is_prerelease" == "true" ]]; then
+            echo "Refusing to deploy prerelease: $tag_name" >&2
+            exit 1
+          fi
 
       - name: Download merged release assets
         env:
@@ -29,7 +59,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          tag_name="${{ github.event.release.tag_name }}"
+          tag_name="${{ steps.release_meta.outputs.tag_name }}"
           echo "Downloading release assets for $tag_name"
 
           mkdir -p release-assets
@@ -46,7 +76,7 @@ jobs:
           set -euo pipefail
           source config.sh
 
-          tag_name="${{ github.event.release.tag_name }}"
+          tag_name="${{ steps.release_meta.outputs.tag_name }}"
           VERSION="${tag_name#v}"
           PROJECT_NAME="$PROJECT_NAME"
 
@@ -91,6 +121,7 @@ jobs:
         run: |
           echo "## Firmware installer (GitHub Pages)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Triggered by release: ${{ github.event.release.tag_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "Triggered by: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "Tag: ${{ steps.release_meta.outputs.tag_name }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- deploy-pages: ${{ steps.deployment.outcome }}" >> $GITHUB_STEP_SUMMARY
