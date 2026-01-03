@@ -71,6 +71,16 @@ jobs:
           echo "Downloaded assets:"
           ls -lh release-assets
 
+      - name: Fetch release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag_name="${{ steps.release_meta.outputs.tag_name }}"
+          gh release view "$tag_name" --repo "${{ github.repository }}" --json body --jq '.body' > release-notes.md
+          echo "Fetched release notes (first 40 lines):"
+          sed -n '1,40p' release-notes.md
+
       - name: Rehydrate build/ folders for site generator
         run: |
           set -euo pipefail
@@ -102,7 +112,7 @@ jobs:
       - name: Build installer site (latest stable)
         run: |
           chmod +x tools/build-esp-web-tools-site.sh
-          RELEASE_TAG="${{ steps.release_meta.outputs.tag_name }}" ./tools/build-esp-web-tools-site.sh site
+          RELEASE_TAG="${{ steps.release_meta.outputs.tag_name }}" RELEASE_NOTES_PATH="release-notes.md" ./tools/build-esp-web-tools-site.sh site
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

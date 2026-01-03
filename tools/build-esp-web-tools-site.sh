@@ -97,14 +97,23 @@ DISPLAY_VERSION="$VERSION"
 #  3) Repo homepage
 
 VERSION_HREF="#"
+CHANGELOG_HREF="#"
 if [[ -n "${GITHUB_SERVER_URL:-}" && -n "${GITHUB_REPOSITORY:-}" ]]; then
   VERSION_HREF="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+  CHANGELOG_HREF="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/main/CHANGELOG.md"
 
   if [[ -n "${RELEASE_TAG:-}" ]]; then
     VERSION_HREF="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$RELEASE_TAG"
   elif [[ -n "${GITHUB_SHA:-}" ]]; then
     VERSION_HREF="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA"
   fi
+fi
+
+if [[ -n "${RELEASE_NOTES_PATH:-}" && -f "$RELEASE_NOTES_PATH" ]]; then
+  cp "$RELEASE_NOTES_PATH" "$OUT_DIR/release-notes.md"
+else
+  # Provide a tiny placeholder so the UI can load something.
+  echo "Release notes are available on GitHub." > "$OUT_DIR/release-notes.md"
 fi
 
 render_index() {
@@ -116,6 +125,7 @@ render_index() {
       -v site_version="$SITE_VERSION" \
       -v display_version="$DISPLAY_VERSION" \
       -v version_href="$VERSION_HREF" \
+      -v changelog_href="$CHANGELOG_HREF" \
       -v frag="$board_fragment" \
       '
         {
@@ -123,6 +133,7 @@ render_index() {
           gsub(/{{SITE_VERSION}}/, site_version)
           gsub(/{{DISPLAY_VERSION}}/, display_version)
           gsub(/{{VERSION_HREF}}/, version_href)
+          gsub(/{{CHANGELOG_HREF}}/, changelog_href)
         }
         /{{BOARD_ENTRIES}}/ {
           while ((getline line < frag) > 0) print line

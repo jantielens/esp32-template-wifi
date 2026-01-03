@@ -25,3 +25,21 @@
   input.addEventListener('input', update);
   update();
 })();
+
+(() => {
+  const pre = document.getElementById('releaseNotes');
+  if (!pre) return;
+
+  fetch('./release-notes.md', { cache: 'no-store' })
+    .then((r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.text();
+    })
+    .then((text) => {
+      const trimmed = (text || '').trim();
+      pre.textContent = trimmed.length ? trimmed : 'No release notes provided.';
+    })
+    .catch(() => {
+      pre.textContent = 'Release notes are not available here. Use the “View release” link above.';
+    });
+})();
