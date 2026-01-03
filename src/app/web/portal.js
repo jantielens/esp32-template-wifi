@@ -525,7 +525,7 @@ function updateGitHubUpdateSection(info) {
     }
 
     if (updateBtn && availabilityEl && availabilityEl.textContent !== 'Update available') {
-        // Will be enabled after a successful "Check Latest" call if needed.
+        // Will be enabled after a successful latest-check if needed.
         updateBtn.disabled = true;
     }
 
