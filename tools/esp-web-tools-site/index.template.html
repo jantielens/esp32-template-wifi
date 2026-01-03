@@ -39,7 +39,7 @@
           <span class="dot">•</span>
           <a href="{{CHANGELOG_HREF}}" target="_blank" rel="noreferrer">Full changelog</a>
         </div>
-        <pre id="releaseNotes" class="release-notes">Loading release notes…</pre>
+        <div id="releaseNotes" class="release-notes markdown">Loading release notes…</div>
       </section>
 
       <section class="panel">
@@ -61,6 +61,8 @@
       </section>
     </main>
 
+    <script src="https://cdn.jsdelivr.net/npm/marked@13.0.3/marked.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
     <script src="./app.js" defer></script>
   </body>
 </html>

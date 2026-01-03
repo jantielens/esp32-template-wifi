@@ -37,7 +37,25 @@
     })
     .then((text) => {
       const trimmed = (text || '').trim();
-      pre.textContent = trimmed.length ? trimmed : 'No release notes provided.';
+      if (!trimmed.length) {
+        pre.textContent = 'No release notes provided.';
+        return;
+      }
+
+      // If a markdown renderer is available, render to HTML.
+      // Otherwise, fall back to plain text.
+      const hasMarked = typeof window.marked !== 'undefined' && typeof window.marked.parse === 'function';
+      const hasPurify = typeof window.DOMPurify !== 'undefined' && typeof window.DOMPurify.sanitize === 'function';
+
+      if (hasMarked && hasPurify) {
+        const html = window.marked.parse(trimmed, {
+          mangle: false,
+          headerIds: false,
+        });
+        pre.innerHTML = window.DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+      } else {
+        pre.textContent = trimmed;
+      }
     })
     .catch(() => {
       pre.textContent = 'Release notes are not available here. Use the “View release” link above.';
