@@ -270,4 +270,4 @@ jobs:
         prerelease: ${{ needs.prepare-matrix.outputs.is_prerelease }}
         generate_release_notes: true  # Append auto-generated notes
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
