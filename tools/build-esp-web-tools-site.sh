@@ -88,6 +88,7 @@ VERSION="$(get_version)"
 SHA_SHORT="${GITHUB_SHA:-local}"
 SHA_SHORT="${SHA_SHORT:0:7}"
 SITE_VERSION="$VERSION+$SHA_SHORT"
+DISPLAY_VERSION="$VERSION"
 
 render_index() {
   local template_path="$1"
@@ -96,11 +97,13 @@ render_index() {
 
   awk -v display_name="$PROJECT_DISPLAY_NAME" \
       -v site_version="$SITE_VERSION" \
+      -v display_version="$DISPLAY_VERSION" \
       -v frag="$board_fragment" \
       '
         {
           gsub(/{{PROJECT_DISPLAY_NAME}}/, display_name)
           gsub(/{{SITE_VERSION}}/, site_version)
+          gsub(/{{DISPLAY_VERSION}}/, display_version)
         }
         /{{BOARD_ENTRIES}}/ {
           while ((getline line < frag) > 0) print line
