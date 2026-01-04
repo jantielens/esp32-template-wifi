@@ -16,11 +16,11 @@ This document describes the build system configuration and automated release wor
 
 ### Overview
 
-The project uses a centralized branding system defined in `config.sh`. These values control your project's identity across builds, releases, web UI, and device names.
+The project uses a centralized branding system defined in `config.sh` (with an optional `config.project.sh` overlay). These values control your project's identity across builds, releases, web UI, and device names.
 
 ### Configuration Variables
 
-Located at the top of `config.sh`:
+Defaults are located at the top of `config.sh` (and can be overridden in `config.project.sh`):
 
 ```bash
 PROJECT_NAME="esp32-template"       # Slug format (no spaces)
@@ -54,7 +54,11 @@ Used for user-facing text and branding:
 
 ### Customizing for Your Project
 
-1. **Edit `config.sh`** at the top of the file:
+1. **Set branding values**:
+
+  - For standalone use: edit `config.sh` at the top of the file.
+  - For template-based projects (recommended): copy `config.project.sh.example` to `config.project.sh` and put your project-specific overrides there.
+
    ```bash
    PROJECT_NAME="my-iot-device"
    PROJECT_DISPLAY_NAME="My IoT Device"
@@ -82,7 +86,7 @@ Used for user-facing text and branding:
 
 The build system automatically applies project branding during compilation:
 
-1. `build.sh` sources `config.sh` to get `PROJECT_NAME` and `PROJECT_DISPLAY_NAME`
+1. `build.sh` sources `config.sh` to get `PROJECT_NAME` and `PROJECT_DISPLAY_NAME` (and `config.sh` will also source `config.project.sh` if present)
 2. (Optional) If `assets/png/*.png` exists and you are building a display-enabled board, `build.sh` generates LVGL image assets into `src/app/png_assets.cpp` and `src/app/png_assets.h`
 3. `tools/minify-web-assets.sh` performs template substitution in HTML files
 4. Branding C++ `#define` statements are generated in `src/app/project_branding.h` (and `web_assets.h` includes it)

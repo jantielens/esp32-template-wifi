@@ -52,9 +52,9 @@ The `boards.txt` entries you’re effectively adding look like:
 <BOARD_ID>.menu.PartitionScheme.<SCHEME_ID>.upload.maximum_size=<MAX_BYTES>
 ```
 
-### 3) Add/enable it in `config.sh`
+### 3) Add/enable it in `config.sh` (or `config.project.sh`)
 
-Add a target in [config.sh](../config.sh) that includes your `PartitionScheme` option in the FQBN, for example:
+Add a target in [config.sh](../config.sh) (or, for template-based projects, in `config.project.sh`) that includes your `PartitionScheme` option in the FQBN, for example:
 
 ```bash
 ["<board_name>"]="esp32:esp32:<BOARD_ID>:CDCOnBoot=cdc,PartitionScheme=<SCHEME_ID>"

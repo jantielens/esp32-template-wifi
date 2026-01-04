@@ -4,6 +4,9 @@
 # This file contains common configuration and helper functions used by all scripts
 # Source this file at the beginning of each script
 
+# Get script directory (works when sourced)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # ============================================================================
 # PROJECT BRANDING CONFIGURATION
 # ============================================================================
@@ -63,8 +66,23 @@ declare -A FQBN_TARGETS=(
 # Default board (used when only one board is configured)
 DEFAULT_BOARD=""
 
-# Get script directory (works when sourced)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# ----------------------------------------------------------------------------
+# Optional project-specific overrides
+# ----------------------------------------------------------------------------
+# To make it easier to merge upstream template changes into downstream projects,
+# projects can keep their branding and board list in a separate file.
+#
+# If present, this file is sourced AFTER defaults above, so it can override:
+#   - PROJECT_NAME / PROJECT_DISPLAY_NAME
+#   - DEFAULT_BOARD
+#   - FQBN_TARGETS (redeclare the associative array)
+#
+# Recommended filename: config.project.sh (commit it in the project repo).
+
+PROJECT_CONFIG_FILE="$SCRIPT_DIR/config.project.sh"
+if [[ -f "$PROJECT_CONFIG_FILE" ]]; then
+    source "$PROJECT_CONFIG_FILE"
+fi
 
 # Color definitions for terminal output
 BLUE='\033[0;34m'
