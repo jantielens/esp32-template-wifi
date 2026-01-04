@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.29] - 2026-01-04
+
+### Added
+- Optional `config.project.sh` overlay for project-specific branding/boards (helps reduce merge conflicts when pulling template updates)
+
+### Documentation
+- Documented a low-friction "upstream remote + merge" workflow for template-based projects
+
 ## [0.0.28] - 2026-01-03
 
 ### Added

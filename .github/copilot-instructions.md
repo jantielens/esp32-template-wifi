@@ -82,6 +82,7 @@ All scripts use absolute paths via `SCRIPT_DIR` resolution - they work from any 
   - Board management: `FQBN_TARGETS` array, `get_board_name()`, `list_boards()`, `get_fqbn_for_board()`
 - Scripts work from any directory due to absolute path resolution
 - Multi-board scripts require board name parameter when multiple targets are configured
+- To reduce merge conflicts in template-based projects, `config.sh` can source an optional `config.project.sh` with project-specific overrides.
 
 ### Arduino Code Standards
 - Use `Serial.begin(115200)` for consistency with monitor.sh default

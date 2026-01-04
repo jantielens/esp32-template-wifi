@@ -9,6 +9,7 @@ This project includes several bash scripts to streamline ESP32 development workf
 **What it contains:**
 - Project configuration (`PROJECT_NAME`, `SKETCH_PATH`, `BUILD_PATH`)
 - Board targets (`FQBN_TARGETS` associative array)
+- Optionally sources `config.project.sh` for project-specific overrides (recommended for template-based projects)
 - `find_arduino_cli()` - Locates arduino-cli (local or system-wide)
 - `find_serial_port()` - Auto-detects `/dev/ttyUSB0` or `/dev/ttyACM0`
 - `get_board_name()` - Returns board name (identity function for compatibility)
@@ -22,8 +23,8 @@ This project includes several bash scripts to streamline ESP32 development workf
 declare -A FQBN_TARGETS=(
   ["esp32-nodisplay"]="esp32:esp32:esp32"  # ESP32 Dev Module (no display)
   ["esp32c3-waveshare-169-st7789v2"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"  # ESP32-C3 + Waveshare 1.69\" ST7789V2
-    ["esp32c3_ota_1_9mb"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb"  # ESP32-C3 w/ custom partitions
-    ["cyd-v2"]="esp32:esp32:esp32"                                   # CYD v2 (same FQBN, different board_overrides.h)
+  ["esp32c3_ota_1_9mb"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb"  # ESP32-C3 w/ custom partitions
+  ["cyd-v2"]="esp32:esp32:esp32"  # CYD v2 (same FQBN, different board_overrides.h)
 )
 ```
 
