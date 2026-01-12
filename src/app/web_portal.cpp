@@ -5,9 +5,11 @@
  * Serves static files and provides REST API for configuration.
  */
 
-// Increase AsyncTCP task stack size to prevent overflow
-// Default is 8192, increase to 16384 for web assets
-#define CONFIG_ASYNC_TCP_STACK_SIZE 16384
+// AsyncTCP task stack sizing:
+// - The AsyncTCP library is compiled as a separate translation unit.
+// - Defining CONFIG_ASYNC_TCP_STACK_SIZE in this file does NOT reliably affect the library build.
+// - To override it, define CONFIG_ASYNC_TCP_STACK_SIZE in src/boards/<board>/board_overrides.h.
+//   The build script propagates this allowlisted define into library builds.
 
 #include "web_portal.h"
 #include "web_assets.h"
@@ -37,6 +39,27 @@
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+
+static void log_async_tcp_stack_watermark_once() {
+    static bool logged = false;
+    if (logged) return;
+    logged = true;
+
+    // AsyncTCP task name varies by library/core version; try a few common ones.
+    TaskHandle_t task = xTaskGetHandle("async_tcp");
+    if (!task) task = xTaskGetHandle("async_tcp_task");
+    if (!task) task = xTaskGetHandle("AsyncTCP");
+    if (!task) return;
+
+    const UBaseType_t high_water_words = uxTaskGetStackHighWaterMark(task);
+    const unsigned high_water_bytes = (unsigned)high_water_words * (unsigned)sizeof(StackType_t);
+
+    #ifdef CONFIG_ASYNC_TCP_STACK_SIZE
+        Logger.logMessagef("Portal", "AsyncTCP stack watermark: %u bytes (CONFIG_ASYNC_TCP_STACK_SIZE=%u)", high_water_bytes, (unsigned)CONFIG_ASYNC_TCP_STACK_SIZE);
+    #else
+        Logger.logMessagef("Portal", "AsyncTCP stack watermark: %u bytes (CONFIG_ASYNC_TCP_STACK_SIZE not set)", high_water_bytes);
+    #endif
+}
 
 
 // Forward declarations
@@ -1571,6 +1594,8 @@ void web_portal_init(DeviceConfig *config) {
     yield();
     delay(100);
     server->begin();
+
+    log_async_tcp_stack_watermark_once();
     Logger.logEnd();
 }
 

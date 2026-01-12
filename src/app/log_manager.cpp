@@ -15,6 +15,14 @@ uint8_t LogManager::nestLevel = 0;
 // Global LogManager instance
 LogManager Logger;
 
+static inline bool serial_ready_for_logging() {
+#if defined(ARDUINO_USB_CDC_ON_BOOT) && (ARDUINO_USB_CDC_ON_BOOT == 1)
+    return (bool)Serial;
+#else
+    return true;
+#endif
+}
+
 // Constructor
 LogManager::LogManager() {
 }
@@ -40,6 +48,7 @@ const char* LogManager::indent() {
 
 // Begin a log block - atomic write
 void LogManager::logBegin(const char* module) {
+    if (!serial_ready_for_logging()) return;
     char line[128];
     snprintf(line, sizeof(line), "%s[%s] Starting...\n", indent(), module);
     Serial.print(line);
@@ -57,6 +66,7 @@ void LogManager::logBegin(const char* module) {
 
 // Add a line to current block - atomic write
 void LogManager::logLine(const char* message) {
+    if (!serial_ready_for_logging()) return;
     char line[160];
     snprintf(line, sizeof(line), "%s%s\n", indent(), message);
     Serial.print(line);
@@ -64,6 +74,7 @@ void LogManager::logLine(const char* message) {
 
 // Add a formatted line (printf-style) - atomic write
 void LogManager::logLinef(const char* format, ...) {
+    if (!serial_ready_for_logging()) return;
     char msgbuf[128];
     va_list args;
     va_start(args, format);
@@ -77,6 +88,7 @@ void LogManager::logLinef(const char* format, ...) {
 
 // End a log block - atomic write
 void LogManager::logEnd(const char* message) {
+    if (!serial_ready_for_logging()) return;
     // Decrement nesting level first (but don't underflow)
     if (nestLevel > 0) {
         nestLevel--;
@@ -100,6 +112,7 @@ void LogManager::logEnd(const char* message) {
 
 // Single-line logging with timing - atomic write to prevent interleaving
 void LogManager::logMessage(const char* module, const char* msg) {
+    if (!serial_ready_for_logging()) return;
     unsigned long start = millis();
     char line[192];
     snprintf(line, sizeof(line), "%s[%s] %s (%lums)\n", indent(), module, msg, millis() - start);
@@ -107,6 +120,7 @@ void LogManager::logMessage(const char* module, const char* msg) {
 }
 
 void LogManager::logMessagef(const char* module, const char* format, ...) {
+    if (!serial_ready_for_logging()) return;
     unsigned long start = millis();
     
     char msgbuf[128];
