@@ -86,6 +86,13 @@ BOARD_PROFILE=psram ./build.sh esp32-nodisplay  # Optional build profile (if def
     - `BUILD_BOARD_NAME` (string literal; used to select the correct per-board app-only GitHub release asset for online updates)
     - Note: these flags are applied to both C++ and C compilation units (LVGL is built as C), so LVGL config can also react to board overrides.
 
+**Board overrides and library builds:**
+
+Some compile-time settings need to apply not only to the sketch, but also to separately-built Arduino libraries (which may compile as their own translation units). For a small allowlist of known-safe settings, `build.sh` propagates values found in `src/boards/<board>/board_overrides.h` into global compiler flags (C and C++).
+
+- Currently allowlisted: `CONFIG_ASYNC_TCP_STACK_SIZE` (AsyncTCP task stack size).
+- Example (inside `src/boards/<board>/board_overrides.h`): `#define CONFIG_ASYNC_TCP_STACK_SIZE 16384`
+
 **Build Output Structure:**
 ```
 build/

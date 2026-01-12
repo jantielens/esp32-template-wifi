@@ -9,6 +9,12 @@ This document is a template. Sections marked with `COMPILE_FLAG_REPORT` markers 
 - Print active flags during a build (example):
   - `python3 tools/compile_flags_report.py build --board cyd-v2`
 
+## Build system notes
+
+- Some Arduino libraries are compiled as separate translation units and may not see macros that are only defined in `src/boards/<board>/board_overrides.h`.
+- The build script propagates a small allowlist of board override defines into global compiler flags so libraries are compiled with the same values.
+  - Currently allowlisted: `CONFIG_ASYNC_TCP_STACK_SIZE`
+
 ## Flags (generated)
 
 <!-- BEGIN COMPILE_FLAG_REPORT:FLAGS -->
