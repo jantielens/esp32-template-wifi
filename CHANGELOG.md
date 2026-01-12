@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.30] - 2026-01-12
+
+### Added
+- One-shot AsyncTCP task stack watermark logging after web server start (helps validate stack headroom)
+
+### Changed
+- Build propagates `CONFIG_ASYNC_TCP_STACK_SIZE` from per-board overrides into global C/C++ compile flags so separately-built libraries (AsyncTCP) see it
+
+### Fixed
+- Avoid early boot logging when USB CDC is enabled but not ready
+
+### Documentation
+- Documented board override propagation into library builds in `docs/scripts.md` and `docs/compile-time-flags.md`
+
 ## [0.0.29] - 2026-01-04
 
 ### Added
