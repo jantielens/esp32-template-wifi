@@ -11,7 +11,7 @@ This project includes several bash scripts to streamline ESP32 development workf
 - Board targets (`FQBN_TARGETS` associative array)
 - Optionally sources `config.project.sh` for project-specific overrides (recommended for template-based projects)
 - `find_arduino_cli()` - Locates arduino-cli (local or system-wide)
-- `find_serial_port()` - Auto-detects `/dev/ttyUSB0` or `/dev/ttyACM0`
+- `find_serial_port()` - Auto-detects `/dev/ttyUSB*` or `/dev/ttyACM*`
 - `get_board_name()` - Returns board name (identity function for compatibility)
 - `list_boards()` - Lists all configured boards
 - `get_fqbn_for_board()` - Gets FQBN for a board name
