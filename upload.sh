@@ -390,7 +390,7 @@ elif [[ "$MODE" == "full" ]]; then
     fi
 
     echo -e "${YELLOW}Flashing merged image at 0x0 (full)...${NC}"
-    flash_with_esptool "$CHIP_TYPE" "$PORT" "$ESPTOOL_CMD" write_flash -z 0x0 "$MERGED_BIN"
+    flash_with_esptool "$CHIP_TYPE" "$PORT" "$ESPTOOL_CMD" write-flash -z 0x0 "$MERGED_BIN"
 elif [[ "$MODE" == "app-only" ]]; then
     APP_BIN="$BOARD_BUILD_PATH/app.ino.bin"
     if [[ ! -f "$APP_BIN" ]]; then
@@ -402,7 +402,7 @@ elif [[ "$MODE" == "app-only" ]]; then
 
     APP_OFFSET=$(echo "$PART_INFO" | grep '^app_offset=' | cut -d'=' -f2-)
     echo -e "${YELLOW}Flashing app at $APP_OFFSET (app-only)...${NC}"
-    flash_with_esptool "$CHIP_TYPE" "$PORT" "$ESPTOOL_CMD" write_flash -z "$APP_OFFSET" "$APP_BIN"
+    flash_with_esptool "$CHIP_TYPE" "$PORT" "$ESPTOOL_CMD" write-flash -z "$APP_OFFSET" "$APP_BIN"
 else
     echo -e "${RED}Error: Unknown mode: $MODE${NC}"
     exit 1
