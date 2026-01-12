@@ -277,6 +277,7 @@ This template automates the installation:
 ### Important Operational Notes
 
 - The **first flash after changing a partition table should be done over serial** (USB). OTA updates will work normally afterwards.
+- For boards using `PartitionScheme=...`, `upload.sh` defaults to a full flash (`--full`) to ensure the partition layout on the device matches what was built.
 - If you see errors like “offset not aligned” or “sketch too big”, verify your offsets are 0x10000-aligned (except NVS/otadata) and that your firmware fits in the configured app partition size.
 
 **Notes:**

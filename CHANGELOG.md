@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.31] - 2026-01-12
+
+### Added
+- `upload.sh` now supports explicit flash modes: `--full` (merged image at 0x0) and `--app-only` (flash only the app at the correct partition offset)
+- `upload.sh` supports `--erase-nvs` (reset config) and `--erase-flash` (destructive)
+
+### Changed
+- Boards using `PartitionScheme=...` default to `--full` flashing to ensure partition changes are applied correctly
+- `tools/install-custom-partitions.sh` installs all repo partition CSVs and registers only the repo-provided schemes actively used by configured boards (idempotent)
+
+### Fixed
+- Serial port auto-detection now handles `/dev/ttyUSB*` and `/dev/ttyACM*` (not just `...0`)
+- Updated esptool invocation to match newer ESP32 Arduino cores (`esptool` binary + `write-flash`)
+
 ## [0.0.30] - 2026-01-12
 
 ### Added

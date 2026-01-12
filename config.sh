@@ -144,18 +144,26 @@ find_arduino_cli() {
 }
 
 # Auto-detect serial port
-# Returns /dev/ttyUSB0 if exists, otherwise /dev/ttyACM0
+# Prefers /dev/ttyUSB* (UART adapters) then /dev/ttyACM* (USB CDC)
 # Returns exit code 1 if no port found
 find_serial_port() {
-    if [ -e /dev/ttyUSB0 ]; then
-        echo "/dev/ttyUSB0"
+    local port
+
+    # Prefer ttyUSB devices first.
+    port=$(ls -1 /dev/ttyUSB* 2>/dev/null | sort -V | head -n 1 || true)
+    if [[ -n "$port" ]]; then
+        echo "$port"
         return 0
-    elif [ -e /dev/ttyACM0 ]; then
-        echo "/dev/ttyACM0"
-        return 0
-    else
-        return 1
     fi
+
+    # Then fall back to ttyACM devices.
+    port=$(ls -1 /dev/ttyACM* 2>/dev/null | sort -V | head -n 1 || true)
+    if [[ -n "$port" ]]; then
+        echo "$port"
+        return 0
+    fi
+
+    return 1
 }
 
 # Get board name (identity function now - board names are the keys)

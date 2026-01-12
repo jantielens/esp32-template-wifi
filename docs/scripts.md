@@ -11,7 +11,7 @@ This project includes several bash scripts to streamline ESP32 development workf
 - Board targets (`FQBN_TARGETS` associative array)
 - Optionally sources `config.project.sh` for project-specific overrides (recommended for template-based projects)
 - `find_arduino_cli()` - Locates arduino-cli (local or system-wide)
-- `find_serial_port()` - Auto-detects `/dev/ttyUSB0` or `/dev/ttyACM0`
+- `find_serial_port()` - Auto-detects `/dev/ttyUSB*` or `/dev/ttyACM*`
 - `get_board_name()` - Returns board name (identity function for compatibility)
 - `list_boards()` - Lists all configured boards
 - `get_fqbn_for_board()` - Gets FQBN for a board name
@@ -218,6 +218,14 @@ This script automates both steps.
 
 **Usage:**
 
+**Options:**
+```bash
+./upload.sh --full        # Flash merged image at 0x0 (recommended for PartitionScheme boards)
+./upload.sh --app-only    # Flash only the app at the correct app offset
+./upload.sh --erase-nvs   # Erase NVS only (WiFi/config reset)
+./upload.sh --erase-flash # Erase entire flash (destructive)
+```
+
 **Single Board Configuration:**
 ```bash
 ./upload.sh              # Auto-detects port
@@ -237,6 +245,10 @@ This script automates both steps.
 - Detects connected ESP32 boards
 - Uploads firmware from board-specific `./build/<board>/` directory to the device
 - Auto-detects serial port if not specified
+
+**PartitionScheme note:**
+- If the board FQBN includes `PartitionScheme=...`, `upload.sh` defaults to `--full` to ensure partition changes are applied correctly.
+- Use `--app-only` for faster updates when the partition layout is already correct.
 
 **Requirements:** 
 - Must run `build.sh [board]` first
