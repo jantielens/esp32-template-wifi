@@ -218,6 +218,14 @@ This script automates both steps.
 
 **Usage:**
 
+**Options:**
+```bash
+./upload.sh --full        # Flash merged image at 0x0 (recommended for PartitionScheme boards)
+./upload.sh --app-only    # Flash only the app at the correct app offset
+./upload.sh --erase-nvs   # Erase NVS only (WiFi/config reset)
+./upload.sh --erase-flash # Erase entire flash (destructive)
+```
+
 **Single Board Configuration:**
 ```bash
 ./upload.sh              # Auto-detects port
@@ -237,6 +245,10 @@ This script automates both steps.
 - Detects connected ESP32 boards
 - Uploads firmware from board-specific `./build/<board>/` directory to the device
 - Auto-detects serial port if not specified
+
+**PartitionScheme note:**
+- If the board FQBN includes `PartitionScheme=...`, `upload.sh` defaults to `--full` to ensure partition changes are applied correctly.
+- Use `--app-only` for faster updates when the partition layout is already correct.
 
 **Requirements:** 
 - Must run `build.sh [board]` first
