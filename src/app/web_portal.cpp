@@ -25,6 +25,7 @@
 #include "web_portal_config.h"
 #include "web_portal_state.h"
 #include "web_portal_firmware.h"
+#include "web_portal_ap.h"
 
 #if HAS_DISPLAY
 #include "display_manager.h"
@@ -36,9 +37,7 @@
 #endif
 
 #include <ESPAsyncWebServer.h>
-#include <DNSServer.h>
 #include <WiFi.h>
-#include <ArduinoJson.h>
 
 #include <esp_heap_caps.h>
 
@@ -67,28 +66,15 @@ static void log_async_tcp_stack_watermark_once() {
 }
 
 
-// Forward declarations
-void handleRoot(AsyncWebServerRequest *request);
-void handleGetMode(AsyncWebServerRequest *request);
-void handleGetHealth(AsyncWebServerRequest *request);
-void handleReboot(AsyncWebServerRequest *request);
 // Web server on port 80 (pointer to avoid constructor issues)
 AsyncWebServer *server = nullptr;
 
-// DNS server for captive portal (port 53)
-DNSServer dnsServer;
-
-// AP configuration
-#define DNS_PORT 53
-#define CAPTIVE_PORTAL_IP IPAddress(192, 168, 4, 1)
-
 // State
-static bool ap_mode_active = false;
 static DeviceConfig *current_config = nullptr;
 static bool ota_in_progress = false;
 
 bool web_portal_is_ap_mode_active() {
-    return ap_mode_active;
+    return web_portal_is_ap_mode();
 }
 
 DeviceConfig* web_portal_get_current_config() {
@@ -107,161 +93,6 @@ void web_portal_set_ota_in_progress(bool in_progress) {
 // Use this flag to defer "hide current image / return" operations to the main loop.
 static volatile bool pending_image_hide_request = false;
 #endif
-
-// GET /api/mode - Return portal mode (core vs full)
-void handleGetMode(AsyncWebServerRequest *request) {
-    if (!portal_auth_gate(request)) return;
-    
-    AsyncResponseStream *response = request->beginResponseStream("application/json");
-    response->print("{\"mode\":\"");
-    response->print(ap_mode_active ? "core" : "full");
-    response->print("\",\"ap_active\":");
-    response->print(ap_mode_active ? "true" : "false");
-    response->print("}");
-    request->send(response);
-}
-
-// GET /api/info - Get device information
-void handleGetVersion(AsyncWebServerRequest *request) {
-    if (!portal_auth_gate(request)) return;
-    AsyncResponseStream *response = request->beginResponseStream("application/json");
-    response->print("{\"version\":\"");
-    response->print(FIRMWARE_VERSION);
-    response->print("\",\"build_date\":\"");
-    response->print(BUILD_DATE);
-    response->print("\",\"build_time\":\"");
-    response->print(BUILD_TIME);
-    response->print("\",\"chip_model\":\"");
-    response->print(ESP.getChipModel());
-    response->print("\",\"chip_revision\":");
-    response->print(ESP.getChipRevision());
-    response->print(",\"chip_cores\":");
-    response->print(ESP.getChipCores());
-    response->print(",\"cpu_freq\":");
-    response->print(ESP.getCpuFreqMHz());
-    response->print(",\"flash_chip_size\":");
-    response->print(ESP.getFlashChipSize());
-    response->print(",\"psram_size\":");
-    response->print(ESP.getPsramSize());
-    response->print(",\"free_heap\":");
-    response->print(ESP.getFreeHeap());
-    response->print(",\"sketch_size\":");
-    response->print(device_telemetry_sketch_size());
-    response->print(",\"free_sketch_space\":");
-    response->print(device_telemetry_free_sketch_space());
-    response->print(",\"mac_address\":\"");
-    response->print(WiFi.macAddress());
-    response->print("\",\"wifi_hostname\":\"");
-    response->print(WiFi.getHostname());
-    response->print("\",\"mdns_name\":\"");
-    response->print(WiFi.getHostname());
-    response->print(".local\",\"hostname\":\"");
-    response->print(WiFi.getHostname());
-    response->print("\",\"project_name\":\"");
-    response->print(PROJECT_NAME);
-    response->print("\",\"project_display_name\":\"");
-    response->print(PROJECT_DISPLAY_NAME);
-
-    // Build metadata for GitHub-based updates
-    response->print("\",\"board_name\":\"");
-    #ifdef BUILD_BOARD_NAME
-    response->print(BUILD_BOARD_NAME);
-    #else
-    response->print("unknown");
-    #endif
-    response->print("\",\"github_updates_enabled\":");
-    response->print(GITHUB_UPDATES_ENABLED ? "true" : "false");
-    #if GITHUB_UPDATES_ENABLED
-    response->print(",\"github_owner\":\"");
-    response->print(GITHUB_OWNER);
-    response->print("\",\"github_repo\":\"");
-    response->print(GITHUB_REPO);
-    response->print("\"");
-    #endif
-    response->print(",\"has_mqtt\":");
-    response->print(HAS_MQTT ? "true" : "false");
-    response->print(",\"has_backlight\":");
-    response->print(HAS_BACKLIGHT ? "true" : "false");
-    
-    #if HAS_DISPLAY
-    // Display screen information
-    response->print(",\"has_display\":true");
-
-    // Display resolution (driver coordinate space for direct writes / image upload)
-    int display_coord_width = DISPLAY_WIDTH;
-    int display_coord_height = DISPLAY_HEIGHT;
-    if (displayManager && displayManager->getDriver()) {
-        display_coord_width = displayManager->getDriver()->width();
-        display_coord_height = displayManager->getDriver()->height();
-    }
-    response->print(",\"display_coord_width\":");
-    response->print(display_coord_width);
-    response->print(",\"display_coord_height\":");
-    response->print(display_coord_height);
-    
-    // Get available screens
-    size_t screen_count = 0;
-    const ScreenInfo* screens = display_manager_get_available_screens(&screen_count);
-    
-    response->print(",\"available_screens\":[");
-    for (size_t i = 0; i < screen_count; i++) {
-        if (i > 0) response->print(",");
-        response->print("{\"id\":\"");
-        response->print(screens[i].id);
-        response->print("\",\"name\":\"");
-        response->print(screens[i].display_name);
-        response->print("\"}");
-    }
-    response->print("]");
-    
-    // Get current screen
-    const char* current_screen = display_manager_get_current_screen_id();
-    response->print(",\"current_screen\":");
-    if (current_screen) {
-        response->print("\"");
-        response->print(current_screen);
-        response->print("\"");
-    } else {
-        response->print("null");
-    }
-    #else
-    response->print(",\"has_display\":false");
-    #endif
-    
-    response->print("}");
-    request->send(response);
-}
-
-// GET /api/health - Get device health statistics
-void handleGetHealth(AsyncWebServerRequest *request) {
-    if (!portal_auth_gate(request)) return;
-    StaticJsonDocument<1024> doc;
-
-    device_telemetry_fill_api(doc);
-
-    if (doc.overflowed()) {
-        Logger.logMessage("Portal", "ERROR: /api/health JSON overflow (StaticJsonDocument too small)");
-        request->send(500, "application/json", "{\"success\":false,\"message\":\"Response too large\"}");
-        return;
-    }
-
-    AsyncResponseStream *response = request->beginResponseStream("application/json");
-    serializeJson(doc, *response);
-    request->send(response);
-}
-
-// POST /api/reboot - Reboot device without saving
-void handleReboot(AsyncWebServerRequest *request) {
-    if (!portal_auth_gate(request)) return;
-    Logger.logMessage("API", "POST /api/reboot");
-    
-    request->send(200, "application/json", "{\"success\":true,\"message\":\"Rebooting device...\"}");
-    
-    // Schedule reboot after response is sent
-    delay(100);
-    Logger.logMessage("Portal", "Rebooting");
-    ESP.restart();
-}
 
 // ===== PUBLIC API =====
 
@@ -369,15 +200,8 @@ void web_portal_init(DeviceConfig *config) {
     Logger.logMessage("Portal", "Image API initialized");
     #endif // HAS_IMAGE_API && HAS_DISPLAY
     
-    // 404 handler
-    server->onNotFound([](AsyncWebServerRequest *request) {
-        // In AP mode, redirect to root for captive portal
-        if (ap_mode_active) {
-            request->redirect("/");
-        } else {
-            request->send(404, "text/plain", "Not found");
-        }
-    });
+    // Captive portal 404 handler
+    web_portal_ap_register_not_found(server);
     
     // Start server
     yield();
@@ -388,62 +212,11 @@ void web_portal_init(DeviceConfig *config) {
     Logger.logEnd();
 }
 
-// Start AP mode with captive portal
-void web_portal_start_ap() {
-    Logger.logBegin("AP Mode");
-    
-    // Generate AP name with chip ID
-    uint32_t chipId = 0;
-    for(int i=0; i<17; i=i+8) {
-        chipId |= ((ESP.getEfuseMac() >> (40 - i)) & 0xff) << i;
-    }
-    
-    // Convert PROJECT_NAME to uppercase for AP SSID
-    String apPrefix = String(PROJECT_NAME);
-    apPrefix.toUpperCase();
-    String apName = apPrefix + "-" + String(chipId, HEX);
-    
-    Logger.logLinef("SSID: %s", apName.c_str());
-    
-    // Configure AP
-    WiFi.mode(WIFI_AP);
-    WiFi.softAPConfig(CAPTIVE_PORTAL_IP, CAPTIVE_PORTAL_IP, IPAddress(255, 255, 255, 0));
-    WiFi.softAP(apName.c_str());
-    
-    // Start DNS server for captive portal (redirect all DNS queries to our IP)
-    dnsServer.start(DNS_PORT, "*", CAPTIVE_PORTAL_IP);
-    
-    WiFi.softAPsetHostname(apName.c_str());
-
-    // Mark AP mode active so watchdog/DNS handling knows we're in captive portal
-    ap_mode_active = true;
-
-    Logger.logLinef("IP: %s", WiFi.softAPIP().toString().c_str());
-    Logger.logEnd("Captive portal active");
-}
-
-// Stop AP mode
-void web_portal_stop_ap() {
-    if (ap_mode_active) {
-        Logger.logMessage("Portal", "Stopping AP mode");
-        dnsServer.stop();
-        WiFi.softAPdisconnect(true);
-        ap_mode_active = false;
-    }
-}
-
 // Handle web server (call in loop)
 void web_portal_handle() {
-    if (ap_mode_active) {
-        dnsServer.processNextRequest();
-    }
+    web_portal_ap_handle();
 
     web_portal_config_loop();
-}
-
-// Check if in AP mode
-bool web_portal_is_ap_mode() {
-    return ap_mode_active;
 }
 
 // Check if OTA update is in progress
