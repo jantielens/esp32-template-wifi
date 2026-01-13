@@ -2,6 +2,7 @@
 #include "web_portal_auth.h"
 #include "web_portal_config.h"
 #include "web_portal_display.h"
+#include "web_portal_firmware.h"
 #include "web_portal_pages.h"
 
 #include "board_config.h"
@@ -10,13 +11,6 @@ void handleGetMode(AsyncWebServerRequest *request);
 void handleGetVersion(AsyncWebServerRequest *request);
 void handleGetHealth(AsyncWebServerRequest *request);
 void handleReboot(AsyncWebServerRequest *request);
-
-void handleGetFirmwareLatest(AsyncWebServerRequest *request);
-void handlePostFirmwareUpdate(AsyncWebServerRequest *request);
-void handleGetFirmwareUpdateStatus(AsyncWebServerRequest *request);
-
-
-
 void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
 
 void web_portal_register_routes(AsyncWebServer* server) {
