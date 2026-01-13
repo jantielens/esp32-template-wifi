@@ -1,5 +1,6 @@
 #include "web_portal_routes.h"
 #include "web_portal_auth.h"
+#include "web_portal_display.h"
 
 #include "board_config.h"
 
@@ -22,14 +23,7 @@ void handleGetFirmwareLatest(AsyncWebServerRequest *request);
 void handlePostFirmwareUpdate(AsyncWebServerRequest *request);
 void handleGetFirmwareUpdateStatus(AsyncWebServerRequest *request);
 
-#if HAS_DISPLAY
-void handleSetDisplayBrightness(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total);
-void handleGetDisplaySleep(AsyncWebServerRequest *request);
-void handlePostDisplaySleep(AsyncWebServerRequest *request);
-void handlePostDisplayWake(AsyncWebServerRequest *request);
-void handlePostDisplayActivity(AsyncWebServerRequest *request);
-void handleSetDisplayScreen(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total);
-#endif
+
 
 void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
 

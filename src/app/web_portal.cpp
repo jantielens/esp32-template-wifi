@@ -77,16 +77,11 @@ void handleJS(AsyncWebServerRequest *request);
 void handleGetConfig(AsyncWebServerRequest *request);
 void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total);
 void handleDeleteConfig(AsyncWebServerRequest *request);
-void handleSetDisplayBrightness(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total);
 void handleGetVersion(AsyncWebServerRequest *request);
 void handleGetMode(AsyncWebServerRequest *request);
 void handleGetHealth(AsyncWebServerRequest *request);
 void handleReboot(AsyncWebServerRequest *request);
 void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
-void handleGetDisplaySleep(AsyncWebServerRequest *request);
-void handlePostDisplaySleep(AsyncWebServerRequest *request);
-void handlePostDisplayWake(AsyncWebServerRequest *request);
-void handlePostDisplayActivity(AsyncWebServerRequest *request);
 
 void handleGetFirmwareLatest(AsyncWebServerRequest *request);
 void handlePostFirmwareUpdate(AsyncWebServerRequest *request);
@@ -1289,171 +1284,6 @@ void handleReboot(AsyncWebServerRequest *request) {
     Logger.logMessage("Portal", "Rebooting");
     ESP.restart();
 }
-
-// PUT /api/display/brightness - Set backlight brightness immediately (no persist)
-void handleSetDisplayBrightness(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
-    if (!portal_auth_gate(request)) return;
-    // Only handle the complete request (index == 0 && index + len == total)
-    if (index != 0 || index + len != total) {
-        return;
-    }
-    
-    // Parse JSON body
-    StaticJsonDocument<256> doc;
-    DeserializationError error = deserializeJson(doc, data, len);
-    
-    if (error) {
-        request->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid JSON\"}");
-        return;
-    }
-    
-    // Get brightness value (0-100)
-    if (!doc.containsKey("brightness")) {
-        request->send(400, "application/json", "{\"success\":false,\"message\":\"Missing brightness value\"}");
-        return;
-    }
-    
-    uint8_t brightness = (uint8_t)(doc["brightness"] | 100);
-    if (brightness > 100) brightness = 100;
-    
-    #if HAS_DISPLAY
-    // Update the in-RAM target brightness (does not persist to NVS).
-    // This keeps the screen saver target consistent with what the user sees.
-    if (current_config) {
-        current_config->backlight_brightness = brightness;
-    }
-
-    // Edge case: if the screen saver is dimming/asleep/fading, directly setting the
-    // backlight would show the UI again without updating the screen saver state.
-    // Easiest fix: when not Awake, route through the screen saver wake path.
-    const ScreenSaverState state = screen_saver_manager_get_status().state;
-    if (state != ScreenSaverState::Awake) {
-        screen_saver_manager_wake();
-    } else {
-        display_manager_set_backlight_brightness(brightness);
-        screen_saver_manager_notify_activity(false);
-    }
-
-    #endif
-    
-    // Return success
-    char response[64];
-    snprintf(response, sizeof(response), "{\"success\":true,\"brightness\":%d}", brightness);
-    request->send(200, "application/json", response);
-}
-
-// GET /api/display/sleep - Screen saver status snapshot
-void handleGetDisplaySleep(AsyncWebServerRequest *request) {
-    if (!portal_auth_gate(request)) return;
-    #if HAS_DISPLAY
-    ScreenSaverStatus status = screen_saver_manager_get_status();
-
-    StaticJsonDocument<256> doc;
-    doc["enabled"] = status.enabled;
-    doc["state"] = (uint8_t)status.state;
-    doc["current_brightness"] = status.current_brightness;
-    doc["target_brightness"] = status.target_brightness;
-    doc["seconds_until_sleep"] = status.seconds_until_sleep;
-
-    AsyncResponseStream *response = request->beginResponseStream("application/json");
-    serializeJson(doc, *response);
-    request->send(response);
-    #else
-    request->send(404, "application/json", "{\"success\":false,\"message\":\"No display\"}");
-    #endif
-}
-
-// POST /api/display/sleep - Sleep now
-void handlePostDisplaySleep(AsyncWebServerRequest *request) {
-    if (!portal_auth_gate(request)) return;
-    #if HAS_DISPLAY
-    Logger.logMessage("API", "POST /api/display/sleep");
-    screen_saver_manager_sleep_now();
-    request->send(200, "application/json", "{\"success\":true}");
-    #else
-    request->send(404, "application/json", "{\"success\":false,\"message\":\"No display\"}");
-    #endif
-}
-
-// POST /api/display/wake - Wake now
-void handlePostDisplayWake(AsyncWebServerRequest *request) {
-    if (!portal_auth_gate(request)) return;
-    #if HAS_DISPLAY
-    Logger.logMessage("API", "POST /api/display/wake");
-    screen_saver_manager_wake();
-    request->send(200, "application/json", "{\"success\":true}");
-    #else
-    request->send(404, "application/json", "{\"success\":false,\"message\":\"No display\"}");
-    #endif
-}
-
-// POST /api/display/activity - Reset idle timer; optionally wake
-void handlePostDisplayActivity(AsyncWebServerRequest *request) {
-    if (!portal_auth_gate(request)) return;
-    #if HAS_DISPLAY
-    bool wake = false;
-    if (request->hasParam("wake")) {
-        wake = (request->getParam("wake")->value() == "1");
-    }
-    Logger.logMessagef("API", "POST /api/display/activity (wake=%d)", (int)wake);
-    screen_saver_manager_notify_activity(wake);
-    request->send(200, "application/json", "{\"success\":true}");
-    #else
-    request->send(404, "application/json", "{\"success\":false,\"message\":\"No display\"}");
-    #endif
-}
-
-#if HAS_DISPLAY
-// PUT /api/display/screen - Switch to a different screen (runtime only, no persist)
-void handleSetDisplayScreen(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
-    if (!portal_auth_gate(request)) return;
-    // Only handle the complete request (index == 0 && index + len == total)
-    if (index != 0 || index + len != total) {
-        return;
-    }
-    
-    // Parse JSON body
-    StaticJsonDocument<256> doc;
-    DeserializationError error = deserializeJson(doc, data, len);
-    
-    if (error) {
-        request->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid JSON\"}");
-        return;
-    }
-    
-    // Get screen ID
-    if (!doc.containsKey("screen")) {
-        request->send(400, "application/json", "{\"success\":false,\"message\":\"Missing screen ID\"}");
-        return;
-    }
-    
-    const char* screen_id = doc["screen"];
-    if (!screen_id || strlen(screen_id) == 0) {
-        request->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid screen ID\"}");
-        return;
-    }
-    
-    Logger.logMessagef("API", "PUT /api/display/screen: %s", screen_id);
-    
-    // Switch to requested screen
-    bool success = false;
-    display_manager_show_screen(screen_id, &success);
-
-    // Screen-affecting action counts as explicit activity and should wake.
-    if (success) {
-        screen_saver_manager_notify_activity(true);
-    }
-    
-    if (success) {
-        // Build success response with new screen ID
-        char response[96];
-        snprintf(response, sizeof(response), "{\"success\":true,\"screen\":\"%s\"}", screen_id);
-        request->send(200, "application/json", response);
-    } else {
-        request->send(404, "application/json", "{\"success\":false,\"message\":\"Screen not found\"}");
-    }
-}
-#endif
 
 // POST /api/update - Handle OTA firmware upload
 void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
