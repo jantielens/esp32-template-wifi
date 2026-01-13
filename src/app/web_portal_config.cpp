@@ -15,7 +15,10 @@
 #endif
 
 #include <ArduinoJson.h>
+#include <ChunkPrint.h>
 #include <WiFi.h>
+
+#include <memory>
 
 #include <esp_heap_caps.h>
 
@@ -68,59 +71,75 @@ void handleGetConfig(AsyncWebServerRequest *request) {
     }
 
     // Create JSON response (don't include passwords)
-    BasicJsonDocument<PsramJsonAllocator> doc(2304);
-    doc["wifi_ssid"] = current_config->wifi_ssid;
-    doc["wifi_password"] = ""; // Don't send password
-    doc["device_name"] = current_config->device_name;
+    std::shared_ptr<BasicJsonDocument<PsramJsonAllocator>> doc =
+        std::make_shared<BasicJsonDocument<PsramJsonAllocator>>(2304);
+    if (!doc || doc->capacity() == 0) {
+        request->send(503, "application/json", "{\"success\":false,\"message\":\"Out of memory\"}");
+        return;
+    }
+
+    (*doc)["wifi_ssid"] = current_config->wifi_ssid;
+    (*doc)["wifi_password"] = ""; // Don't send password
+    (*doc)["device_name"] = current_config->device_name;
 
     // Sanitized name for display
     char sanitized[CONFIG_DEVICE_NAME_MAX_LEN];
     config_manager_sanitize_device_name(current_config->device_name, sanitized, CONFIG_DEVICE_NAME_MAX_LEN);
-    doc["device_name_sanitized"] = sanitized;
+    (*doc)["device_name_sanitized"] = sanitized;
 
     // Fixed IP settings
-    doc["fixed_ip"] = current_config->fixed_ip;
-    doc["subnet_mask"] = current_config->subnet_mask;
-    doc["gateway"] = current_config->gateway;
-    doc["dns1"] = current_config->dns1;
-    doc["dns2"] = current_config->dns2;
+    (*doc)["fixed_ip"] = current_config->fixed_ip;
+    (*doc)["subnet_mask"] = current_config->subnet_mask;
+    (*doc)["gateway"] = current_config->gateway;
+    (*doc)["dns1"] = current_config->dns1;
+    (*doc)["dns2"] = current_config->dns2;
 
     // Dummy setting
-    doc["dummy_setting"] = current_config->dummy_setting;
+    (*doc)["dummy_setting"] = current_config->dummy_setting;
 
     // MQTT settings (password not returned)
-    doc["mqtt_host"] = current_config->mqtt_host;
-    doc["mqtt_port"] = current_config->mqtt_port;
-    doc["mqtt_username"] = current_config->mqtt_username;
-    doc["mqtt_password"] = "";
-    doc["mqtt_interval_seconds"] = current_config->mqtt_interval_seconds;
+    (*doc)["mqtt_host"] = current_config->mqtt_host;
+    (*doc)["mqtt_port"] = current_config->mqtt_port;
+    (*doc)["mqtt_username"] = current_config->mqtt_username;
+    (*doc)["mqtt_password"] = "";
+    (*doc)["mqtt_interval_seconds"] = current_config->mqtt_interval_seconds;
 
     // Web portal Basic Auth (password not returned)
-    doc["basic_auth_enabled"] = current_config->basic_auth_enabled;
-    doc["basic_auth_username"] = current_config->basic_auth_username;
-    doc["basic_auth_password"] = "";
-    doc["basic_auth_password_set"] = (strlen(current_config->basic_auth_password) > 0);
+    (*doc)["basic_auth_enabled"] = current_config->basic_auth_enabled;
+    (*doc)["basic_auth_username"] = current_config->basic_auth_username;
+    (*doc)["basic_auth_password"] = "";
+    (*doc)["basic_auth_password_set"] = (strlen(current_config->basic_auth_password) > 0);
 
     // Display settings
-    doc["backlight_brightness"] = current_config->backlight_brightness;
+    (*doc)["backlight_brightness"] = current_config->backlight_brightness;
 
     #if HAS_DISPLAY
     // Screen saver settings
-    doc["screen_saver_enabled"] = current_config->screen_saver_enabled;
-    doc["screen_saver_timeout_seconds"] = current_config->screen_saver_timeout_seconds;
-    doc["screen_saver_fade_out_ms"] = current_config->screen_saver_fade_out_ms;
-    doc["screen_saver_fade_in_ms"] = current_config->screen_saver_fade_in_ms;
-    doc["screen_saver_wake_on_touch"] = current_config->screen_saver_wake_on_touch;
+    (*doc)["screen_saver_enabled"] = current_config->screen_saver_enabled;
+    (*doc)["screen_saver_timeout_seconds"] = current_config->screen_saver_timeout_seconds;
+    (*doc)["screen_saver_fade_out_ms"] = current_config->screen_saver_fade_out_ms;
+    (*doc)["screen_saver_fade_in_ms"] = current_config->screen_saver_fade_in_ms;
+    (*doc)["screen_saver_wake_on_touch"] = current_config->screen_saver_wake_on_touch;
     #endif
 
-    if (doc.overflowed()) {
+    if (doc->overflowed()) {
         Logger.logMessage("Portal", "ERROR: /api/config JSON overflow (StaticJsonDocument too small)");
         request->send(500, "application/json", "{\"success\":false,\"message\":\"Response too large\"}");
         return;
     }
 
-    AsyncResponseStream *response = request->beginResponseStream("application/json");
-    serializeJson(doc, *response);
+    const size_t total_len = measureJson(*doc);
+    AsyncWebServerResponse *response = request->beginChunkedResponse(
+        "application/json",
+        [doc, total_len](uint8_t *buffer, size_t max_len, size_t index) -> size_t {
+            if (index >= total_len) return 0;
+            const size_t remaining = total_len - index;
+            const size_t to_write = remaining < max_len ? remaining : max_len;
+            ChunkPrint cp(buffer, index, to_write);
+            (void)serializeJson(*doc, cp);
+            return to_write;
+        }
+    );
     request->send(response);
 }
 
