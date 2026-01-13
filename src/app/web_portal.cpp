@@ -19,6 +19,7 @@
 #include "device_telemetry.h"
 #include "github_release_config.h"
 #include "../version.h"
+#include "psram_json_allocator.h"
 
 #if HAS_DISPLAY
 #include "display_manager.h"
@@ -36,6 +37,8 @@
 #include <Update.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
+
+#include <esp_heap_caps.h>
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -247,7 +250,7 @@ static bool github_fetch_latest_release(char *out_version, size_t out_version_le
         return false;
     }
 
-    DynamicJsonDocument doc(8192);
+    BasicJsonDocument<PsramJsonAllocator> doc(8192);
     DeserializationError err = deserializeJson(doc, payload, DeserializationOption::Filter(filter));
     if (err) {
         if (out_error && out_error_len > 0) {
@@ -310,6 +313,27 @@ static bool github_fetch_latest_release(char *out_version, size_t out_version_le
     http.end();
     return true;
 #endif
+}
+
+// /api/config body accumulator (chunk-safe)
+static portMUX_TYPE g_config_post_mux = portMUX_INITIALIZER_UNLOCKED;
+static struct {
+    bool in_progress;
+    uint32_t started_ms;
+    size_t total;
+    size_t received;
+    uint8_t* buf;
+} g_config_post = {false, 0, 0, 0, nullptr};
+
+static void config_post_reset() {
+    if (g_config_post.buf) {
+        heap_caps_free(g_config_post.buf);
+        g_config_post.buf = nullptr;
+    }
+    g_config_post.in_progress = false;
+    g_config_post.total = 0;
+    g_config_post.received = 0;
+    g_config_post.started_ms = 0;
 }
 
 static void firmware_update_task(void *pv) {
@@ -707,7 +731,7 @@ void handleGetConfig(AsyncWebServerRequest *request) {
     }
     
     // Create JSON response (don't include passwords)
-    StaticJsonDocument<2304> doc;
+    BasicJsonDocument<PsramJsonAllocator> doc(2304);
     doc["wifi_ssid"] = current_config->wifi_ssid;
     doc["wifi_password"] = ""; // Don't send password
     doc["device_name"] = current_config->device_name;
@@ -772,17 +796,115 @@ void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len,
         return;
     }
     
-    // Parse JSON body
-    StaticJsonDocument<2304> doc;
-    DeserializationError error = deserializeJson(doc, data, len);
+    // Accumulate the full body (chunk-safe) then parse once.
+    if (index == 0) {
+        // If a previous upload got stuck, reset it.
+        const uint32_t now = millis();
+        portENTER_CRITICAL(&g_config_post_mux);
+        const bool stale = g_config_post.in_progress && g_config_post.started_ms && (now - g_config_post.started_ms > WEB_PORTAL_CONFIG_BODY_TIMEOUT_MS);
+        portEXIT_CRITICAL(&g_config_post_mux);
+        if (stale) {
+            Logger.logMessage("Portal", "Config upload timed out; resetting state");
+            portENTER_CRITICAL(&g_config_post_mux);
+            config_post_reset();
+            portEXIT_CRITICAL(&g_config_post_mux);
+        }
+
+        portENTER_CRITICAL(&g_config_post_mux);
+        if (g_config_post.in_progress) {
+            portEXIT_CRITICAL(&g_config_post_mux);
+            request->send(409, "application/json", "{\"success\":false,\"message\":\"Config update already in progress\"}");
+            return;
+        }
+        g_config_post.in_progress = true;
+        g_config_post.started_ms = now;
+        g_config_post.total = total;
+        g_config_post.received = 0;
+        g_config_post.buf = nullptr;
+        portEXIT_CRITICAL(&g_config_post_mux);
+
+        if (total == 0 || total > WEB_PORTAL_CONFIG_MAX_JSON_BYTES) {
+            portENTER_CRITICAL(&g_config_post_mux);
+            config_post_reset();
+            portEXIT_CRITICAL(&g_config_post_mux);
+            request->send(413, "application/json", "{\"success\":false,\"message\":\"JSON body too large\"}");
+            return;
+        }
+
+        uint8_t* buf = nullptr;
+        if (psramFound()) {
+            buf = (uint8_t*)heap_caps_malloc(total + 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        }
+        if (!buf) {
+            buf = (uint8_t*)heap_caps_malloc(total + 1, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        }
+        if (!buf) {
+            portENTER_CRITICAL(&g_config_post_mux);
+            config_post_reset();
+            portEXIT_CRITICAL(&g_config_post_mux);
+            request->send(503, "application/json", "{\"success\":false,\"message\":\"Out of memory\"}");
+            return;
+        }
+
+        portENTER_CRITICAL(&g_config_post_mux);
+        g_config_post.buf = buf;
+        portEXIT_CRITICAL(&g_config_post_mux);
+    }
+
+    // Copy this chunk.
+    portENTER_CRITICAL(&g_config_post_mux);
+    const bool ok = g_config_post.in_progress && g_config_post.buf && g_config_post.total == total && (index + len) <= total;
+    uint8_t* dst = g_config_post.buf;
+    portEXIT_CRITICAL(&g_config_post_mux);
+
+    if (!ok) {
+        request->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid upload state\"}");
+        portENTER_CRITICAL(&g_config_post_mux);
+        config_post_reset();
+        portEXIT_CRITICAL(&g_config_post_mux);
+        return;
+    }
+
+    memcpy(dst + index, data, len);
+
+    portENTER_CRITICAL(&g_config_post_mux);
+    const size_t new_received = index + len;
+    if (new_received > g_config_post.received) {
+        g_config_post.received = new_received;
+    }
+    const bool done = (g_config_post.received >= g_config_post.total);
+    portEXIT_CRITICAL(&g_config_post_mux);
+
+    if (!done) {
+        // More chunks to come.
+        return;
+    }
+
+    // Finalize buffer and parse.
+    uint8_t* body = nullptr;
+    size_t body_len = 0;
+    portENTER_CRITICAL(&g_config_post_mux);
+    body = g_config_post.buf;
+    body_len = g_config_post.total;
+    if (body) body[body_len] = 0;
+    portEXIT_CRITICAL(&g_config_post_mux);
+
+    BasicJsonDocument<PsramJsonAllocator> doc(2304);
+    DeserializationError error = deserializeJson(doc, body, body_len);
     
     if (error) {
         Logger.logMessagef("Portal", "JSON parse error: %s", error.c_str());
         if (error == DeserializationError::NoMemory) {
             request->send(413, "application/json", "{\"success\":false,\"message\":\"JSON body too large\"}");
+            portENTER_CRITICAL(&g_config_post_mux);
+            config_post_reset();
+            portEXIT_CRITICAL(&g_config_post_mux);
             return;
         }
         request->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid JSON\"}");
+        portENTER_CRITICAL(&g_config_post_mux);
+        config_post_reset();
+        portEXIT_CRITICAL(&g_config_post_mux);
         return;
     }
     
@@ -793,6 +915,9 @@ void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len,
     // Otherwise, an attacker near the device could wait for fallback AP mode and lock out the owner.
     if (ap_mode_active && (doc.containsKey("basic_auth_enabled") || doc.containsKey("basic_auth_username") || doc.containsKey("basic_auth_password"))) {
         request->send(403, "application/json", "{\"success\":false,\"message\":\"Basic Auth settings cannot be changed in AP mode\"}");
+        portENTER_CRITICAL(&g_config_post_mux);
+        config_post_reset();
+        portEXIT_CRITICAL(&g_config_post_mux);
         return;
     }
     
@@ -980,6 +1105,9 @@ void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len,
     // Validate config
     if (!config_manager_is_valid(current_config)) {
         request->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid configuration\"}");
+        portENTER_CRITICAL(&g_config_post_mux);
+        config_post_reset();
+        portEXIT_CRITICAL(&g_config_post_mux);
         return;
     }
     
@@ -987,6 +1115,10 @@ void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len,
     if (config_manager_save(current_config)) {
         Logger.logMessage("Portal", "Config saved");
         request->send(200, "application/json", "{\"success\":true,\"message\":\"Configuration saved\"}");
+
+        portENTER_CRITICAL(&g_config_post_mux);
+        config_post_reset();
+        portEXIT_CRITICAL(&g_config_post_mux);
         
         // Check for no_reboot parameter
         if (!request->hasParam("no_reboot")) {
@@ -998,6 +1130,10 @@ void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len,
     } else {
         Logger.logMessage("Portal", "Config save failed");
         request->send(500, "application/json", "{\"success\":false,\"message\":\"Failed to save\"}");
+
+        portENTER_CRITICAL(&g_config_post_mux);
+        config_post_reset();
+        portEXIT_CRITICAL(&g_config_post_mux);
     }
 }
 
@@ -1647,6 +1783,14 @@ void web_portal_stop_ap() {
 void web_portal_handle() {
     if (ap_mode_active) {
         dnsServer.processNextRequest();
+    }
+
+    // Cleanup stuck /api/config uploads.
+    if (g_config_post.in_progress && g_config_post.started_ms && (millis() - g_config_post.started_ms > WEB_PORTAL_CONFIG_BODY_TIMEOUT_MS)) {
+        Logger.logMessage("Portal", "Config upload timed out (loop cleanup)");
+        portENTER_CRITICAL(&g_config_post_mux);
+        config_post_reset();
+        portEXIT_CRITICAL(&g_config_post_mux);
     }
 }
 

@@ -243,6 +243,9 @@ void loop()
   mqtt_manager.loop();
   #endif
 
+  // Lightweight telemetry tripwires (runs from main loop only).
+  device_telemetry_check_tripwires();
+
   unsigned long currentMillis = millis();
 
   // WiFi watchdog - monitor connection and reconnect if needed

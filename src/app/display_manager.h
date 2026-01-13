@@ -67,6 +67,10 @@ private:
     Screen* previousScreen;  // Track previous screen for return navigation
     Screen* pendingScreen;   // Deferred screen switch (processed in lvglTask)
 
+    // Defer small LVGL UI updates (like splash status) to the LVGL task.
+    char pendingSplashStatus[96];
+    volatile bool pendingSplashStatusSet;
+
     // Helpers: avoid taking the LVGL mutex when already inside the LVGL task
     bool isInLvglTask() const;
     void lockIfNeeded(bool& didLock);
