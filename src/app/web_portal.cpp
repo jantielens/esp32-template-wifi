@@ -12,12 +12,12 @@
 //   The build script propagates this allowlisted define into library builds.
 
 #include "web_portal.h"
-#include "web_assets.h"
 #include "config_manager.h"
 #include "log_manager.h"
 #include "board_config.h"
 #include "device_telemetry.h"
 #include "github_release_config.h"
+#include "project_branding.h"
 #include "../version.h"
 #include "psram_json_allocator.h"
 #include "web_portal_routes.h"
@@ -70,12 +70,6 @@ static void log_async_tcp_stack_watermark_once() {
 
 // Forward declarations
 void handleRoot(AsyncWebServerRequest *request);
-void handleHome(AsyncWebServerRequest *request);
-void handleNetwork(AsyncWebServerRequest *request);
-void handleFirmware(AsyncWebServerRequest *request);
-void handleCSS(AsyncWebServerRequest *request);
-void handleJS(AsyncWebServerRequest *request);
-void handleGetVersion(AsyncWebServerRequest *request);
 void handleGetMode(AsyncWebServerRequest *request);
 void handleGetHealth(AsyncWebServerRequest *request);
 void handleReboot(AsyncWebServerRequest *request);
@@ -557,124 +551,6 @@ void handleGetFirmwareUpdateStatus(AsyncWebServerRequest *request) {
 // Use this flag to defer "hide current image / return" operations to the main loop.
 static volatile bool pending_image_hide_request = false;
 #endif
-
-// ===== WEB SERVER HANDLERS =====
-
-static AsyncWebServerResponse *begin_gzipped_asset_response(
-    AsyncWebServerRequest *request,
-    const char *content_type,
-    const uint8_t *content_gz,
-    size_t content_gz_len,
-    const char *cache_control
-) {
-    // Prefer the PROGMEM-aware response helper to avoid accidental heap copies.
-    // All generated assets live in flash as `const uint8_t[] PROGMEM`.
-    AsyncWebServerResponse *response = request->beginResponse_P(
-        200,
-        content_type,
-        content_gz,
-        content_gz_len
-    );
-
-    response->addHeader("Content-Encoding", "gzip");
-    response->addHeader("Vary", "Accept-Encoding");
-    if (cache_control && strlen(cache_control) > 0) {
-        response->addHeader("Cache-Control", cache_control);
-    }
-    return response;
-}
-
-// Handle root - redirect to network.html in AP mode, serve home in full mode
-void handleRoot(AsyncWebServerRequest *request) {
-    if (!portal_auth_gate(request)) return;
-    if (ap_mode_active) {
-        // In AP mode, redirect to network configuration page
-        request->redirect("/network.html");
-    } else {
-        // In full mode, serve home page
-        AsyncWebServerResponse *response = begin_gzipped_asset_response(
-            request,
-            "text/html",
-            home_html_gz,
-            home_html_gz_len,
-            "no-store"
-        );
-        request->send(response);
-    }
-}
-
-// Serve home page
-void handleHome(AsyncWebServerRequest *request) {
-    if (!portal_auth_gate(request)) return;
-    if (ap_mode_active) {
-        // In AP mode, redirect to network configuration page
-        request->redirect("/network.html");
-        return;
-    }
-    AsyncWebServerResponse *response = begin_gzipped_asset_response(
-        request,
-        "text/html",
-        home_html_gz,
-        home_html_gz_len,
-        "no-store"
-    );
-    request->send(response);
-}
-
-// Serve network configuration page
-void handleNetwork(AsyncWebServerRequest *request) {
-    if (!portal_auth_gate(request)) return;
-    AsyncWebServerResponse *response = begin_gzipped_asset_response(
-        request,
-        "text/html",
-        network_html_gz,
-        network_html_gz_len,
-        "no-store"
-    );
-    request->send(response);
-}
-
-// Serve firmware update page
-void handleFirmware(AsyncWebServerRequest *request) {
-    if (!portal_auth_gate(request)) return;
-    if (ap_mode_active) {
-        // In AP mode, redirect to network configuration page
-        request->redirect("/network.html");
-        return;
-    }
-    AsyncWebServerResponse *response = begin_gzipped_asset_response(
-        request,
-        "text/html",
-        firmware_html_gz,
-        firmware_html_gz_len,
-        "no-store"
-    );
-    request->send(response);
-}
-
-// Serve CSS
-void handleCSS(AsyncWebServerRequest *request) {
-    AsyncWebServerResponse *response = begin_gzipped_asset_response(
-        request,
-        "text/css",
-        portal_css_gz,
-        portal_css_gz_len,
-        "public, max-age=600"
-    );
-    request->send(response);
-}
-
-// Serve JavaScript
-void handleJS(AsyncWebServerRequest *request) {
-    AsyncWebServerResponse *response = begin_gzipped_asset_response(
-        request,
-        "application/javascript",
-        portal_js_gz,
-        portal_js_gz_len,
-        "public, max-age=600"
-    );
-    request->send(response);
-}
 
 // GET /api/mode - Return portal mode (core vs full)
 void handleGetMode(AsyncWebServerRequest *request) {

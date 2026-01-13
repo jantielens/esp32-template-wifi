@@ -2,15 +2,9 @@
 #include "web_portal_auth.h"
 #include "web_portal_config.h"
 #include "web_portal_display.h"
+#include "web_portal_pages.h"
 
 #include "board_config.h"
-
-void handleRoot(AsyncWebServerRequest *request);
-void handleHome(AsyncWebServerRequest *request);
-void handleNetwork(AsyncWebServerRequest *request);
-void handleFirmware(AsyncWebServerRequest *request);
-void handleCSS(AsyncWebServerRequest *request);
-void handleJS(AsyncWebServerRequest *request);
 
 void handleGetMode(AsyncWebServerRequest *request);
 void handleGetVersion(AsyncWebServerRequest *request);
