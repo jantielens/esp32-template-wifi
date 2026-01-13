@@ -8,6 +8,7 @@
 #include "log_manager.h"
 #include "project_branding.h"
 #include "psram_json_allocator.h"
+#include "web_portal_json.h"
 #include "../version.h"
 
 #include <ArduinoJson.h>
@@ -360,15 +361,16 @@ void handleGetFirmwareLatest(AsyncWebServerRequest *request) {
 
     const bool update_available = (compare_semver(FIRMWARE_VERSION, latest) < 0);
 
-    StaticJsonDocument<384> doc;
-    doc["success"] = true;
-    doc["current_version"] = FIRMWARE_VERSION;
-    doc["latest_version"] = latest;
-    doc["update_available"] = update_available;
+    std::shared_ptr<BasicJsonDocument<PsramJsonAllocator>> doc =
+        std::make_shared<BasicJsonDocument<PsramJsonAllocator>>(512);
+    if (doc && doc->capacity() > 0) {
+        (*doc)["success"] = true;
+        (*doc)["current_version"] = FIRMWARE_VERSION;
+        (*doc)["latest_version"] = latest;
+        (*doc)["update_available"] = update_available;
+    }
 
-    AsyncResponseStream *response = request->beginResponseStream("application/json");
-    serializeJson(doc, *response);
-    request->send(response);
+    web_portal_send_json_chunked(request, doc);
 #endif
 }
 
@@ -429,31 +431,34 @@ void handlePostFirmwareUpdate(AsyncWebServerRequest *request) {
         return;
     }
 
-    StaticJsonDocument<256> doc;
-    doc["success"] = true;
-    doc["update_started"] = true;
-    doc["current_version"] = FIRMWARE_VERSION;
-    doc["latest_version"] = latest;
+    std::shared_ptr<BasicJsonDocument<PsramJsonAllocator>> doc =
+        std::make_shared<BasicJsonDocument<PsramJsonAllocator>>(384);
+    if (doc && doc->capacity() > 0) {
+        (*doc)["success"] = true;
+        (*doc)["update_started"] = true;
+        (*doc)["current_version"] = FIRMWARE_VERSION;
+        (*doc)["latest_version"] = latest;
+    }
 
-    AsyncResponseStream *response = request->beginResponseStream("application/json");
-    serializeJson(doc, *response);
-    request->send(response);
+    web_portal_send_json_chunked(request, doc);
 #endif
 }
 
 // GET /api/firmware/update/status - Progress snapshot for online update.
 void handleGetFirmwareUpdateStatus(AsyncWebServerRequest *request) {
     if (!portal_auth_gate(request)) return;
-    StaticJsonDocument<384> doc;
-    doc["enabled"] = (GITHUB_UPDATES_ENABLED ? true : false);
-    doc["in_progress"] = firmware_update_in_progress;
-    doc["state"] = firmware_update_state;
-    doc["progress"] = (uint32_t)firmware_update_progress;
-    doc["total"] = (uint32_t)firmware_update_total;
-    doc["latest_version"] = firmware_update_latest_version;
-    doc["error"] = firmware_update_error;
 
-    AsyncResponseStream *response = request->beginResponseStream("application/json");
-    serializeJson(doc, *response);
-    request->send(response);
+    std::shared_ptr<BasicJsonDocument<PsramJsonAllocator>> doc =
+        std::make_shared<BasicJsonDocument<PsramJsonAllocator>>(512);
+    if (doc && doc->capacity() > 0) {
+        (*doc)["enabled"] = (GITHUB_UPDATES_ENABLED ? true : false);
+        (*doc)["in_progress"] = firmware_update_in_progress;
+        (*doc)["state"] = firmware_update_state;
+        (*doc)["progress"] = (uint32_t)firmware_update_progress;
+        (*doc)["total"] = (uint32_t)firmware_update_total;
+        (*doc)["latest_version"] = firmware_update_latest_version;
+        (*doc)["error"] = firmware_update_error;
+    }
+
+    web_portal_send_json_chunked(request, doc);
 }

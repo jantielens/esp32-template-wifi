@@ -9,13 +9,11 @@
 #include "log_manager.h"
 #include "psram_json_allocator.h"
 #include "project_branding.h"
+#include "web_portal_json.h"
 #include "../version.h"
 
 #include <ArduinoJson.h>
-#include <ChunkPrint.h>
 #include <WiFi.h>
-
-#include <memory>
 
 #if HAS_DISPLAY
 #include "display_manager.h"
@@ -154,32 +152,14 @@ void handleGetHealth(AsyncWebServerRequest *request) {
 
     std::shared_ptr<BasicJsonDocument<PsramJsonAllocator>> doc =
         std::make_shared<BasicJsonDocument<PsramJsonAllocator>>(1536);
-    if (!doc || doc->capacity() == 0) {
-        request->send(503, "application/json", "{\"success\":false,\"message\":\"Out of memory\"}");
-        return;
-    }
-
-    device_telemetry_fill_api(*doc);
-
-    if (doc->overflowed()) {
-        Logger.logMessage("Portal", "ERROR: /api/health JSON overflow");
-        request->send(500, "application/json", "{\"success\":false,\"message\":\"Response too large\"}");
-        return;
-    }
-
-    const size_t total_len = measureJson(*doc);
-    AsyncWebServerResponse *response = request->beginChunkedResponse(
-        "application/json",
-        [doc, total_len](uint8_t *buffer, size_t max_len, size_t index) -> size_t {
-            if (index >= total_len) return 0;
-            const size_t remaining = total_len - index;
-            const size_t to_write = remaining < max_len ? remaining : max_len;
-            ChunkPrint cp(buffer, index, to_write);
-            (void)serializeJson(*doc, cp);
-            return to_write;
+    if (doc && doc->capacity() > 0) {
+        device_telemetry_fill_api(*doc);
+        if (doc->overflowed()) {
+            Logger.logMessage("Portal", "ERROR: /api/health JSON overflow");
         }
-    );
-    request->send(response);
+    }
+
+    web_portal_send_json_chunked(request, doc);
 }
 
 // POST /api/reboot - Reboot device without saving
