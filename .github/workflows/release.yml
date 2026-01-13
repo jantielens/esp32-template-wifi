@@ -127,10 +127,10 @@ jobs:
         # - boot_app0.bin: OTA boot helper (from ESP32 core)
         # - app.ino.merged.bin: legacy merged image (flash at offset 0; may overwrite NVS)
 
-        APP_BIN="$BOARD_DIR/app.ino.bin"
-  BOOTLOADER_BIN="$BOARD_DIR/app.ino.bootloader.bin"
-  PARTITIONS_BIN="$BOARD_DIR/app.ino.partitions.bin"
-        MERGED_BIN="$BOARD_DIR/app.ino.merged.bin"
+          APP_BIN="$BOARD_DIR/app.ino.bin"
+          BOOTLOADER_BIN="$BOARD_DIR/app.ino.bootloader.bin"
+          PARTITIONS_BIN="$BOARD_DIR/app.ino.partitions.bin"
+          MERGED_BIN="$BOARD_DIR/app.ino.merged.bin"
 
         if [ ! -f "$APP_BIN" ]; then
           echo "Error: app-only firmware not found: $APP_BIN"
