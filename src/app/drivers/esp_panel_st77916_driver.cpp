@@ -271,7 +271,19 @@ void ESPPanel_ST77916_Driver::init() {
     // Allocate a reusable swap buffer for optional byte swapping.
     // Size it to the LVGL draw buffer so we can swap+flush in one drawBitmap call.
     swapBufCapacityPixels = (uint32_t)LVGL_BUFFER_SIZE;
-    swapBuf = (uint16_t*)heap_caps_malloc(sizeof(uint16_t) * swapBufCapacityPixels, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    if (ESP_PANEL_SWAPBUF_PREFER_INTERNAL) {
+        swapBuf = (uint16_t*)heap_caps_malloc(sizeof(uint16_t) * swapBufCapacityPixels, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        if (!swapBuf) {
+            Logger.logLine("ESP_Panel: swapBuf internal alloc failed, trying PSRAM...");
+            swapBuf = (uint16_t*)heap_caps_malloc(sizeof(uint16_t) * swapBufCapacityPixels, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        }
+    } else {
+        swapBuf = (uint16_t*)heap_caps_malloc(sizeof(uint16_t) * swapBufCapacityPixels, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!swapBuf) {
+            Logger.logLine("ESP_Panel: swapBuf PSRAM alloc failed, trying internal...");
+            swapBuf = (uint16_t*)heap_caps_malloc(sizeof(uint16_t) * swapBufCapacityPixels, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        }
+    }
 
     Logger.logLine("ESP_Panel: Display initialized");
 }

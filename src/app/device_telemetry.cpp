@@ -1,6 +1,7 @@
 #include "device_telemetry.h"
 
 #include "log_manager.h"
+#include "board_config.h"
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -47,6 +48,56 @@ static void get_memory_snapshot(
     size_t *out_psram_min,
     size_t *out_psram_largest
 );
+
+static void log_task_stack_watermarks_one_shot() {
+    const UBaseType_t task_count = uxTaskGetNumberOfTasks();
+    if (task_count == 0) return;
+
+    TaskStatus_t* tasks = nullptr;
+    if (psramFound()) {
+        tasks = (TaskStatus_t*)heap_caps_malloc(sizeof(TaskStatus_t) * task_count, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    }
+    if (!tasks) {
+        tasks = (TaskStatus_t*)heap_caps_malloc(sizeof(TaskStatus_t) * task_count, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    }
+    if (!tasks) {
+        Logger.logMessage("Mem", "TRIPWIRE: OOM while allocating task list");
+        return;
+    }
+
+    uint32_t total_runtime = 0;
+    const UBaseType_t got = uxTaskGetSystemState(tasks, task_count, &total_runtime);
+    if (got == 0) {
+        heap_caps_free(tasks);
+        Logger.logMessage("Mem", "TRIPWIRE: uxTaskGetSystemState returned 0");
+        return;
+    }
+
+    // Sort by lowest high-water mark first (most at risk).
+    for (UBaseType_t i = 0; i < got; i++) {
+        UBaseType_t best = i;
+        for (UBaseType_t j = i + 1; j < got; j++) {
+            if (tasks[j].usStackHighWaterMark < tasks[best].usStackHighWaterMark) {
+                best = j;
+            }
+        }
+        if (best != i) {
+            TaskStatus_t tmp = tasks[i];
+            tasks[i] = tasks[best];
+            tasks[best] = tmp;
+        }
+    }
+
+    // Keep logs bounded.
+    const UBaseType_t max_to_log = (got > 16) ? 16 : got;
+    Logger.logMessagef("Mem", "TRIPWIRE: task stack watermarks (worst %u/%u)", (unsigned)max_to_log, (unsigned)got);
+    for (UBaseType_t i = 0; i < max_to_log; i++) {
+        const unsigned bytes = (unsigned)tasks[i].usStackHighWaterMark * (unsigned)sizeof(StackType_t);
+        Logger.logMessagef("Stack", "%s hw=%u", tasks[i].pcTaskName ? tasks[i].pcTaskName : "(null)", bytes);
+    }
+
+    heap_caps_free(tasks);
+}
 
 DeviceMemorySnapshot device_telemetry_get_memory_snapshot() {
     DeviceMemorySnapshot snapshot = {};
@@ -114,6 +165,37 @@ void device_telemetry_log_memory_snapshot(const char *tag) {
         (unsigned)psram_min,
         (unsigned)psram_largest
     );
+}
+
+void device_telemetry_check_tripwires() {
+    #if MEMORY_TRIPWIRE_INTERNAL_MIN_BYTES == 0
+    return;
+    #else
+    static bool fired = false;
+    static unsigned long last_check = 0;
+
+    if (fired) return;
+
+    const unsigned long now = millis();
+    if (last_check != 0 && (now - last_check) < (unsigned long)MEMORY_TRIPWIRE_CHECK_INTERVAL_MS) {
+        return;
+    }
+    last_check = now;
+
+    DeviceMemorySnapshot snapshot = device_telemetry_get_memory_snapshot();
+    if (snapshot.heap_internal_min_free_bytes > (size_t)MEMORY_TRIPWIRE_INTERNAL_MIN_BYTES) {
+        return;
+    }
+
+    fired = true;
+    Logger.logMessagef(
+        "Mem",
+        "TRIPWIRE fired: internal_min=%u <= %u",
+        (unsigned)snapshot.heap_internal_min_free_bytes,
+        (unsigned)MEMORY_TRIPWIRE_INTERNAL_MIN_BYTES
+    );
+    log_task_stack_watermarks_one_shot();
+    #endif
 }
 
 void device_telemetry_fill_api(JsonDocument &doc) {

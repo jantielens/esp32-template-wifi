@@ -19,6 +19,8 @@
 
 #include <SPI.h>
 
+static portMUX_TYPE g_splash_status_mux = portMUX_INITIALIZER_UNLOCKED;
+
 // Global instance
 DisplayManager* displayManager = nullptr;
 
@@ -28,7 +30,8 @@ DisplayManager::DisplayManager(DeviceConfig* cfg)
       #if HAS_IMAGE_API
       directImageScreen(this),
       #endif
-        lvglTaskHandle(nullptr), lvglMutex(nullptr), screenCount(0), buf(nullptr), flushPending(false), directImageActive(false) {
+                lvglTaskHandle(nullptr), lvglMutex(nullptr), screenCount(0), buf(nullptr), flushPending(false), directImageActive(false), pendingSplashStatusSet(false) {
+        pendingSplashStatus[0] = '\0';
     // Instantiate selected display driver
     #if DISPLAY_DRIVER == DISPLAY_DRIVER_TFT_ESPI
     driver = new TFT_eSPI_Driver();
@@ -211,6 +214,22 @@ void DisplayManager::lvglTask(void* pvParameter) {
     
     while (true) {
         mgr->lock();
+
+        // Apply any deferred splash status update.
+        if (mgr->pendingSplashStatusSet) {
+            char text[sizeof(mgr->pendingSplashStatus)];
+            bool has = false;
+            portENTER_CRITICAL(&g_splash_status_mux);
+            if (mgr->pendingSplashStatusSet) {
+                strlcpy(text, mgr->pendingSplashStatus, sizeof(text));
+                mgr->pendingSplashStatusSet = false;
+                has = true;
+            }
+            portEXIT_CRITICAL(&g_splash_status_mux);
+            if (has) {
+                mgr->splashScreen.setStatus(text);
+            }
+        }
         
         // Process pending screen switch (deferred from external calls)
         if (mgr->pendingScreen) {
@@ -457,9 +476,20 @@ void DisplayManager::returnToPreviousScreen() {
 #endif
 
 void DisplayManager::setSplashStatus(const char* text) {
-    lock();
-    splashScreen.setStatus(text);
-    unlock();
+    // If called before the LVGL task exists (during early setup), update directly.
+    // Otherwise, defer to the LVGL task to avoid cross-task LVGL calls.
+    if (!lvglTaskHandle || isInLvglTask()) {
+        bool didLock = false;
+        lockIfNeeded(didLock);
+        splashScreen.setStatus(text);
+        unlockIfNeeded(didLock);
+        return;
+    }
+
+    portENTER_CRITICAL(&g_splash_status_mux);
+    strlcpy(pendingSplashStatus, text ? text : "", sizeof(pendingSplashStatus));
+    pendingSplashStatusSet = true;
+    portEXIT_CRITICAL(&g_splash_status_mux);
 }
 
 bool DisplayManager::showScreen(const char* screen_id) {

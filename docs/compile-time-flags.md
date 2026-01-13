@@ -18,7 +18,7 @@ This document is a template. Sections marked with `COMPILE_FLAG_REPORT` markers 
 ## Flags (generated)
 
 <!-- BEGIN COMPILE_FLAG_REPORT:FLAGS -->
-Total flags: 78
+Total flags: 83
 
 ### Features (HAS_*)
 
@@ -94,9 +94,12 @@ Total flags: 78
 - **LVGL_BUFFER_PREFER_INTERNAL** default: `false` — Prefer internal RAM over PSRAM for LVGL draw buffer allocation.
 - **LVGL_BUFFER_SIZE** default: `(DISPLAY_WIDTH * 10)` — LVGL draw buffer size in pixels (larger = faster, more RAM).
 - **LVGL_TICK_PERIOD_MS** default: `5` — LVGL tick period in milliseconds.
+- **MEMORY_TRIPWIRE_INTERNAL_MIN_BYTES** default: `0` — Default: disabled (0). Enable per-board if you want early warning logs.
 - **TFT_SPI_FREQUENCY** default: `(no default)` — TFT SPI clock frequency.
 - **TFT_SPI_FREQ_HZ** default: `(no default)` — QSPI clock frequency (Hz).
 - **TOUCH_I2C_FREQ_HZ** default: `(no default)` — I2C frequency (Hz).
+- **WEB_PORTAL_CONFIG_BODY_TIMEOUT_MS** default: `5000` — Timeout for an incomplete /api/config upload (ms) before freeing the buffer.
+- **WEB_PORTAL_CONFIG_MAX_JSON_BYTES** default: `4096` — Max JSON body size accepted by /api/config.
 - **WIFI_MAX_ATTEMPTS** default: `3` — Maximum WiFi connection attempts at boot before falling back.
 
 ### Other
@@ -105,8 +108,10 @@ Total flags: 78
 - **DISPLAY_DRIVER_ILI9341_2** default: `(no default)` — Use the ILI9341_2 controller setup in TFT_eSPI.
 - **DISPLAY_INVERSION_ON** default: `(no default)` — Enable display inversion (panel-specific).
 - **DISPLAY_NEEDS_GAMMA_FIX** default: `(no default)` — Apply gamma correction fix for this panel variant.
+- **ESP_PANEL_SWAPBUF_PREFER_INTERNAL** default: `true` — Default: true. Some panel buses are more reliable with internal/DMA-capable buffers.
 - **LCD_QSPI_HOST** default: `(no default)` — QSPI host peripheral.
 - **LED_ACTIVE_HIGH** default: `true` — LED polarity: true if HIGH turns the LED on.
+- **MEMORY_TRIPWIRE_CHECK_INTERVAL_MS** default: `5000` — How often to check tripwires from the main loop.
 - **PROJECT_DISPLAY_NAME** default: `"ESP32 Device"` — Human-friendly project name used in the web UI and device name (can be set by build system).
 - **TFT_BACKLIGHT_ON** default: `(no default)` — Backlight "on" level.
 - **TFT_BACKLIGHT_PWM_CHANNEL** default: `0` — LEDC channel used for backlight PWM.
@@ -172,6 +177,11 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/screens/lvgl_image_screen.h
   - src/app/touch_manager.cpp
   - src/app/web_portal.cpp
+  - src/app/web_portal_config.cpp
+  - src/app/web_portal_device_api.cpp
+  - src/app/web_portal_display.cpp
+  - src/app/web_portal_display.h
+  - src/app/web_portal_routes.cpp
 - **HAS_IMAGE_API**
   - src/app/app.ino
   - src/app/board_config.h
@@ -223,6 +233,8 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/drivers/tft_espi_driver.cpp
 - **DISPLAY_ROTATION**
   - src/app/touch_manager.cpp
+- **ESP_PANEL_SWAPBUF_PREFER_INTERNAL**
+  - src/app/board_config.h
 - **IMAGE_API_DECODE_HEADROOM_BYTES**
   - src/app/board_config.h
 - **IMAGE_API_DEFAULT_TIMEOUT_MS**
@@ -247,6 +259,11 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/board_config.h
 - **LVGL_TICK_PERIOD_MS**
   - src/app/board_config.h
+- **MEMORY_TRIPWIRE_CHECK_INTERVAL_MS**
+  - src/app/board_config.h
+- **MEMORY_TRIPWIRE_INTERNAL_MIN_BYTES**
+  - src/app/board_config.h
+  - src/app/device_telemetry.cpp
 - **PROJECT_DISPLAY_NAME**
   - src/app/board_config.h
 - **TFT_BACKLIGHT_ON**
@@ -276,6 +293,10 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/drivers/xpt2046_driver.cpp
 - **TOUCH_SCLK**
   - src/app/drivers/xpt2046_driver.cpp
+- **WEB_PORTAL_CONFIG_BODY_TIMEOUT_MS**
+  - src/app/board_config.h
+- **WEB_PORTAL_CONFIG_MAX_JSON_BYTES**
+  - src/app/board_config.h
 - **WIFI_MAX_ATTEMPTS**
   - src/app/board_config.h
 <!-- END COMPILE_FLAG_REPORT:USAGE -->

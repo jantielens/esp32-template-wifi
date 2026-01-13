@@ -46,4 +46,8 @@ DeviceMemorySnapshot device_telemetry_get_memory_snapshot();
 // Convenience logging helper (single line) using LogManager.
 void device_telemetry_log_memory_snapshot(const char *tag);
 
+// Call from the main loop to run lightweight one-shot tripwires.
+// (Avoid calling from AsyncTCP/other background tasks.)
+void device_telemetry_check_tripwires();
+
 #endif // DEVICE_TELEMETRY_H

@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.35] - 2026-01-13
+
+### Added
+- Memory telemetry: unified heap/internal/PSRAM snapshots and a low-memory tripwire with per-task stack watermark dump
+- PSRAM-preferring ArduinoJson allocator for large documents (PSRAM-first with internal fallback)
+
+### Changed
+- Web portal: modularized route wiring and handlers into focused portal modules
+- Web API: stream heavy JSON endpoints using chunked responses (health, config, firmware) and centralized JSON response helpers
+- Display: defer LVGL/screen updates to the LVGL task to avoid cross-task LVGL calls
+
+### Fixed
+- Web portal: route ordering and OTA gating hardening
+- CI: fix YAML indentation regression in `.github/workflows/release.yml`
+
 ## [0.0.34] - 2026-01-13
 
 ### Added
