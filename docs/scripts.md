@@ -223,6 +223,7 @@ This script automates both steps.
 ./upload.sh --full        # Flash bootloader + partitions + boot_app0 + app at the correct offsets (preserves NVS by default)
 ./upload.sh --app-only    # Flash only the app at the correct app offset
 ./upload.sh --merged      # Flash merged image at 0x0 (legacy; overwrites NVS on most layouts)
+./upload.sh --baud 921600 # Set esptool baud rate for flashing (faster on many USB-UART adapters)
 ./upload.sh --erase-nvs   # Erase NVS only (WiFi/config reset)
 ./upload.sh --erase-flash # Erase entire flash (destructive)
 ```

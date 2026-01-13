@@ -8,6 +8,7 @@
 #   --full        Flash bootloader + partitions + boot_app0 + app at the correct offsets (preserves NVS by default)
 #   --app-only    Flash only the app binary at the correct app offset
 #   --merged      Flash merged image at 0x0 (destructive; will overwrite NVS on most layouts)
+#   --baud <rate> Set esptool baud rate for full/app-only/merged/erase (default: auto; retries at 115200 on failure)
 #   --erase-flash Erase entire flash before flashing (destructive)
 #   --erase-nvs   Erase only the NVS partition before flashing (requires partitions.bin)
 #
@@ -33,6 +34,7 @@ Options:
     --full        Flash bootloader + partitions + boot_app0 + app at the correct offsets (preserves NVS by default)
     --app-only    Flash only the app binary at the correct app offset
     --merged      Flash merged image at 0x0 (destructive; overwrites NVS on most layouts)
+        --baud <rate> Set esptool baud rate (default: auto; retries at 115200 on failure)
   --erase-flash Erase entire flash before flashing
   --erase-nvs   Erase only the NVS partition before flashing
   -h, --help    Show help
@@ -65,6 +67,24 @@ get_fqbn_option() {
     return 1
 }
 
+get_bootloader_offset_for_chip() {
+    local chip="$1"
+    case "$chip" in
+        # Per ESP32 Arduino core boards.txt (e.g. 3.3.x): classic ESP32 + ESP32-S2 use 0x1000.
+        esp32|esp32s2)
+            echo "0x1000"
+            ;;
+        # Newer families use 0x0.
+        esp32s3|esp32c2|esp32c3|esp32c6|esp32h2)
+            echo "0x0"
+            ;;
+        *)
+            # Conservative fallback: match the core default.
+            echo "0x1000"
+            ;;
+    esac
+}
+
 get_chip_type_from_fqbn() {
     local fqbn="$1"
 
@@ -81,6 +101,24 @@ get_chip_type_from_fqbn() {
         chip="esp32"
     fi
     echo "$chip"
+}
+
+default_esptool_baud_for_port() {
+    local port="$1"
+
+    # UART adapters (/dev/ttyUSB*) are typically happy at 921600.
+    if [[ "$port" == /dev/ttyUSB* ]]; then
+        echo "921600"
+        return 0
+    fi
+
+    # USB CDC (/dev/ttyACM*) can be finicky on some setups.
+    if [[ "$port" == /dev/ttyACM* ]]; then
+        echo "460800"
+        return 0
+    fi
+
+    echo "115200"
 }
 
 find_esp32_core_dir() {
@@ -259,6 +297,7 @@ parse_args() {
     MODE=""
     ERASE_FLASH=false
     ERASE_NVS=false
+    BAUD_RATE=""
 
     REST_ARGS=()
     while [[ $# -gt 0 ]]; do
@@ -282,6 +321,15 @@ parse_args() {
             --erase-nvs)
                 ERASE_NVS=true
                 shift
+                ;;
+            --baud)
+                if [[ -z "${2:-}" ]]; then
+                    echo -e "${RED}Error: --baud requires a value${NC}"
+                    usage
+                    exit 1
+                fi
+                BAUD_RATE="$2"
+                shift 2
                 ;;
             -h|--help)
                 usage
@@ -309,13 +357,27 @@ flash_with_esptool() {
     local chip_type="$1"
     local port="$2"
     local esptool_cmd="$3"
-    shift 3
+    local baud_rate="$4"
+    shift 4
 
+    local rc=0
     if [[ "$esptool_cmd" == *.py ]]; then
-        python3 "$esptool_cmd" --chip "$chip_type" --port "$port" "$@"
+        python3 "$esptool_cmd" --chip "$chip_type" --port "$port" --baud "$baud_rate" "$@" || rc=$?
     else
-        "$esptool_cmd" --chip "$chip_type" --port "$port" "$@"
+        "$esptool_cmd" --chip "$chip_type" --port "$port" --baud "$baud_rate" "$@" || rc=$?
     fi
+
+    if [[ $rc -ne 0 && "$baud_rate" != "115200" ]]; then
+        echo -e "${YELLOW}esptool failed at baud $baud_rate; retrying at 115200...${NC}" >&2
+        if [[ "$esptool_cmd" == *.py ]]; then
+            python3 "$esptool_cmd" --chip "$chip_type" --port "$port" --baud 115200 "$@"
+        else
+            "$esptool_cmd" --chip "$chip_type" --port "$port" --baud 115200 "$@"
+        fi
+        return $?
+    fi
+
+    return $rc
 }
 
 parse_args "$@"
@@ -383,13 +445,17 @@ if [[ "$MODE" == "full" || "$MODE" == "app-only" || "$MODE" == "merged" || "$ERA
         echo "Please ensure ESP32 platform is installed (run setup.sh)"
         exit 1
     fi
+
+    if [[ -z "${BAUD_RATE:-}" ]]; then
+        BAUD_RATE=$(default_esptool_baud_for_port "$PORT")
+    fi
 fi
 
 PARTITIONS_BIN="$BOARD_BUILD_PATH/app.ino.partitions.bin"
 
 if [[ "$ERASE_FLASH" == "true" ]]; then
     echo -e "${YELLOW}Erasing entire flash...${NC}"
-    flash_with_esptool "$CHIP_TYPE" "$PORT" "$ESPTOOL_CMD" erase_flash
+    flash_with_esptool "$CHIP_TYPE" "$PORT" "$ESPTOOL_CMD" "$BAUD_RATE" erase_flash
 fi
 
 if [[ "$ERASE_NVS" == "true" ]]; then
@@ -410,7 +476,7 @@ if [[ "$ERASE_NVS" == "true" ]]; then
         local_nvs_size=$(echo "$nvs_info" | awk '{print $2}')
     fi
     echo -e "${YELLOW}Erasing NVS region ($local_nvs_offset, $local_nvs_size)...${NC}"
-    flash_with_esptool "$CHIP_TYPE" "$PORT" "$ESPTOOL_CMD" erase_region "$local_nvs_offset" "$local_nvs_size"
+    flash_with_esptool "$CHIP_TYPE" "$PORT" "$ESPTOOL_CMD" "$BAUD_RATE" erase_region "$local_nvs_offset" "$local_nvs_size"
 fi
 
 if [[ "$MODE" == "arduino" ]]; then
@@ -461,9 +527,10 @@ elif [[ "$MODE" == "full" ]]; then
         fi
     fi
 
-    echo -e "${YELLOW}Flashing multi-part image (preserve NVS): bootloader@0x0, partitions@0x8000, boot_app0@0xE000, app@$APP_OFFSET...${NC}"
-    flash_with_esptool "$CHIP_TYPE" "$PORT" "$ESPTOOL_CMD" write-flash -z \
-        0x0 "$BOOTLOADER_BIN" \
+    BOOTLOADER_OFFSET=$(get_bootloader_offset_for_chip "$CHIP_TYPE")
+    echo -e "${YELLOW}Flashing multi-part image (preserve NVS): bootloader@${BOOTLOADER_OFFSET}, partitions@0x8000, boot_app0@0xE000, app@$APP_OFFSET...${NC}"
+    flash_with_esptool "$CHIP_TYPE" "$PORT" "$ESPTOOL_CMD" "$BAUD_RATE" write-flash -z \
+        "$BOOTLOADER_OFFSET" "$BOOTLOADER_BIN" \
         0x8000 "$PARTITIONS_BIN" \
         0xE000 "$BOOT_APP0_BIN" \
         "$APP_OFFSET" "$APP_BIN"
@@ -489,7 +556,7 @@ elif [[ "$MODE" == "app-only" ]]; then
         fi
     fi
     echo -e "${YELLOW}Flashing app at $APP_OFFSET (app-only)...${NC}"
-    flash_with_esptool "$CHIP_TYPE" "$PORT" "$ESPTOOL_CMD" write-flash -z "$APP_OFFSET" "$APP_BIN"
+    flash_with_esptool "$CHIP_TYPE" "$PORT" "$ESPTOOL_CMD" "$BAUD_RATE" write-flash -z "$APP_OFFSET" "$APP_BIN"
 elif [[ "$MODE" == "merged" ]]; then
     MERGED_BIN="$BOARD_BUILD_PATH/app.ino.merged.bin"
     if [[ ! -f "$MERGED_BIN" ]]; then
@@ -500,7 +567,7 @@ elif [[ "$MODE" == "merged" ]]; then
     fi
 
     echo -e "${YELLOW}Flashing merged image at 0x0 (destructive; overwrites NVS)...${NC}"
-    flash_with_esptool "$CHIP_TYPE" "$PORT" "$ESPTOOL_CMD" write-flash -z 0x0 "$MERGED_BIN"
+    flash_with_esptool "$CHIP_TYPE" "$PORT" "$ESPTOOL_CMD" "$BAUD_RATE" write-flash -z 0x0 "$MERGED_BIN"
 else
     echo -e "${RED}Error: Unknown mode: $MODE${NC}"
     exit 1

@@ -22,9 +22,20 @@ if [[ ! -d "$TEMPLATE_DIR" ]]; then
   exit 1
 fi
 
-BOOTLOADER_OFFSET_DEC=0
 PARTITIONS_OFFSET_DEC=32768  # 0x8000
 BOOT_APP0_OFFSET_DEC=57344   # 0xE000
+
+get_bootloader_offset_dec_for_chip_family() {
+  local chip_family="$1"
+  case "$chip_family" in
+    "ESP32"|"ESP32-S2")
+      echo 4096  # 0x1000
+      ;;
+    *)
+      echo 0
+      ;;
+  esac
+}
 
 find_esp32_core_dir() {
   local esp32_hw_base="$HOME/.arduino15/packages/esp32/hardware/esp32"
@@ -214,6 +225,7 @@ trap 'rm -f "$board_fragment_tmp"' EXIT
 for board_name in "${boards[@]}"; do
   fqbn="${FQBN_TARGETS[$board_name]}"
   chip_family="$(get_chip_family_for_fqbn "$fqbn")"
+  bootloader_offset_dec="$(get_bootloader_offset_dec_for_chip_family "$chip_family")"
 
   src_dir="$REPO_ROOT/build/$board_name"
 
@@ -272,7 +284,7 @@ for board_name in "${boards[@]}"; do
     {
       "chipFamily": "${chip_family}",
       "parts": [
-        { "path": "../firmware/${board_name}/bootloader.bin?v=${SHA_SHORT}", "offset": ${BOOTLOADER_OFFSET_DEC} },
+        { "path": "../firmware/${board_name}/bootloader.bin?v=${SHA_SHORT}", "offset": ${bootloader_offset_dec} },
         { "path": "../firmware/${board_name}/partitions.bin?v=${SHA_SHORT}", "offset": ${PARTITIONS_OFFSET_DEC} },
         { "path": "../firmware/${board_name}/boot_app0.bin?v=${SHA_SHORT}", "offset": ${BOOT_APP0_OFFSET_DEC} },
         { "path": "../firmware/${board_name}/app.bin?v=${SHA_SHORT}", "offset": ${app_offset_dec} }
