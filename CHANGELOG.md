@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.34] - 2026-01-13
+
+### Added
+- ESP Web Tools installer now flashes multi-part images (bootloader/partitions/boot_app0/app) and derives the app offset from `app.ino.partitions.bin`
+- Releases now include `*-bootloader.bin`, `*-partitions.bin`, and `*-boot_app0.bin` assets to support browser installs on custom partition layouts
+
+### Changed
+- `upload.sh --full` now uses multi-part flashing by default (preserves NVS); `--merged` is available for legacy merged-at-0x0 flashing
+
 ## [0.0.33] - 2026-01-13
 
 ### Fixed

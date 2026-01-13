@@ -517,7 +517,7 @@ This repo includes a GitHub Pages installer site powered by ESP Web Tools, so us
 ### How it works
 
 - The release workflow builds firmware for all configured boards.
-- It attaches both app-only and **merged** firmware binaries to the GitHub Release.
+- It attaches app-only and the **multi-part** flashing binaries (bootloader/partitions/boot_app0) to the GitHub Release.
 - For **stable releases only** (non-prerelease), a separate Pages workflow runs when the release is published and deploys the installer site to GitHub Pages.
 - Pages deployment is **latest-only**: each stable release overwrites what’s hosted.
 
@@ -534,7 +534,8 @@ After the run finishes, the installer will be available at:
 ### Notes
 
 - This works without CORS issues because the page, manifest, and firmware `.bin` files are all served from the same GitHub Pages origin.
-- The installer uses each board’s `app.ino.merged.bin` output and flashes it at offset `0`.
+- The installer uses multi-part flashing: bootloader @ `0x0`, partition table @ `0x8000`, `boot_app0` @ `0xE000`, and app @ the `app0` offset derived from `app.ino.partitions.bin`.
+- This avoids accidentally overwriting NVS on custom partition layouts.
 - Boards with names containing `beta` or `experimental` are excluded from the hosted installer list.
 
 Separately from the browser installer, the device web portal also supports a **device-side online update** (Firmware page → “Online Update (GitHub)”). That flow downloads the board-specific **app-only** release asset (`$PROJECT_NAME-<board>-vX.Y.Z.bin`) directly from GitHub Releases and installs it on the device.
@@ -602,9 +603,10 @@ When you push a tag matching `v*.*.*`:
 3. **Creates GitHub Release** with:
    - Release notes extracted from CHANGELOG.md
   - Firmware binaries: `$PROJECT_NAME-<board>-vX.Y.Z.bin` (app-only)
-  - Firmware binaries: `$PROJECT_NAME-<board>-vX.Y.Z-merged.bin` (merged; browser flasher)
-  - Debug symbols: `$PROJECT_NAME-<board>-vX.Y.Z.elf`
-   - Build metadata: `build-info-<board>.txt`
+  - Firmware binaries: `$PROJECT_NAME-<board>-vX.Y.Z-bootloader.bin`
+  - Firmware binaries: `$PROJECT_NAME-<board>-vX.Y.Z-partitions.bin`
+  - Firmware binaries: `$PROJECT_NAME-<board>-vX.Y.Z-boot_app0.bin`
+  - Firmware binaries: `$PROJECT_NAME-<board>-vX.Y.Z-merged.bin` (legacy; may overwrite NVS)
    - SHA256 checksums: `SHA256SUMS.txt`
 4. **Marks as pre-release** if version contains hyphen (e.g., `v1.0.0-beta.1`)
 
@@ -614,7 +616,10 @@ For stable releases, after the GitHub Release is published, `.github/workflows/p
 
 Each release includes firmware binaries for all board variants:
 - `$PROJECT_NAME-esp32-nodisplay-v0.0.5.bin` (app-only)
-- `$PROJECT_NAME-esp32-nodisplay-v0.0.5-merged.bin` (merged; flashes at offset 0)
+- `$PROJECT_NAME-esp32-nodisplay-v0.0.5-bootloader.bin`
+- `$PROJECT_NAME-esp32-nodisplay-v0.0.5-partitions.bin`
+- `$PROJECT_NAME-esp32-nodisplay-v0.0.5-boot_app0.bin`
+- `$PROJECT_NAME-esp32-nodisplay-v0.0.5-merged.bin` (legacy; flashes at offset 0)
 - `SHA256SUMS.txt` - Checksums for verification
 
 Debug symbols (`.elf`) and build metadata (`.txt`) are available in the workflow artifacts but not included in releases to keep downloads lightweight.

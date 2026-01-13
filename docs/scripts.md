@@ -220,8 +220,10 @@ This script automates both steps.
 
 **Options:**
 ```bash
-./upload.sh --full        # Flash merged image at 0x0 (recommended for PartitionScheme boards)
+./upload.sh --full        # Flash bootloader + partitions + boot_app0 + app at the correct offsets (preserves NVS by default)
 ./upload.sh --app-only    # Flash only the app at the correct app offset
+./upload.sh --merged      # Flash merged image at 0x0 (legacy; overwrites NVS on most layouts)
+./upload.sh --baud 921600 # Set esptool baud rate for flashing (faster on many USB-UART adapters)
 ./upload.sh --erase-nvs   # Erase NVS only (WiFi/config reset)
 ./upload.sh --erase-flash # Erase entire flash (destructive)
 ```
@@ -247,7 +249,8 @@ This script automates both steps.
 - Auto-detects serial port if not specified
 
 **PartitionScheme note:**
-- If the board FQBN includes `PartitionScheme=...`, `upload.sh` defaults to `--full` to ensure partition changes are applied correctly.
+- If the board FQBN includes `PartitionScheme=...`, `upload.sh` defaults to `--full` to ensure partition changes are applied and the app is flashed at the correct offset.
+- Use `--merged` only if you explicitly want a merged-at-0x0 flash (destructive on most layouts).
 - Use `--app-only` for faster updates when the partition layout is already correct.
 
 **Requirements:** 
@@ -378,6 +381,9 @@ This script automates both steps.
 ./bum.sh                # Build + Upload + Monitor
 ./um.sh                 # Upload + Monitor
 
+# You can pass upload.sh options through
+./um.sh --baud 921600    # Faster flashing (if supported)
+
 # Clean build when needed
 ./clean.sh
 ./build.sh
@@ -407,6 +413,9 @@ This script automates both steps.
 # Full cycle for specific board
 ./bum.sh esp32-nodisplay          # Build + Upload + Monitor
 ./um.sh esp32c3-waveshare-169-st7789v2         # Upload + Monitor
+
+# With upload options
+./um.sh --baud 921600 cyd-v2                  # Upload + Monitor at custom baud
 
 # Clean all board builds
 ./clean.sh
