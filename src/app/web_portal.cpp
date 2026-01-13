@@ -107,6 +107,10 @@ static bool ota_in_progress = false;
 static size_t ota_progress = 0;
 static size_t ota_total = 0;
 
+// OTA upload state gate (avoid concurrent uploads).
+static portMUX_TYPE g_ota_upload_mux = portMUX_INITIALIZER_UNLOCKED;
+static uint8_t g_ota_last_percent = 0;
+
 // ===== Basic Auth (optional; STA/full mode only) =====
 static bool portal_auth_required() {
     if (ap_mode_active) return false;
@@ -1464,13 +1468,25 @@ void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t ind
     if (!portal_auth_gate(request)) return;
     // First chunk - initialize OTA
     if (index == 0) {
+        // Guard against concurrent OTA uploads or online-update flow.
+        bool allowed = false;
+        portENTER_CRITICAL(&g_ota_upload_mux);
+        if (!ota_in_progress && !firmware_update_in_progress) {
+            ota_in_progress = true;
+            g_ota_last_percent = 0;
+            allowed = true;
+        }
+        portEXIT_CRITICAL(&g_ota_upload_mux);
 
-        
+        if (!allowed) {
+            request->send(409, "application/json", "{\"success\":false,\"message\":\"Update already in progress\"}");
+            return;
+        }
+
         Logger.logBegin("OTA Update");
         Logger.logLinef("File: %s", filename.c_str());
         Logger.logLinef("Size: %d bytes", request->contentLength());
-        
-        ota_in_progress = true;
+
         ota_progress = 0;
         ota_total = request->contentLength();
         
@@ -1478,7 +1494,9 @@ void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t ind
         if (!filename.endsWith(".bin")) {
             Logger.logEnd("Not a .bin file");
             request->send(400, "application/json", "{\"success\":false,\"message\":\"Only .bin files are supported\"}");
+            portENTER_CRITICAL(&g_ota_upload_mux);
             ota_in_progress = false;
+            portEXIT_CRITICAL(&g_ota_upload_mux);
             return;
         }
         
@@ -1492,7 +1510,9 @@ void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t ind
         if (ota_total > 0 && ota_total > freeSpace) {
             Logger.logEnd("Firmware too large");
             request->send(400, "application/json", "{\"success\":false,\"message\":\"Firmware too large\"}");
+            portENTER_CRITICAL(&g_ota_upload_mux);
             ota_in_progress = false;
+            portEXIT_CRITICAL(&g_ota_upload_mux);
             return;
         }
         
@@ -1501,7 +1521,9 @@ void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t ind
             Logger.logEnd("Begin failed");
             Update.printError(Serial);
             request->send(500, "application/json", "{\"success\":false,\"message\":\"OTA begin failed\"}");
+            portENTER_CRITICAL(&g_ota_upload_mux);
             ota_in_progress = false;
+            portEXIT_CRITICAL(&g_ota_upload_mux);
             return;
         }
     }
@@ -1511,19 +1533,23 @@ void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t ind
         if (Update.write(data, len) != len) {
             Logger.logEnd("Write failed");
             Update.printError(Serial);
+            Update.abort();
             request->send(500, "application/json", "{\"success\":false,\"message\":\"Write failed\"}");
+            portENTER_CRITICAL(&g_ota_upload_mux);
             ota_in_progress = false;
+            portEXIT_CRITICAL(&g_ota_upload_mux);
             return;
         }
         
         ota_progress += len;
         
         // Print progress every 10%
-        static uint8_t last_percent = 0;
-        uint8_t percent = (ota_progress * 100) / ota_total;
-        if (percent >= last_percent + 10) {
-            Logger.logLinef("Progress: %d%%", percent);
-            last_percent = percent;
+        if (ota_total > 0) {
+            uint8_t percent = (ota_progress * 100) / ota_total;
+            if (percent >= (uint8_t)(g_ota_last_percent + 10)) {
+                Logger.logLinef("Progress: %d%%", percent);
+                g_ota_last_percent = percent;
+            }
         }
     }
     
@@ -1542,8 +1568,10 @@ void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t ind
             Update.printError(Serial);
             request->send(500, "application/json", "{\"success\":false,\"message\":\"Update failed\"}");
         }
-        
+
+        portENTER_CRITICAL(&g_ota_upload_mux);
         ota_in_progress = false;
+        portEXIT_CRITICAL(&g_ota_upload_mux);
     }
 }
 
@@ -1579,6 +1607,8 @@ void web_portal_init(DeviceConfig *config) {
     server->on("/portal.js", HTTP_GET, handleJS);
     
     // API endpoints
+    // NOTE: Keep more specific routes registered before more general/prefix routes.
+    // Some AsyncWebServer matchers can behave like prefix matches depending on configuration.
     server->on("/api/mode", HTTP_GET, handleGetMode);
     server->on("/api/config", HTTP_GET, handleGetConfig);
     
@@ -1597,8 +1627,8 @@ void web_portal_init(DeviceConfig *config) {
 
     // GitHub Releases-based firmware updates (stable only)
     server->on("/api/firmware/latest", HTTP_GET, handleGetFirmwareLatest);
-    server->on("/api/firmware/update", HTTP_POST, handlePostFirmwareUpdate);
     server->on("/api/firmware/update/status", HTTP_GET, handleGetFirmwareUpdateStatus);
+    server->on("/api/firmware/update", HTTP_POST, handlePostFirmwareUpdate);
     
     #if HAS_DISPLAY
     // Display API endpoints
