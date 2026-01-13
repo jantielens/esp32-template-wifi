@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.33] - 2026-01-13
+
+### Fixed
+- ESP-Panel CST816S touch init stability: avoid enabling the interrupt handler during boot (polling is used via `readPoints()`)
+- ESP-Panel ST77916 LVGL flush stability: wait for panel IO to complete before returning (prevents draw buffer reuse too early)
+
 ## [0.0.32] - 2026-01-12
 
 ### Added

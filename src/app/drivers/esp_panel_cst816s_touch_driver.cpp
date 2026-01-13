@@ -21,7 +21,11 @@ void ESPPanel_CST816S_TouchDriver::init() {
     touch_bus->configI2cFreqHz(400000);
     touch_bus->begin();
 
-    touch = new ESP_PanelTouch_CST816S(touch_bus, DISPLAY_WIDTH, DISPLAY_HEIGHT, TOUCH_RST, TOUCH_INT);
+    // Workaround: avoid enabling the CST816S interrupt handler during boot.
+    // Some setups can hit `Stack canary watchpoint triggered (ipc1)` inside the IDF touch init path.
+    // We poll in `getTouch()` anyway via `readPoints()`, so the interrupt isn't required.
+    const int touch_int_pin = -1;
+    touch = new ESP_PanelTouch_CST816S(touch_bus, DISPLAY_WIDTH, DISPLAY_HEIGHT, TOUCH_RST, touch_int_pin);
     touch->init();
     touch->begin();
 }

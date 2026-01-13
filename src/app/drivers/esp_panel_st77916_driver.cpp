@@ -356,7 +356,9 @@ void ESPPanel_ST77916_Driver::pushColors(uint16_t* data, uint32_t len, bool swap
     // The ESP_Panel API expects a byte pointer.
     // If swap_bytes is requested, swap into a contiguous buffer and flush once.
     if (!swap_bytes || !swapBuf || swapBufCapacityPixels < pixelCount) {
-        lcd->drawBitmap(currentX, currentY, currentW, currentH, (const uint8_t*)data);
+        // drawBitmap() is non-blocking for most buses; LVGL requires that flush only completes
+        // once panel IO finishes, otherwise it may reuse/overwrite the draw buffer too early.
+        (void)lcd->drawBitmapWaitUntilFinish(currentX, currentY, currentW, currentH, (const uint8_t*)data, 1000);
         return;
     }
 
@@ -364,5 +366,5 @@ void ESPPanel_ST77916_Driver::pushColors(uint16_t* data, uint32_t len, bool swap
         uint16_t v = data[i];
         swapBuf[i] = (uint16_t)((v << 8) | (v >> 8));
     }
-    lcd->drawBitmap(currentX, currentY, currentW, currentH, (const uint8_t*)swapBuf);
+    (void)lcd->drawBitmapWaitUntilFinish(currentX, currentY, currentW, currentH, (const uint8_t*)swapBuf, 1000);
 }
