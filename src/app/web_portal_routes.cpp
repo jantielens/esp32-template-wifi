@@ -1,5 +1,6 @@
 #include "web_portal_routes.h"
 #include "web_portal_auth.h"
+#include "web_portal_config.h"
 #include "web_portal_display.h"
 
 #include "board_config.h"
@@ -12,9 +13,6 @@ void handleCSS(AsyncWebServerRequest *request);
 void handleJS(AsyncWebServerRequest *request);
 
 void handleGetMode(AsyncWebServerRequest *request);
-void handleGetConfig(AsyncWebServerRequest *request);
-void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total);
-void handleDeleteConfig(AsyncWebServerRequest *request);
 void handleGetVersion(AsyncWebServerRequest *request);
 void handleGetHealth(AsyncWebServerRequest *request);
 void handleReboot(AsyncWebServerRequest *request);
