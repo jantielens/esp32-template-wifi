@@ -361,8 +361,7 @@ void handleGetFirmwareLatest(AsyncWebServerRequest *request) {
 
     const bool update_available = (compare_semver(FIRMWARE_VERSION, latest) < 0);
 
-    std::shared_ptr<BasicJsonDocument<PsramJsonAllocator>> doc =
-        std::make_shared<BasicJsonDocument<PsramJsonAllocator>>(512);
+    std::shared_ptr<BasicJsonDocument<PsramJsonAllocator>> doc = make_psram_json_doc(512);
     if (doc && doc->capacity() > 0) {
         (*doc)["success"] = true;
         (*doc)["current_version"] = FIRMWARE_VERSION;
@@ -431,8 +430,7 @@ void handlePostFirmwareUpdate(AsyncWebServerRequest *request) {
         return;
     }
 
-    std::shared_ptr<BasicJsonDocument<PsramJsonAllocator>> doc =
-        std::make_shared<BasicJsonDocument<PsramJsonAllocator>>(384);
+    std::shared_ptr<BasicJsonDocument<PsramJsonAllocator>> doc = make_psram_json_doc(384);
     if (doc && doc->capacity() > 0) {
         (*doc)["success"] = true;
         (*doc)["update_started"] = true;
@@ -448,8 +446,7 @@ void handlePostFirmwareUpdate(AsyncWebServerRequest *request) {
 void handleGetFirmwareUpdateStatus(AsyncWebServerRequest *request) {
     if (!portal_auth_gate(request)) return;
 
-    std::shared_ptr<BasicJsonDocument<PsramJsonAllocator>> doc =
-        std::make_shared<BasicJsonDocument<PsramJsonAllocator>>(512);
+    std::shared_ptr<BasicJsonDocument<PsramJsonAllocator>> doc = make_psram_json_doc(512);
     if (doc && doc->capacity() > 0) {
         (*doc)["enabled"] = (GITHUB_UPDATES_ENABLED ? true : false);
         (*doc)["in_progress"] = firmware_update_in_progress;

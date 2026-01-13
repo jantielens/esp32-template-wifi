@@ -8,6 +8,22 @@
 
 #include <memory>
 
+static inline void web_portal_send_json_error(AsyncWebServerRequest *request, int status_code, const char *message) {
+    if (!request) return;
+
+    // Note: messages should be constant strings or otherwise JSON-safe (no quotes/newlines).
+    AsyncResponseStream *response = request->beginResponseStream("application/json");
+    response->print("{\"success\":false,\"message\":\"");
+    response->print(message ? message : "Error");
+    response->print("\"}");
+    response->setCode(status_code);
+    request->send(response);
+}
+
+static inline std::shared_ptr<BasicJsonDocument<PsramJsonAllocator>> make_psram_json_doc(size_t capacity) {
+    return std::make_shared<BasicJsonDocument<PsramJsonAllocator>>(capacity);
+}
+
 template <typename TDoc>
 static inline void web_portal_send_json_chunked(
     AsyncWebServerRequest *request,
@@ -17,12 +33,12 @@ static inline void web_portal_send_json_chunked(
     if (!request) return;
 
     if (!doc || doc->capacity() == 0) {
-        request->send(503, "application/json", "{\"success\":false,\"message\":\"Out of memory\"}");
+        web_portal_send_json_error(request, 503, "Out of memory");
         return;
     }
 
     if (doc->overflowed()) {
-        request->send(500, "application/json", "{\"success\":false,\"message\":\"Response too large\"}");
+        web_portal_send_json_error(request, 500, "Response too large");
         return;
     }
 

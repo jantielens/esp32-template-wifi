@@ -69,8 +69,7 @@ void handleGetConfig(AsyncWebServerRequest *request) {
     }
 
     // Create JSON response (don't include passwords)
-    std::shared_ptr<BasicJsonDocument<PsramJsonAllocator>> doc =
-        std::make_shared<BasicJsonDocument<PsramJsonAllocator>>(2304);
+    std::shared_ptr<BasicJsonDocument<PsramJsonAllocator>> doc = make_psram_json_doc(2304);
     if (doc && doc->capacity() > 0) {
         (*doc)["wifi_ssid"] = current_config->wifi_ssid;
         (*doc)["wifi_password"] = ""; // Don't send password

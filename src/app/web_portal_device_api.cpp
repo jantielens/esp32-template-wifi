@@ -150,8 +150,7 @@ void handleGetVersion(AsyncWebServerRequest *request) {
 void handleGetHealth(AsyncWebServerRequest *request) {
     if (!portal_auth_gate(request)) return;
 
-    std::shared_ptr<BasicJsonDocument<PsramJsonAllocator>> doc =
-        std::make_shared<BasicJsonDocument<PsramJsonAllocator>>(1536);
+    std::shared_ptr<BasicJsonDocument<PsramJsonAllocator>> doc = make_psram_json_doc(1536);
     if (doc && doc->capacity() > 0) {
         device_telemetry_fill_api(*doc);
         if (doc->overflowed()) {
