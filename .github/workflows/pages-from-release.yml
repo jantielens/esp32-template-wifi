@@ -53,20 +53,37 @@ jobs:
             exit 1
           fi
 
-      - name: Download merged release assets
+      - name: Download release assets (multi-part)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
 
           tag_name="${{ steps.release_meta.outputs.tag_name }}"
+          VERSION="${tag_name#v}"
           echo "Downloading release assets for $tag_name"
 
           mkdir -p release-assets
+          # app-only + multi-part prerequisites
           gh release download "$tag_name" \
             --repo "${{ github.repository }}" \
             --dir release-assets \
-            --pattern "*-merged.bin"
+            --pattern "*-v${VERSION}.bin"
+
+          gh release download "$tag_name" \
+            --repo "${{ github.repository }}" \
+            --dir release-assets \
+            --pattern "*-bootloader.bin"
+
+          gh release download "$tag_name" \
+            --repo "${{ github.repository }}" \
+            --dir release-assets \
+            --pattern "*-partitions.bin"
+
+          gh release download "$tag_name" \
+            --repo "${{ github.repository }}" \
+            --dir release-assets \
+            --pattern "*-boot_app0.bin"
 
           echo "Downloaded assets:"
           ls -lh release-assets
@@ -97,16 +114,33 @@ jobs:
               continue
             fi
 
-            expected_name="$PROJECT_NAME-$board_name-v$VERSION-merged.bin"
-            merged_path="release-assets/$expected_name"
+            app_path="release-assets/$PROJECT_NAME-$board_name-v$VERSION.bin"
+            bootloader_path="release-assets/$PROJECT_NAME-$board_name-v$VERSION-bootloader.bin"
+            partitions_path="release-assets/$PROJECT_NAME-$board_name-v$VERSION-partitions.bin"
+            boot_app0_path="release-assets/$PROJECT_NAME-$board_name-v$VERSION-boot_app0.bin"
 
-            if [[ ! -f "$merged_path" ]]; then
-              echo "Error: merged firmware not found for $board_name (expected $expected_name)"
+            if [[ ! -f "$app_path" ]]; then
+              echo "Error: app firmware not found for $board_name (expected $(basename "$app_path"))"
+              exit 1
+            fi
+            if [[ ! -f "$bootloader_path" ]]; then
+              echo "Error: bootloader not found for $board_name (expected $(basename "$bootloader_path"))"
+              exit 1
+            fi
+            if [[ ! -f "$partitions_path" ]]; then
+              echo "Error: partitions not found for $board_name (expected $(basename "$partitions_path"))"
+              exit 1
+            fi
+            if [[ ! -f "$boot_app0_path" ]]; then
+              echo "Error: boot_app0 not found for $board_name (expected $(basename "$boot_app0_path"))"
               exit 1
             fi
 
             mkdir -p "build/$board_name"
-            cp "$merged_path" "build/$board_name/app.ino.merged.bin"
+            cp "$app_path" "build/$board_name/app.ino.bin"
+            cp "$bootloader_path" "build/$board_name/app.ino.bootloader.bin"
+            cp "$partitions_path" "build/$board_name/app.ino.partitions.bin"
+            cp "$boot_app0_path" "build/$board_name/boot_app0.bin"
           done
 
       - name: Build installer site (latest stable)

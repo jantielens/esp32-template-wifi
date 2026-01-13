@@ -5,10 +5,11 @@
 # Usage: ./upload.sh [options] [board-name] [port]
 #
 # Options:
-#   --full        Flash merged image at 0x0 (recommended when PartitionScheme is used)
-#   --app-only    Flash only the app binary at the correct app offset (preserves partitions/NVS)
+#   --full        Flash bootloader + partitions + boot_app0 + app at the correct offsets (preserves NVS by default)
+#   --app-only    Flash only the app binary at the correct app offset
+#   --merged      Flash merged image at 0x0 (destructive; will overwrite NVS on most layouts)
 #   --erase-flash Erase entire flash before flashing (destructive)
-#   --erase-nvs   Erase only the NVS partition before flashing (requires partition CSV)
+#   --erase-nvs   Erase only the NVS partition before flashing (requires partitions.bin)
 #
 # Board/port arguments:
 #   - board-name: Required when multiple boards configured
@@ -29,8 +30,9 @@ Usage:
   ${0##*/} [options] [board-name] [port]
 
 Options:
-  --full        Flash merged image at 0x0 (recommended when PartitionScheme is used)
-  --app-only    Flash only the app binary at the correct app offset
+    --full        Flash bootloader + partitions + boot_app0 + app at the correct offsets (preserves NVS by default)
+    --app-only    Flash only the app binary at the correct app offset
+    --merged      Flash merged image at 0x0 (destructive; overwrites NVS on most layouts)
   --erase-flash Erase entire flash before flashing
   --erase-nvs   Erase only the NVS partition before flashing
   -h, --help    Show help
@@ -114,6 +116,46 @@ find_esptool() {
         return 0
     fi
 
+    return 1
+}
+
+find_boot_app0_bin() {
+    local esp32_dir
+    esp32_dir=$(find_esp32_core_dir || true)
+    if [[ -z "$esp32_dir" ]]; then
+        return 1
+    fi
+
+    local candidate="$esp32_dir/tools/partitions/boot_app0.bin"
+    if [[ -f "$candidate" ]]; then
+        echo "$candidate"
+        return 0
+    fi
+
+    return 1
+}
+
+partition_bin_find_offsets() {
+    local partitions_bin="$1"
+    local kind="$2"  # app-offset | nvs
+
+    local parser="$SCRIPT_DIR/tools/parse_esp32_partitions.py"
+    if [[ ! -f "$parser" ]]; then
+        return 1
+    fi
+
+    if [[ ! -f "$partitions_bin" ]]; then
+        return 1
+    fi
+
+    if [[ "$kind" == "app-offset" ]]; then
+        python3 "$parser" "$partitions_bin" --app-offset --format hex
+        return $?
+    fi
+    if [[ "$kind" == "nvs" ]]; then
+        python3 "$parser" "$partitions_bin" --nvs --format hex
+        return $?
+    fi
     return 1
 }
 
@@ -229,6 +271,10 @@ parse_args() {
                 MODE="app-only"
                 shift
                 ;;
+            --merged)
+                MODE="merged"
+                shift
+                ;;
             --erase-flash)
                 ERASE_FLASH=true
                 shift
@@ -330,7 +376,7 @@ fi
 
 CHIP_TYPE=$(get_chip_type_from_fqbn "$FQBN")
 ESPTOOL_CMD=""
-if [[ "$MODE" == "full" || "$MODE" == "app-only" || "$ERASE_FLASH" == "true" || "$ERASE_NVS" == "true" ]]; then
+if [[ "$MODE" == "full" || "$MODE" == "app-only" || "$MODE" == "merged" || "$ERASE_FLASH" == "true" || "$ERASE_NVS" == "true" ]]; then
     ESPTOOL_CMD=$(find_esptool || true)
     if [[ -z "$ESPTOOL_CMD" ]]; then
         echo -e "${RED}Error: esptool not found${NC}"
@@ -339,24 +385,7 @@ if [[ "$MODE" == "full" || "$MODE" == "app-only" || "$ERASE_FLASH" == "true" || 
     fi
 fi
 
-PARTITION_CSV=""
-PART_INFO=""
-if [[ "$MODE" == "app-only" || "$ERASE_NVS" == "true" ]]; then
-    PARTITION_CSV=$(get_partition_csv_path "$BOARD_BUILD_PATH" "$FQBN" || true)
-    if [[ -z "$PARTITION_CSV" ]]; then
-        echo -e "${RED}Error: Could not locate partition CSV to derive offsets${NC}"
-        echo "Tried build output and installed ESP32 core PartitionScheme mapping."
-        echo "Hint: run ./tools/install-custom-partitions.sh and rebuild." 
-        exit 1
-    fi
-
-    PART_INFO=$(partition_csv_find_offsets "$PARTITION_CSV" || true)
-    if [[ -z "$PART_INFO" ]]; then
-        echo -e "${RED}Error: Failed to parse partition CSV for app offset${NC}"
-        echo "CSV: $PARTITION_CSV"
-        exit 1
-    fi
-fi
+PARTITIONS_BIN="$BOARD_BUILD_PATH/app.ino.partitions.bin"
 
 if [[ "$ERASE_FLASH" == "true" ]]; then
     echo -e "${YELLOW}Erasing entire flash...${NC}"
@@ -364,12 +393,21 @@ if [[ "$ERASE_FLASH" == "true" ]]; then
 fi
 
 if [[ "$ERASE_NVS" == "true" ]]; then
-    local_nvs_offset=$(echo "$PART_INFO" | grep '^nvs_offset=' | cut -d'=' -f2- || true)
-    local_nvs_size=$(echo "$PART_INFO" | grep '^nvs_size=' | cut -d'=' -f2- || true)
-    if [[ -z "$local_nvs_offset" || -z "$local_nvs_size" ]]; then
-        echo -e "${RED}Error: NVS partition not found in partition CSV${NC}"
-        echo "CSV: $PARTITION_CSV"
-        exit 1
+    nvs_info=$(partition_bin_find_offsets "$PARTITIONS_BIN" "nvs" || true)
+    if [[ -z "$nvs_info" ]]; then
+        # Backward-compatible fallback to partition CSV.
+        PARTITION_CSV=$(get_partition_csv_path "$BOARD_BUILD_PATH" "$FQBN" || true)
+        PART_INFO=$(partition_csv_find_offsets "$PARTITION_CSV" || true)
+        local_nvs_offset=$(echo "$PART_INFO" | grep '^nvs_offset=' | cut -d'=' -f2- || true)
+        local_nvs_size=$(echo "$PART_INFO" | grep '^nvs_size=' | cut -d'=' -f2- || true)
+        if [[ -z "$local_nvs_offset" || -z "$local_nvs_size" ]]; then
+            echo -e "${RED}Error: Failed to locate NVS partition offset/size${NC}"
+            echo "Tried: $PARTITIONS_BIN and partition CSV mapping"
+            exit 1
+        fi
+    else
+        local_nvs_offset=$(echo "$nvs_info" | awk '{print $1}')
+        local_nvs_size=$(echo "$nvs_info" | awk '{print $2}')
     fi
     echo -e "${YELLOW}Erasing NVS region ($local_nvs_offset, $local_nvs_size)...${NC}"
     flash_with_esptool "$CHIP_TYPE" "$PORT" "$ESPTOOL_CMD" erase_region "$local_nvs_offset" "$local_nvs_size"
@@ -381,16 +419,54 @@ if [[ "$MODE" == "arduino" ]]; then
         --port "$PORT" \
         --input-dir "$BOARD_BUILD_PATH"
 elif [[ "$MODE" == "full" ]]; then
-    MERGED_BIN="$BOARD_BUILD_PATH/app.ino.merged.bin"
-    if [[ ! -f "$MERGED_BIN" ]]; then
-        echo -e "${RED}Error: merged firmware not found${NC}"
-        echo "Expected: $MERGED_BIN"
+    BOOTLOADER_BIN="$BOARD_BUILD_PATH/app.ino.bootloader.bin"
+    if [[ ! -f "$BOOTLOADER_BIN" ]]; then
+        echo -e "${RED}Error: bootloader binary not found${NC}"
+        echo "Expected: $BOOTLOADER_BIN"
+        echo "Please run: ./build.sh $BOARD"
+        exit 1
+    fi
+    if [[ ! -f "$PARTITIONS_BIN" ]]; then
+        echo -e "${RED}Error: partitions binary not found${NC}"
+        echo "Expected: $PARTITIONS_BIN"
         echo "Please run: ./build.sh $BOARD"
         exit 1
     fi
 
-    echo -e "${YELLOW}Flashing merged image at 0x0 (full)...${NC}"
-    flash_with_esptool "$CHIP_TYPE" "$PORT" "$ESPTOOL_CMD" write-flash -z 0x0 "$MERGED_BIN"
+    APP_BIN="$BOARD_BUILD_PATH/app.ino.bin"
+    if [[ ! -f "$APP_BIN" ]]; then
+        echo -e "${RED}Error: app binary not found${NC}"
+        echo "Expected: $APP_BIN"
+        echo "Please run: ./build.sh $BOARD"
+        exit 1
+    fi
+
+    BOOT_APP0_BIN=$(find_boot_app0_bin || true)
+    if [[ -z "$BOOT_APP0_BIN" ]]; then
+        echo -e "${RED}Error: boot_app0.bin not found in ESP32 core${NC}"
+        echo "Hint: run ./setup.sh to install the ESP32 core/toolchain"
+        exit 1
+    fi
+
+    APP_OFFSET=$(partition_bin_find_offsets "$PARTITIONS_BIN" "app-offset" || true)
+    if [[ -z "$APP_OFFSET" ]]; then
+        # Backward-compatible fallback to partition CSV.
+        PARTITION_CSV=$(get_partition_csv_path "$BOARD_BUILD_PATH" "$FQBN" || true)
+        PART_INFO=$(partition_csv_find_offsets "$PARTITION_CSV" || true)
+        APP_OFFSET=$(echo "$PART_INFO" | grep '^app_offset=' | cut -d'=' -f2- || true)
+        if [[ -z "$APP_OFFSET" ]]; then
+            echo -e "${RED}Error: Failed to determine app offset for full flash${NC}"
+            echo "Tried: $PARTITIONS_BIN and partition CSV mapping"
+            exit 1
+        fi
+    fi
+
+    echo -e "${YELLOW}Flashing multi-part image (preserve NVS): bootloader@0x0, partitions@0x8000, boot_app0@0xE000, app@$APP_OFFSET...${NC}"
+    flash_with_esptool "$CHIP_TYPE" "$PORT" "$ESPTOOL_CMD" write-flash -z \
+        0x0 "$BOOTLOADER_BIN" \
+        0x8000 "$PARTITIONS_BIN" \
+        0xE000 "$BOOT_APP0_BIN" \
+        "$APP_OFFSET" "$APP_BIN"
 elif [[ "$MODE" == "app-only" ]]; then
     APP_BIN="$BOARD_BUILD_PATH/app.ino.bin"
     if [[ ! -f "$APP_BIN" ]]; then
@@ -400,9 +476,31 @@ elif [[ "$MODE" == "app-only" ]]; then
         exit 1
     fi
 
-    APP_OFFSET=$(echo "$PART_INFO" | grep '^app_offset=' | cut -d'=' -f2-)
+    APP_OFFSET=$(partition_bin_find_offsets "$PARTITIONS_BIN" "app-offset" || true)
+    if [[ -z "$APP_OFFSET" ]]; then
+        # Backward-compatible fallback to partition CSV.
+        PARTITION_CSV=$(get_partition_csv_path "$BOARD_BUILD_PATH" "$FQBN" || true)
+        PART_INFO=$(partition_csv_find_offsets "$PARTITION_CSV" || true)
+        APP_OFFSET=$(echo "$PART_INFO" | grep '^app_offset=' | cut -d'=' -f2- || true)
+        if [[ -z "$APP_OFFSET" ]]; then
+            echo -e "${RED}Error: Failed to determine app offset for app-only flash${NC}"
+            echo "Tried: $PARTITIONS_BIN and partition CSV mapping"
+            exit 1
+        fi
+    fi
     echo -e "${YELLOW}Flashing app at $APP_OFFSET (app-only)...${NC}"
     flash_with_esptool "$CHIP_TYPE" "$PORT" "$ESPTOOL_CMD" write-flash -z "$APP_OFFSET" "$APP_BIN"
+elif [[ "$MODE" == "merged" ]]; then
+    MERGED_BIN="$BOARD_BUILD_PATH/app.ino.merged.bin"
+    if [[ ! -f "$MERGED_BIN" ]]; then
+        echo -e "${RED}Error: merged firmware not found${NC}"
+        echo "Expected: $MERGED_BIN"
+        echo "Please run: ./build.sh $BOARD"
+        exit 1
+    fi
+
+    echo -e "${YELLOW}Flashing merged image at 0x0 (destructive; overwrites NVS)...${NC}"
+    flash_with_esptool "$CHIP_TYPE" "$PORT" "$ESPTOOL_CMD" write-flash -z 0x0 "$MERGED_BIN"
 else
     echo -e "${RED}Error: Unknown mode: $MODE${NC}"
     exit 1

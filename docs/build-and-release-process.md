@@ -340,9 +340,16 @@ The project uses an automated release workflow that triggers on version tags. Re
 
 This repository includes a static firmware installer site (no backend) powered by ESP Web Tools. It is deployed to GitHub Pages from **stable GitHub Releases**.
 
-### Why merged firmware is required
+### Why multi-part flashing is required
 
-The browser installer flashes a single firmware image at offset `0`. For this, the installer uses the Arduino build output `app.ino.merged.bin` (bootloader + partitions + app).
+For custom partition layouts, flashing a single “merged.bin at offset 0” can overwrite areas like NVS (and can fail to boot if `app0` is not at the default offset).
+
+This template’s browser installer uses **multi-part flashing**:
+
+- bootloader @ `0x0`
+- partition table @ `0x8000`
+- `boot_app0` @ `0xE000`
+- app @ the `app0` offset derived from `app.ino.partitions.bin`
 
 ### Same-origin requirement (CORS)
 
@@ -353,10 +360,14 @@ To avoid CORS issues in browsers, the **installer page**, **manifest JSON**, and
 - **Trigger**: `.github/workflows/pages-from-release.yml` runs on `release.published` and refuses pre-releases.
 - **Manual deploy**: The same workflow supports `workflow_dispatch` with a `tag_name` input (still refuses pre-releases).
 - **Inputs**:
-  - Downloads `*-merged.bin` assets from the release.
+  - Downloads app + multi-part assets from the release.
   - Fetches the release body into `release-notes.md`.
-  - Rehydrates `build/<board>/app.ino.merged.bin` so the site generator can run without rebuilding firmware.
-- **Output**: `tools/build-esp-web-tools-site.sh` generates `site/` (HTML, `manifests/*.json`, `firmware/<board>/firmware.bin`) which is deployed via GitHub Pages “Source: GitHub Actions”.
+  - Rehydrates `build/<board>/` with:
+    - `app.ino.bin`
+    - `app.ino.bootloader.bin`
+    - `app.ino.partitions.bin`
+    - `boot_app0.bin`
+- **Output**: `tools/build-esp-web-tools-site.sh` generates `site/` (HTML, `manifests/*.json`, `firmware/<board>/*.bin`) which is deployed via GitHub Pages “Source: GitHub Actions”.
 
 ---
 
@@ -407,7 +418,10 @@ git push origin v0.0.5
 - Extracts changelog section for v0.0.5
 - Creates GitHub Release with:
   - `esp32-template-esp32-nodisplay-v0.0.5.bin` (app-only)
-  - `esp32-template-esp32-nodisplay-v0.0.5-merged.bin` (ESP Web Tools / flashes at offset 0)
+  - `esp32-template-esp32-nodisplay-v0.0.5-bootloader.bin`
+  - `esp32-template-esp32-nodisplay-v0.0.5-partitions.bin`
+  - `esp32-template-esp32-nodisplay-v0.0.5-boot_app0.bin`
+  - `esp32-template-esp32-nodisplay-v0.0.5-merged.bin` (legacy; may overwrite NVS)
   - `SHA256SUMS.txt`
 - Release notes populated from CHANGELOG.md (no auto-generated “What’s Changed” section)
 - Debug symbols (`.elf`) and build metadata available in workflow artifacts
@@ -614,7 +628,11 @@ git pull
 
 Each release includes:
 - **Firmware binaries** (app-only): `$PROJECT_NAME-<board>-vX.Y.Z.bin` for each board variant
-- **Firmware binaries** (merged; browser installer): `$PROJECT_NAME-<board>-vX.Y.Z-merged.bin`
+- **Firmware binaries** (multi-part; browser installer):
+  - `$PROJECT_NAME-<board>-vX.Y.Z-bootloader.bin`
+  - `$PROJECT_NAME-<board>-vX.Y.Z-partitions.bin`
+  - `$PROJECT_NAME-<board>-vX.Y.Z-boot_app0.bin`
+- **Firmware binaries** (legacy merged; may overwrite NVS): `$PROJECT_NAME-<board>-vX.Y.Z-merged.bin`
 - **Checksums**: `SHA256SUMS.txt` for verification
 - **Release notes**: Extracted from CHANGELOG.md
 
@@ -776,8 +794,8 @@ Follow [Semantic Versioning](https://semver.org/):
 **Purpose**: Deploy a static ESP Web Tools installer to GitHub Pages without rebuilding firmware.
 
 **Process**:
-1. Download `*-merged.bin` assets from the release
-2. Rehydrate `build/<board>/app.ino.merged.bin`
+1. Download app + multi-part assets from the release
+2. Rehydrate `build/<board>/` with app/bootloader/partitions/boot_app0 binaries
 3. Run `tools/build-esp-web-tools-site.sh` to produce `site/`
 4. Deploy `site/` to GitHub Pages via GitHub Actions artifacts
 

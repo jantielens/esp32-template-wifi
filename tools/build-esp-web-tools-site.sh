@@ -22,6 +22,55 @@ if [[ ! -d "$TEMPLATE_DIR" ]]; then
   exit 1
 fi
 
+BOOTLOADER_OFFSET_DEC=0
+PARTITIONS_OFFSET_DEC=32768  # 0x8000
+BOOT_APP0_OFFSET_DEC=57344   # 0xE000
+
+find_esp32_core_dir() {
+  local esp32_hw_base="$HOME/.arduino15/packages/esp32/hardware/esp32"
+  if [[ ! -d "$esp32_hw_base" ]]; then
+    return 1
+  fi
+
+  local esp32_dir
+  esp32_dir="$(ls -1d "$esp32_hw_base"/*/ 2>/dev/null | sort -V | tail -n 1 || true)"
+  esp32_dir="${esp32_dir%/}"
+  if [[ -z "$esp32_dir" || ! -d "$esp32_dir" ]]; then
+    return 1
+  fi
+  echo "$esp32_dir"
+}
+
+find_boot_app0_bin() {
+  local esp32_dir
+  esp32_dir="$(find_esp32_core_dir || true)"
+  if [[ -z "$esp32_dir" ]]; then
+    return 1
+  fi
+
+  local candidate="$esp32_dir/tools/partitions/boot_app0.bin"
+  if [[ -f "$candidate" ]]; then
+    echo "$candidate"
+    return 0
+  fi
+
+  return 1
+}
+
+get_app_offset_dec_from_partitions_bin() {
+  local partitions_bin="$1"
+  local parser="$REPO_ROOT/tools/parse_esp32_partitions.py"
+  if [[ ! -f "$parser" ]]; then
+    echo "ERROR: Missing partitions parser: $parser" >&2
+    exit 1
+  fi
+  if [[ ! -f "$partitions_bin" ]]; then
+    echo "ERROR: Missing partitions bin: $partitions_bin" >&2
+    exit 1
+  fi
+  python3 "$parser" "$partitions_bin" --app-offset --format dec
+}
+
 get_version() {
   local major minor patch
   major=$(grep -E '^#define[[:space:]]+VERSION_MAJOR' "$REPO_ROOT/src/version.h" | grep -oE '[0-9]+' | head -1)
@@ -167,19 +216,50 @@ for board_name in "${boards[@]}"; do
   chip_family="$(get_chip_family_for_fqbn "$fqbn")"
 
   src_dir="$REPO_ROOT/build/$board_name"
-  merged_bin="$src_dir/app.ino.merged.bin"
 
-  if [[ ! -f "$merged_bin" ]]; then
-    echo "ERROR: Missing merged firmware for $board_name at $merged_bin" >&2
+  bootloader_bin="$src_dir/app.ino.bootloader.bin"
+  partitions_bin="$src_dir/app.ino.partitions.bin"
+  app_bin="$src_dir/app.ino.bin"
+
+  if [[ ! -f "$bootloader_bin" ]]; then
+    echo "ERROR: Missing bootloader binary for $board_name at $bootloader_bin" >&2
     echo "Hint: run ./build.sh $board_name first" >&2
+    exit 1
+  fi
+  if [[ ! -f "$partitions_bin" ]]; then
+    echo "ERROR: Missing partitions binary for $board_name at $partitions_bin" >&2
+    echo "Hint: run ./build.sh $board_name first" >&2
+    exit 1
+  fi
+  if [[ ! -f "$app_bin" ]]; then
+    echo "ERROR: Missing app binary for $board_name at $app_bin" >&2
+    echo "Hint: run ./build.sh $board_name first" >&2
+    exit 1
+  fi
+
+  boot_app0_bin="$src_dir/boot_app0.bin"
+  if [[ ! -f "$boot_app0_bin" ]]; then
+    boot_app0_bin="$(find_boot_app0_bin || true)"
+  fi
+  if [[ -z "$boot_app0_bin" || ! -f "$boot_app0_bin" ]]; then
+    echo "ERROR: boot_app0.bin not found (need $src_dir/boot_app0.bin or an installed ESP32 core via ./setup.sh)" >&2
+    exit 1
+  fi
+
+  app_offset_dec="$(get_app_offset_dec_from_partitions_bin "$partitions_bin")"
+  if [[ -z "$app_offset_dec" ]]; then
+    echo "ERROR: Failed to determine app offset for $board_name" >&2
     exit 1
   fi
 
   dst_dir="$OUT_DIR/firmware/$board_name"
   mkdir -p "$dst_dir"
 
-  # Stable filename; add cache-busting query param in manifest.
-  cp "$merged_bin" "$dst_dir/firmware.bin"
+  # Stable filenames; add cache-busting query param in manifest.
+  cp "$bootloader_bin" "$dst_dir/bootloader.bin"
+  cp "$partitions_bin" "$dst_dir/partitions.bin"
+  cp "$boot_app0_bin" "$dst_dir/boot_app0.bin"
+  cp "$app_bin" "$dst_dir/app.bin"
 
   manifest_path="$OUT_DIR/manifests/$board_name.json"
 
@@ -192,7 +272,10 @@ for board_name in "${boards[@]}"; do
     {
       "chipFamily": "${chip_family}",
       "parts": [
-        { "path": "../firmware/${board_name}/firmware.bin?v=${SHA_SHORT}", "offset": 0 }
+        { "path": "../firmware/${board_name}/bootloader.bin?v=${SHA_SHORT}", "offset": ${BOOTLOADER_OFFSET_DEC} },
+        { "path": "../firmware/${board_name}/partitions.bin?v=${SHA_SHORT}", "offset": ${PARTITIONS_OFFSET_DEC} },
+        { "path": "../firmware/${board_name}/boot_app0.bin?v=${SHA_SHORT}", "offset": ${BOOT_APP0_OFFSET_DEC} },
+        { "path": "../firmware/${board_name}/app.bin?v=${SHA_SHORT}", "offset": ${app_offset_dec} }
       ]
     }
   ]
@@ -206,7 +289,7 @@ EOF
               <div class="board-sub">Chip: <code>${chip_family}</code></div>
               <div class="board-links">
                 <a href="./manifests/${board_name}.json">manifest</a>
-                <a href="./firmware/${board_name}/firmware.bin">firmware</a>
+                <a href="./firmware/${board_name}/app.bin">app</a>
               </div>
             </div>
             <div>
