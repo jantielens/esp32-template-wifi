@@ -381,6 +381,9 @@ This script automates both steps.
 ./bum.sh                # Build + Upload + Monitor
 ./um.sh                 # Upload + Monitor
 
+# You can pass upload.sh options through
+./um.sh --baud 921600    # Faster flashing (if supported)
+
 # Clean build when needed
 ./clean.sh
 ./build.sh
@@ -410,6 +413,9 @@ This script automates both steps.
 # Full cycle for specific board
 ./bum.sh esp32-nodisplay          # Build + Upload + Monitor
 ./um.sh esp32c3-waveshare-169-st7789v2         # Upload + Monitor
+
+# With upload options
+./um.sh --baud 921600 cyd-v2                  # Upload + Monitor at custom baud
 
 # Clean all board builds
 ./clean.sh
