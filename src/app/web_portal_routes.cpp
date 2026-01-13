@@ -1,9 +1,7 @@
 #include "web_portal_routes.h"
+#include "web_portal_auth.h"
 
 #include "board_config.h"
-
-// Forward declarations (implemented in web_portal.cpp)
-bool portal_auth_gate(AsyncWebServerRequest *request);
 
 void handleRoot(AsyncWebServerRequest *request);
 void handleHome(AsyncWebServerRequest *request);

@@ -21,6 +21,7 @@
 #include "../version.h"
 #include "psram_json_allocator.h"
 #include "web_portal_routes.h"
+#include "web_portal_auth.h"
 
 #if HAS_DISPLAY
 #include "display_manager.h"
@@ -108,30 +109,20 @@ static bool ota_in_progress = false;
 static size_t ota_progress = 0;
 static size_t ota_total = 0;
 
+bool web_portal_is_ap_mode_active() {
+    return ap_mode_active;
+}
+
+DeviceConfig* web_portal_get_current_config() {
+    return current_config;
+}
+
 // OTA upload state gate (avoid concurrent uploads).
 static portMUX_TYPE g_ota_upload_mux = portMUX_INITIALIZER_UNLOCKED;
 static uint8_t g_ota_last_percent = 0;
 
 // ===== Basic Auth (optional; STA/full mode only) =====
-static bool portal_auth_required() {
-    if (ap_mode_active) return false;
-    if (!current_config) return false;
-    return current_config->basic_auth_enabled;
-}
-
-bool portal_auth_gate(AsyncWebServerRequest *request) {
-    if (!portal_auth_required()) return true;
-
-    const char *user = current_config->basic_auth_username;
-    const char *pass = current_config->basic_auth_password;
-
-    if (request->authenticate(user, pass)) {
-        return true;
-    }
-
-    request->requestAuthentication(PROJECT_DISPLAY_NAME);
-    return false;
-}
+// (Basic auth gate moved to web_portal_auth.cpp)
 
 // ===== GitHub Releases firmware update (app-only) =====
 static TaskHandle_t firmware_update_task_handle = nullptr;
