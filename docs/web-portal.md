@@ -464,7 +464,7 @@ Returns real-time device health statistics.
 - `cpu_temperature`: `null` on chips without an internal temperature sensor
 - `fs_mounted`: `null` when no filesystem partition is present; `false` when present but not mounted
 - `wifi_rssi`, `wifi_channel`, `ip_address`: `null` when not connected
-- `*_min_window` / `*_max_window`: sampled between polls (captures short-lived dips/spikes)
+- `*_min_window` / `*_max_window`: sampled continuously by firmware and returned as a multi-client-safe snapshot (captures short-lived dips/spikes)
 
 ### Configuration Management
 

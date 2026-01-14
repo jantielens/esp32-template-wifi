@@ -45,9 +45,13 @@ static bool log_every_ms(unsigned long now_ms, unsigned long *last_ms, unsigned 
     return false;
 }
 
-// /api/health min/max window sampling (reset on /api/health).
-// Goal: capture short-lived dips/spikes between HTTP polls without storing
-// time series on-device.
+// /api/health min/max window sampling (time-based rollover).
+// Goal: capture short-lived dips/spikes without storing time series on-device.
+// IMPORTANT:
+// - Do NOT reset sampling on HTTP requests (multiple clients would interfere).
+// - We keep a small "last" window and a "current" window and report a merged
+//   snapshot, which is stable across multiple clients and makes a reasonable
+//   effort to not miss spikes around rollover boundaries.
 static portMUX_TYPE g_health_window_mux = portMUX_INITIALIZER_UNLOCKED;
 static TimerHandle_t g_health_window_timer = nullptr;
 
@@ -67,22 +71,22 @@ struct HealthWindowStats {
     int psram_frag_max;
 };
 
-static HealthWindowStats g_health_window = {
-    /*initialized*/ false,
-    /*internal_free_min*/ 0,
-    /*internal_free_max*/ 0,
-    /*internal_largest_min*/ 0,
-    /*internal_frag_max*/ 0,
-    /*psram_free_min*/ 0,
-    /*psram_free_max*/ 0,
-    /*psram_largest_min*/ 0,
-    /*psram_frag_max*/ 0,
-};
+static HealthWindowStats g_health_window_current = {};
+static HealthWindowStats g_health_window_last = {};
+static bool g_health_window_last_valid = false;
+
+static unsigned long g_health_window_current_start_ms = 0;
+static unsigned long g_health_window_last_start_ms = 0;
+static unsigned long g_health_window_last_end_ms = 0;
 
 static void health_window_reset() {
     portENTER_CRITICAL(&g_health_window_mux);
-    g_health_window = {};
-    g_health_window.initialized = false;
+    g_health_window_current = {};
+    g_health_window_last = {};
+    g_health_window_last_valid = false;
+    g_health_window_current_start_ms = millis();
+    g_health_window_last_start_ms = 0;
+    g_health_window_last_end_ms = 0;
     portEXIT_CRITICAL(&g_health_window_mux);
 }
 
@@ -99,34 +103,54 @@ static void health_window_update_sample(size_t internal_free, size_t internal_la
     const int internal_frag = compute_fragmentation_percent(internal_free, internal_largest);
     const int psram_frag = compute_fragmentation_percent(psram_free, psram_largest);
 
+    const unsigned long now_ms = millis();
+
     portENTER_CRITICAL(&g_health_window_mux);
 
-    if (!g_health_window.initialized) {
-        g_health_window.initialized = true;
+    if (g_health_window_current_start_ms == 0) {
+        g_health_window_current_start_ms = now_ms;
+    }
 
-        g_health_window.internal_free_min = internal_free;
-        g_health_window.internal_free_max = internal_free;
-        g_health_window.internal_largest_min = internal_largest;
-        g_health_window.internal_frag_max = internal_frag;
+    // Time-based rollover (shared across all clients).
+    // Roll over BEFORE applying the sample so the boundary sample belongs to the new window.
+    if ((uint32_t)(now_ms - g_health_window_current_start_ms) >= (uint32_t)HEALTH_POLL_INTERVAL_MS) {
+        if (g_health_window_current.initialized) {
+            g_health_window_last = g_health_window_current;
+            g_health_window_last_valid = true;
+            g_health_window_last_start_ms = g_health_window_current_start_ms;
+            g_health_window_last_end_ms = now_ms;
+        }
 
-        g_health_window.psram_free_min = psram_free;
-        g_health_window.psram_free_max = psram_free;
-        g_health_window.psram_largest_min = psram_largest;
-        g_health_window.psram_frag_max = psram_frag;
+        g_health_window_current = {};
+        g_health_window_current_start_ms = now_ms;
+    }
+
+    if (!g_health_window_current.initialized) {
+        g_health_window_current.initialized = true;
+
+        g_health_window_current.internal_free_min = internal_free;
+        g_health_window_current.internal_free_max = internal_free;
+        g_health_window_current.internal_largest_min = internal_largest;
+        g_health_window_current.internal_frag_max = internal_frag;
+
+        g_health_window_current.psram_free_min = psram_free;
+        g_health_window_current.psram_free_max = psram_free;
+        g_health_window_current.psram_largest_min = psram_largest;
+        g_health_window_current.psram_frag_max = psram_frag;
 
         portEXIT_CRITICAL(&g_health_window_mux);
         return;
     }
 
-    if (internal_free < g_health_window.internal_free_min) g_health_window.internal_free_min = internal_free;
-    if (internal_free > g_health_window.internal_free_max) g_health_window.internal_free_max = internal_free;
-    if (internal_largest < g_health_window.internal_largest_min) g_health_window.internal_largest_min = internal_largest;
-    if (internal_frag > g_health_window.internal_frag_max) g_health_window.internal_frag_max = internal_frag;
+    if (internal_free < g_health_window_current.internal_free_min) g_health_window_current.internal_free_min = internal_free;
+    if (internal_free > g_health_window_current.internal_free_max) g_health_window_current.internal_free_max = internal_free;
+    if (internal_largest < g_health_window_current.internal_largest_min) g_health_window_current.internal_largest_min = internal_largest;
+    if (internal_frag > g_health_window_current.internal_frag_max) g_health_window_current.internal_frag_max = internal_frag;
 
-    if (psram_free < g_health_window.psram_free_min) g_health_window.psram_free_min = psram_free;
-    if (psram_free > g_health_window.psram_free_max) g_health_window.psram_free_max = psram_free;
-    if (psram_largest < g_health_window.psram_largest_min) g_health_window.psram_largest_min = psram_largest;
-    if (psram_frag > g_health_window.psram_frag_max) g_health_window.psram_frag_max = psram_frag;
+    if (psram_free < g_health_window_current.psram_free_min) g_health_window_current.psram_free_min = psram_free;
+    if (psram_free > g_health_window_current.psram_free_max) g_health_window_current.psram_free_max = psram_free;
+    if (psram_largest < g_health_window_current.psram_largest_min) g_health_window_current.psram_largest_min = psram_largest;
+    if (psram_frag > g_health_window_current.psram_frag_max) g_health_window_current.psram_frag_max = psram_frag;
 
     portEXIT_CRITICAL(&g_health_window_mux);
 }
@@ -138,7 +162,16 @@ static size_t cached_free_sketch_space = 0;
 
 static void fill_common(JsonDocument &doc, bool include_ip_and_channel, bool include_debug_fields);
 
-static void fill_health_window_fields_and_reset(JsonDocument &doc);
+static void fill_health_window_fields(JsonDocument &doc);
+
+static void health_window_get_snapshot(
+    HealthWindowStats* out_last,
+    bool* out_has_last,
+    HealthWindowStats* out_current,
+    unsigned long* out_current_start_ms,
+    unsigned long* out_last_start_ms,
+    unsigned long* out_last_end_ms
+);
 
 static void get_memory_snapshot(
     size_t *out_heap_free,
@@ -259,53 +292,26 @@ static void health_window_timer_cb(TimerHandle_t) {
     health_window_update_sample(internal_free, heap_largest, psram_free, psram_largest);
 }
 
-static HealthWindowStats health_window_get_and_reset(size_t internal_free_now, size_t internal_largest_now, size_t psram_free_now, size_t psram_largest_now) {
-    const int internal_frag_now = compute_fragmentation_percent(internal_free_now, internal_largest_now);
-    const int psram_frag_now = compute_fragmentation_percent(psram_free_now, psram_largest_now);
-
-    HealthWindowStats snap;
-
-    portENTER_CRITICAL(&g_health_window_mux);
-
-    // Ensure the current point-in-time values are included in the window we return.
-    if (!g_health_window.initialized) {
-        g_health_window.initialized = true;
-        g_health_window.internal_free_min = internal_free_now;
-        g_health_window.internal_free_max = internal_free_now;
-        g_health_window.internal_largest_min = internal_largest_now;
-        g_health_window.internal_frag_max = internal_frag_now;
-        g_health_window.psram_free_min = psram_free_now;
-        g_health_window.psram_free_max = psram_free_now;
-        g_health_window.psram_largest_min = psram_largest_now;
-        g_health_window.psram_frag_max = psram_frag_now;
-    } else {
-        if (internal_free_now < g_health_window.internal_free_min) g_health_window.internal_free_min = internal_free_now;
-        if (internal_free_now > g_health_window.internal_free_max) g_health_window.internal_free_max = internal_free_now;
-        if (internal_largest_now < g_health_window.internal_largest_min) g_health_window.internal_largest_min = internal_largest_now;
-        if (internal_frag_now > g_health_window.internal_frag_max) g_health_window.internal_frag_max = internal_frag_now;
-
-        if (psram_free_now < g_health_window.psram_free_min) g_health_window.psram_free_min = psram_free_now;
-        if (psram_free_now > g_health_window.psram_free_max) g_health_window.psram_free_max = psram_free_now;
-        if (psram_largest_now < g_health_window.psram_largest_min) g_health_window.psram_largest_min = psram_largest_now;
-        if (psram_frag_now > g_health_window.psram_frag_max) g_health_window.psram_frag_max = psram_frag_now;
+static void health_window_get_snapshot(
+    HealthWindowStats* out_last,
+    bool* out_has_last,
+    HealthWindowStats* out_current,
+    unsigned long* out_current_start_ms,
+    unsigned long* out_last_start_ms,
+    unsigned long* out_last_end_ms
+) {
+    if (!out_last || !out_has_last || !out_current || !out_current_start_ms || !out_last_start_ms || !out_last_end_ms) {
+        return;
     }
 
-    snap = g_health_window;
-
-    // Reset the window and immediately seed the next window with the current values.
-    g_health_window = {};
-    g_health_window.initialized = true;
-    g_health_window.internal_free_min = internal_free_now;
-    g_health_window.internal_free_max = internal_free_now;
-    g_health_window.internal_largest_min = internal_largest_now;
-    g_health_window.internal_frag_max = internal_frag_now;
-    g_health_window.psram_free_min = psram_free_now;
-    g_health_window.psram_free_max = psram_free_now;
-    g_health_window.psram_largest_min = psram_largest_now;
-    g_health_window.psram_frag_max = psram_frag_now;
-
+    portENTER_CRITICAL(&g_health_window_mux);
+    *out_last = g_health_window_last;
+    *out_has_last = g_health_window_last_valid;
+    *out_current = g_health_window_current;
+    *out_current_start_ms = g_health_window_current_start_ms;
+    *out_last_start_ms = g_health_window_last_start_ms;
+    *out_last_end_ms = g_health_window_last_end_ms;
     portEXIT_CRITICAL(&g_health_window_mux);
-    return snap;
 }
 
 static void log_task_stack_watermarks_one_shot() {
@@ -460,11 +466,11 @@ void device_telemetry_check_tripwires() {
 void device_telemetry_fill_api(JsonDocument &doc) {
     fill_common(doc, true, true);
 
-    // Min/max fields sampled between /api/health polls.
-    // Semantics (per PR #30): the returned window includes the current point-in-time
-    // values, and after each response the next window is reset and immediately
-    // seeded with the current values.
-    fill_health_window_fields_and_reset(doc);
+    // Min/max fields sampled by a background timer (multi-client safe).
+    // We report a merged snapshot across the last complete window and the current
+    // in-progress window to reduce the chance of missing short spikes around
+    // rollovers without storing any time series.
+    fill_health_window_fields(doc);
 
     // =====================================================================
     // USER-EXTEND: Add your own sensors to the web "health" API (/api/health)
@@ -600,39 +606,106 @@ void device_telemetry_start_health_window_sampling() {
     }
 }
 
-static void fill_health_window_fields_and_reset(JsonDocument &doc) {
-    size_t heap_free = 0;
-    size_t heap_min = 0;
-    size_t heap_largest = 0;
-    size_t internal_free = 0;
-    size_t internal_min = 0;
-    size_t psram_free = 0;
-    size_t psram_min = 0;
-    size_t psram_largest = 0;
+static void fill_health_window_fields(JsonDocument &doc) {
+    HealthWindowStats last = {};
+    HealthWindowStats current = {};
+    bool has_last = false;
+    unsigned long current_start_ms = 0;
+    unsigned long last_start_ms = 0;
+    unsigned long last_end_ms = 0;
 
+    health_window_get_snapshot(&last, &has_last, &current, &current_start_ms, &last_start_ms, &last_end_ms);
+
+    // Also fold in instantaneous request-time values to guarantee the returned
+    // band contains the point-in-time fields, even between 200ms samples.
+    size_t heap_free_now = 0;
+    size_t heap_min_now = 0;
+    size_t heap_largest_now = 0;
+    size_t internal_free_now = 0;
+    size_t internal_min_now = 0;
+    size_t psram_free_now = 0;
+    size_t psram_min_now = 0;
+    size_t psram_largest_now = 0;
     get_memory_snapshot(
-        &heap_free,
-        &heap_min,
-        &heap_largest,
-        &internal_free,
-        &internal_min,
-        &psram_free,
-        &psram_min,
-        &psram_largest
+        &heap_free_now,
+        &heap_min_now,
+        &heap_largest_now,
+        &internal_free_now,
+        &internal_min_now,
+        &psram_free_now,
+        &psram_min_now,
+        &psram_largest_now
     );
+    const int internal_frag_now = compute_fragmentation_percent(internal_free_now, heap_largest_now);
+    const int psram_frag_now = compute_fragmentation_percent(psram_free_now, psram_largest_now);
 
-    // heap_largest represents INTERNAL largest free block (see get_memory_snapshot).
-    const HealthWindowStats win = health_window_get_and_reset(internal_free, heap_largest, psram_free, psram_largest);
+    // Merge last-complete and current-in-progress windows.
+    // This is conservative (can be slightly wider than a strict "last N seconds" window),
+    // but avoids missing spikes without extra RAM.
+    HealthWindowStats merged = {};
 
-    doc["heap_internal_free_min_window"] = (uint32_t)win.internal_free_min;
-    doc["heap_internal_free_max_window"] = (uint32_t)win.internal_free_max;
-    doc["heap_internal_largest_min_window"] = (uint32_t)win.internal_largest_min;
-    doc["heap_fragmentation_max_window"] = win.internal_frag_max;
+    const bool has_current = current.initialized;
+    const bool has_any = (has_current || (has_last && last.initialized));
+    if (has_any) {
+        merged.initialized = true;
 
-    doc["psram_free_min_window"] = (uint32_t)win.psram_free_min;
-    doc["psram_free_max_window"] = (uint32_t)win.psram_free_max;
-    doc["psram_largest_min_window"] = (uint32_t)win.psram_largest_min;
-    doc["psram_fragmentation_max_window"] = win.psram_frag_max;
+        // Start from whichever window is present.
+        const HealthWindowStats* base = has_current ? &current : &last;
+        merged.internal_free_min = base->internal_free_min;
+        merged.internal_free_max = base->internal_free_max;
+        merged.internal_largest_min = base->internal_largest_min;
+        merged.internal_frag_max = base->internal_frag_max;
+        merged.psram_free_min = base->psram_free_min;
+        merged.psram_free_max = base->psram_free_max;
+        merged.psram_largest_min = base->psram_largest_min;
+        merged.psram_frag_max = base->psram_frag_max;
+
+        if (has_current && has_last && last.initialized) {
+            if (last.internal_free_min < merged.internal_free_min) merged.internal_free_min = last.internal_free_min;
+            if (last.internal_free_max > merged.internal_free_max) merged.internal_free_max = last.internal_free_max;
+            if (last.internal_largest_min < merged.internal_largest_min) merged.internal_largest_min = last.internal_largest_min;
+            if (last.internal_frag_max > merged.internal_frag_max) merged.internal_frag_max = last.internal_frag_max;
+
+            if (last.psram_free_min < merged.psram_free_min) merged.psram_free_min = last.psram_free_min;
+            if (last.psram_free_max > merged.psram_free_max) merged.psram_free_max = last.psram_free_max;
+            if (last.psram_largest_min < merged.psram_largest_min) merged.psram_largest_min = last.psram_largest_min;
+            if (last.psram_frag_max > merged.psram_frag_max) merged.psram_frag_max = last.psram_frag_max;
+        }
+    }
+
+    if (!merged.initialized) {
+        // Early boot: initialize from instantaneous values.
+        merged.initialized = true;
+        merged.internal_free_min = internal_free_now;
+        merged.internal_free_max = internal_free_now;
+        merged.internal_largest_min = heap_largest_now;
+        merged.internal_frag_max = internal_frag_now;
+        merged.psram_free_min = psram_free_now;
+        merged.psram_free_max = psram_free_now;
+        merged.psram_largest_min = psram_largest_now;
+        merged.psram_frag_max = psram_frag_now;
+    }
+
+    // Guarantee the instantaneous request-time values are within the returned band.
+    if (internal_free_now < merged.internal_free_min) merged.internal_free_min = internal_free_now;
+    if (internal_free_now > merged.internal_free_max) merged.internal_free_max = internal_free_now;
+    if (heap_largest_now < merged.internal_largest_min) merged.internal_largest_min = heap_largest_now;
+    if (internal_frag_now > merged.internal_frag_max) merged.internal_frag_max = internal_frag_now;
+
+    if (psram_free_now < merged.psram_free_min) merged.psram_free_min = psram_free_now;
+    if (psram_free_now > merged.psram_free_max) merged.psram_free_max = psram_free_now;
+    if (psram_largest_now < merged.psram_largest_min) merged.psram_largest_min = psram_largest_now;
+    if (psram_frag_now > merged.psram_frag_max) merged.psram_frag_max = psram_frag_now;
+
+    doc["heap_internal_free_min_window"] = (uint32_t)merged.internal_free_min;
+    doc["heap_internal_free_max_window"] = (uint32_t)merged.internal_free_max;
+    doc["heap_internal_largest_min_window"] = (uint32_t)merged.internal_largest_min;
+    doc["heap_fragmentation_max_window"] = merged.internal_frag_max;
+
+    doc["psram_free_min_window"] = (uint32_t)merged.psram_free_min;
+    doc["psram_free_max_window"] = (uint32_t)merged.psram_free_max;
+    doc["psram_largest_min_window"] = (uint32_t)merged.psram_largest_min;
+    doc["psram_fragmentation_max_window"] = merged.psram_frag_max;
 }
 
 static void fill_common(JsonDocument &doc, bool include_ip_and_channel, bool include_debug_fields) {
