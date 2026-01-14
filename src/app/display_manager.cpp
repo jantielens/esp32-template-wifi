@@ -5,6 +5,8 @@
 #include "display_manager.h"
 #include "log_manager.h"
 
+#include <esp_timer.h>
+
 // Include selected display driver header.
 // Driver implementations are compiled via src/app/display_drivers.cpp.
 #if DISPLAY_DRIVER == DISPLAY_DRIVER_TFT_ESPI
@@ -20,6 +22,12 @@
 #include <SPI.h>
 
 static portMUX_TYPE g_splash_status_mux = portMUX_INITIALIZER_UNLOCKED;
+static portMUX_TYPE g_perf_mux = portMUX_INITIALIZER_UNLOCKED;
+
+static DisplayPerfStats g_perf = {0, 0, 0};
+static bool g_perf_ready = false;
+static uint32_t g_perf_window_start_ms = 0;
+static uint16_t g_perf_frames_in_window = 0;
 
 // Global instance
 DisplayManager* displayManager = nullptr;
@@ -262,7 +270,9 @@ void DisplayManager::lvglTask(void* pvParameter) {
         }
         
         // Handle LVGL rendering (animations, timers, etc.)
+        const uint64_t lv_start_us = esp_timer_get_time();
         uint32_t delayMs = lv_timer_handler();
+        const uint32_t lv_timer_us = (uint32_t)(esp_timer_get_time() - lv_start_us);
         
         // Update current screen (data refresh)
         if (mgr->currentScreen) {
@@ -271,9 +281,36 @@ void DisplayManager::lvglTask(void* pvParameter) {
         
         // Flush canvas buffer only when LVGL produced draw data.
         if (mgr->flushPending) {
+            const uint32_t now_ms = millis();
+            if (g_perf_window_start_ms == 0) {
+                g_perf_window_start_ms = now_ms;
+                g_perf_frames_in_window = 0;
+            }
+
+            uint64_t present_start_us = 0;
             if (mgr->driver->renderMode() == DisplayDriver::RenderMode::Buffered) {
+                present_start_us = esp_timer_get_time();
                 mgr->driver->present();
             }
+
+            const uint32_t present_us = (present_start_us == 0) ? 0 : (uint32_t)(esp_timer_get_time() - present_start_us);
+            g_perf_frames_in_window++;
+
+            // Update published stats every ~1s.
+            const uint32_t elapsed = now_ms - g_perf_window_start_ms;
+            if (elapsed >= 1000) {
+                const uint16_t fps = g_perf_frames_in_window;
+                portENTER_CRITICAL(&g_perf_mux);
+                g_perf.fps = fps;
+                g_perf.lv_timer_us = lv_timer_us;
+                g_perf.present_us = present_us;
+                g_perf_ready = true;
+                portEXIT_CRITICAL(&g_perf_mux);
+
+                g_perf_window_start_ms = now_ms;
+                g_perf_frames_in_window = 0;
+            }
+
             mgr->flushPending = false;
         }
         
@@ -285,6 +322,18 @@ void DisplayManager::lvglTask(void* pvParameter) {
         if (delayMs > 20) delayMs = 20;
         vTaskDelay(pdMS_TO_TICKS(delayMs));
     }
+}
+
+bool display_manager_get_perf_stats(DisplayPerfStats* out) {
+    if (!out) return false;
+    bool ok = false;
+    portENTER_CRITICAL(&g_perf_mux);
+    ok = g_perf_ready;
+    if (ok) {
+        *out = g_perf;
+    }
+    portEXIT_CRITICAL(&g_perf_mux);
+    return ok;
 }
 
 void DisplayManager::initHardware() {
