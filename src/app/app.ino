@@ -5,7 +5,9 @@
 #include "log_manager.h"
 #include "mqtt_manager.h"
 #include "device_telemetry.h"
+#if HEALTH_HISTORY_ENABLED
 #include "health_history.h"
+#endif
 #include <WiFi.h>
 #include <ESPmDNS.h>
 #include <lwip/netif.h>
@@ -62,7 +64,9 @@ void setup()
 {
   // Optional device-side history for sparklines (/api/health/history)
   // Start as early as possible after a device boot.
+  #if HEALTH_HISTORY_ENABLED
   health_history_start();
+  #endif
 
   // Initialize log manager (wraps Serial for web streaming)
   Logger.begin(115200);

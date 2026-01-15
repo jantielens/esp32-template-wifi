@@ -10,7 +10,9 @@
 #include "psram_json_allocator.h"
 #include "project_branding.h"
 #include "web_portal_json.h"
+#if HEALTH_HISTORY_ENABLED
 #include "health_history.h"
+#endif
 #include "../version.h"
 
 #include <ArduinoJson.h>
@@ -93,14 +95,20 @@ void handleGetVersion(AsyncWebServerRequest *request) {
     response->print((unsigned long)HEALTH_HISTORY_SECONDS);
 
     // Optional: Device-side history endpoint (/api/health/history)
-    const bool hist_available = health_history_available();
-    const HealthHistoryParams hist_params = health_history_params();
-    response->print(",\"health_history_available\":");
-    response->print(hist_available ? "true" : "false");
-    response->print(",\"health_history_period_ms\":");
-    response->print((unsigned long)hist_params.period_ms);
-    response->print(",\"health_history_samples\":");
-    response->print((unsigned long)hist_params.samples);
+    #if HEALTH_HISTORY_ENABLED
+        const bool hist_available = health_history_available();
+        const HealthHistoryParams hist_params = health_history_params();
+        response->print(",\"health_history_available\":");
+        response->print(hist_available ? "true" : "false");
+        response->print(",\"health_history_period_ms\":");
+        response->print((unsigned long)hist_params.period_ms);
+        response->print(",\"health_history_samples\":");
+        response->print((unsigned long)hist_params.samples);
+    #else
+        response->print(",\"health_history_available\":false");
+        response->print(",\"health_history_period_ms\":0");
+        response->print(",\"health_history_samples\":0");
+    #endif
 
     response->print(",\"github_updates_enabled\":");
     response->print(GITHUB_UPDATES_ENABLED ? "true" : "false");
@@ -184,6 +192,11 @@ void handleGetHealth(AsyncWebServerRequest *request) {
 // GET /api/health/history - Get device-side health history for sparklines
 void handleGetHealthHistory(AsyncWebServerRequest *request) {
     if (!portal_auth_gate(request)) return;
+
+    #if !HEALTH_HISTORY_ENABLED
+        request->send(404, "application/json", "{\"available\":false}");
+        return;
+    #endif
 
     if (!health_history_available()) {
         request->send(404, "application/json", "{\"available\":false}");
