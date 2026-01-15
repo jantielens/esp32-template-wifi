@@ -190,6 +190,10 @@ Real-time device health monitoring integrated as a header badge with expandable 
 - Click `✕` to close
 - Same polling cadence as configured by firmware
 
+**Sparklines (Optional):**
+- If the firmware exposes device-side history, the portal fetches it from `GET /api/health/history` (only while the overlay is expanded).
+- If device-side history is unavailable, the overlay shows point-in-time metrics only (no sparklines).
+
 ### Configuration Pages
 
 #### Home Page (`/` or `/home.html`)
@@ -379,6 +383,9 @@ Returns comprehensive device information.
   "psram_size": 0,
   "health_poll_interval_ms": 5000,
   "health_history_seconds": 300,
+  "health_history_available": true,
+  "health_history_period_ms": 5000,
+  "health_history_samples": 60,
   "display_coord_width": 320,
   "display_coord_height": 240,
   "free_heap": 250000,
@@ -400,6 +407,11 @@ Returns comprehensive device information.
 **Health Widget Fields:**
 - `health_poll_interval_ms`: Poll interval used by the portal health overlay
 - `health_history_seconds`: History window length used by the portal sparklines
+
+**Health History Capability Fields:**
+- `health_history_available`: `true` when the device exposes `GET /api/health/history`
+- `health_history_period_ms`: Sampling cadence for device-side history
+- `health_history_samples`: Configured sample capacity for device-side history
 
 **Display Fields (when `HAS_DISPLAY` enabled):**
 - `display_coord_width`, `display_coord_height`: Display driver coordinate space dimensions (what direct pixel writes and the Image API target)
@@ -465,6 +477,33 @@ Returns real-time device health statistics.
 - `fs_mounted`: `null` when no filesystem partition is present; `false` when present but not mounted
 - `wifi_rssi`, `wifi_channel`, `ip_address`: `null` when not connected
 - `*_min_window` / `*_max_window`: sampled continuously by firmware and returned as a multi-client-safe snapshot (captures short-lived dips/spikes)
+
+#### `GET /api/health/history`
+
+Returns device-side health history arrays for the portal sparklines.
+
+**Notes:**
+- Arrays are ordered oldest → newest.
+- `uptime_ms` values are monotonic `millis()` at sample time (wraps after ~49.7 days).
+- `cpu_usage` entries may be `null` when unavailable.
+
+**Response (example):**
+```json
+{
+  "available": true,
+  "period_ms": 5000,
+  "seconds": 300,
+  "samples": 60,
+  "count": 60,
+  "capacity": 60,
+
+  "uptime_ms": [120000, 125000, 130000],
+  "cpu_usage": [12, 14, 18],
+  "heap_internal_free": [190000, 189500, 189000],
+  "heap_internal_free_min_window": [188000, 188000, 188500],
+  "heap_internal_free_max_window": [195000, 194500, 194000]
+}
+```
 
 ### Configuration Management
 
