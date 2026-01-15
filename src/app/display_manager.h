@@ -177,6 +177,13 @@ public:
     DisplayDriver* getDriver() { return driver; }
 };
 
+// Lightweight rendering/perf snapshot (best-effort).
+struct DisplayPerfStats {
+    uint16_t fps;
+    uint32_t lv_timer_us;
+    uint32_t present_us;
+};
+
 // Global instance (managed by app.ino)
 extern DisplayManager* displayManager;
 
@@ -196,6 +203,10 @@ void display_manager_set_backlight_brightness(uint8_t brightness);  // 0-100%
 void display_manager_lock();
 void display_manager_unlock();
 bool display_manager_try_lock(uint32_t timeout_ms);
+
+// Best-effort perf stats for diagnostics (/api/health).
+// Returns false until a first stats window has been captured.
+bool display_manager_get_perf_stats(DisplayPerfStats* out);
 
 #if HAS_IMAGE_API
 // C-style interface for image API

@@ -172,22 +172,23 @@ Real-time device health monitoring integrated as a header badge with expandable 
 - Current CPU usage percentage
 - Orange background for visibility
 - Click to expand full health overlay
-- Updates every 10 seconds
+- Poll interval is configurable by firmware (see `GET /api/info`)
 
-**Expanded Overlay (11 metrics):**
+**Expanded Overlay:**
 - Appears top-right when badge clicked
 - **Uptime**: Device runtime
 - **Reset Reason**: Why device last restarted
-- **CPU Usage**: Percentage based on IDLE task
+- **CPU Usage**: Percentage based on IDLE task (nullable when runtime stats unavailable)
 - **Core Temp**: Internal temperature sensor (ESP32-C3/S2/S3/C2/C6/H2)
-- **Free Heap**: Available RAM
-- **Min Heap**: Minimum free heap since boot
-- **Fragmentation**: Heap fragmentation percentage
+- **Internal Heap**: Free/min/largest block + fragmentation
+- **PSRAM**: Free/min/largest block + fragmentation (when present)
 - **Flash Usage**: Used firmware space
-- **RSSI**: WiFi signal strength (when connected)
-- **IP Address**: Current IP (when connected)
+- **Filesystem**: FFat presence/mounted/usage (nullable when no partition present)
+- **MQTT**: Enabled/connected/publish age
+- **Display**: FPS + timing (when display present)
+- **RSSI / IP Address**: Network signal and IP (when connected)
 - Click `✕` to close
-- Updates every 5 seconds when expanded
+- Same polling cadence as configured by firmware
 
 ### Configuration Pages
 
@@ -369,12 +370,15 @@ Returns comprehensive device information.
   "version": "0.0.1",
   "build_date": "Nov 25 2025",
   "build_time": "14:30:00",
+  "board_name": "esp32-nodisplay",
   "chip_model": "ESP32-C3",
   "chip_revision": 4,
   "chip_cores": 1,
   "cpu_freq": 160,
   "flash_chip_size": 4194304,
   "psram_size": 0,
+  "health_poll_interval_ms": 5000,
+  "health_history_seconds": 300,
   "display_coord_width": 320,
   "display_coord_height": 240,
   "free_heap": 250000,
@@ -393,6 +397,10 @@ Returns comprehensive device information.
 - `mdns_name`: Full mDNS name (hostname + `.local`)
 - `hostname`: Short hostname
 
+**Health Widget Fields:**
+- `health_poll_interval_ms`: Poll interval used by the portal health overlay
+- `health_history_seconds`: History window length used by the portal sparklines
+
 **Display Fields (when `HAS_DISPLAY` enabled):**
 - `display_coord_width`, `display_coord_height`: Display driver coordinate space dimensions (what direct pixel writes and the Image API target)
 
@@ -408,16 +416,42 @@ Returns real-time device health statistics.
   "uptime_seconds": 3600,
   "reset_reason": "Power On",
   "cpu_usage": 15,
-  "cpu_usage_min": 8,
-  "cpu_usage_max": 32,
   "cpu_freq": 160,
-  "temperature": 42,
+  "cpu_temperature": 42,
   "heap_free": 250000,
   "heap_min": 240000,
-  "heap_size": 327680,
+  "heap_largest": 120000,
+  "heap_internal_free": 200000,
+  "heap_internal_min": 190000,
+  "heap_internal_largest": 110000,
   "heap_fragmentation": 5,
+  "psram_free": 8388608,
+  "psram_min": 8350000,
+  "psram_largest": 8200000,
+  "psram_fragmentation": 2,
   "flash_used": 1048576,
   "flash_total": 3145728,
+  "fs_mounted": true,
+  "fs_used_bytes": 123456,
+  "fs_total_bytes": 987654,
+  "mqtt_enabled": true,
+  "mqtt_publish_enabled": true,
+  "mqtt_connected": true,
+  "mqtt_last_health_publish_ms": 1234567,
+  "mqtt_health_publish_age_ms": 4000,
+  "display_fps": 30,
+  "display_lv_timer_us": 250,
+  "display_present_us": 1200,
+
+  "heap_internal_free_min_window": 195000,
+  "heap_internal_free_max_window": 205000,
+  "heap_internal_largest_min_window": 100000,
+  "heap_fragmentation_max_window": 8,
+  "psram_free_min_window": 8300000,
+  "psram_free_max_window": 8388608,
+  "psram_largest_min_window": 8100000,
+  "psram_fragmentation_max_window": 4,
+
   "wifi_rssi": -45,
   "wifi_channel": 6,
   "ip_address": "192.168.1.100",
@@ -426,9 +460,11 @@ Returns real-time device health statistics.
 ```
 
 **Notes:**
-- `cpu_usage_min`, `cpu_usage_max`: Minimum and maximum CPU usage over the last 60 seconds
-- `temperature`: `null` on chips without internal sensor (original ESP32)
-- `wifi_rssi`, `wifi_channel`, `ip_address`, `hostname`: `null` when not connected
+- `cpu_usage`: `null` when FreeRTOS runtime stats are unavailable/disabled
+- `cpu_temperature`: `null` on chips without an internal temperature sensor
+- `fs_mounted`: `null` when no filesystem partition is present; `false` when present but not mounted
+- `wifi_rssi`, `wifi_channel`, `ip_address`: `null` when not connected
+- `*_min_window` / `*_max_window`: sampled continuously by firmware and returned as a multi-client-safe snapshot (captures short-lived dips/spikes)
 
 ### Configuration Management
 

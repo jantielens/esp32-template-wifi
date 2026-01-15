@@ -135,6 +135,9 @@ void setup()
   // Start CPU monitoring background task
   device_telemetry_start_cpu_monitoring();
 
+  // Start 200ms health-window sampling (min/max fields between /api/health polls)
+  device_telemetry_start_health_window_sampling();
+
   // Try to load saved configuration
   #if HAS_DISPLAY
   display_manager_set_splash_status("Reading config...");

@@ -82,7 +82,16 @@ void handleGetVersion(AsyncWebServerRequest *request) {
         response->print("unknown");
     #endif
 
-    response->print("\",\"github_updates_enabled\":");
+    // Close board_name string value
+    response->print("\"");
+
+    // Health widget client tuning (sparklines + polling cadence)
+    response->print(",\"health_poll_interval_ms\":");
+    response->print((unsigned long)HEALTH_POLL_INTERVAL_MS);
+    response->print(",\"health_history_seconds\":");
+    response->print((unsigned long)HEALTH_HISTORY_SECONDS);
+
+    response->print(",\"github_updates_enabled\":");
     response->print(GITHUB_UPDATES_ENABLED ? "true" : "false");
     #if GITHUB_UPDATES_ENABLED
         response->print(",\"github_owner\":\"");
@@ -150,7 +159,7 @@ void handleGetVersion(AsyncWebServerRequest *request) {
 void handleGetHealth(AsyncWebServerRequest *request) {
     if (!portal_auth_gate(request)) return;
 
-    std::shared_ptr<BasicJsonDocument<PsramJsonAllocator>> doc = make_psram_json_doc(1536);
+    std::shared_ptr<BasicJsonDocument<PsramJsonAllocator>> doc = make_psram_json_doc(2048);
     if (doc && doc->capacity() > 0) {
         device_telemetry_fill_api(*doc);
         if (doc->overflowed()) {

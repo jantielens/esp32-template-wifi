@@ -28,6 +28,8 @@ public:
     bool publishEnabled() const;
     bool connected();
 
+    unsigned long lastHealthPublishMs() const { return _last_health_publish_ms; }
+
     // Publish helpers
     bool publish(const char *topic, const char *payload, bool retained);
     bool publishJson(const char *topic, JsonDocument &doc, bool retained);
@@ -69,6 +71,9 @@ private:
     unsigned long _last_reconnect_attempt_ms = 0;
     unsigned long _last_health_publish_ms = 0;
 };
+
+// Global instance (defined in app.ino)
+extern MqttManager mqtt_manager;
 
 #endif // HAS_MQTT
 

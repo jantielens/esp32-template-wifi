@@ -110,6 +110,19 @@
 // #endif
 
 // ============================================================================
+// Web Portal Health Widget
+// ============================================================================
+// How often the web UI polls /api/health.
+#ifndef HEALTH_POLL_INTERVAL_MS
+#define HEALTH_POLL_INTERVAL_MS 5000
+#endif
+
+// How much client-side history (sparklines) to keep.
+#ifndef HEALTH_HISTORY_SECONDS
+#define HEALTH_HISTORY_SECONDS 300
+#endif
+
+// ============================================================================
 // Display Configuration
 // ============================================================================
 // Enable display + LVGL UI support.

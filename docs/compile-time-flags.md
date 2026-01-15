@@ -18,7 +18,7 @@ This document is a template. Sections marked with `COMPILE_FLAG_REPORT` markers 
 ## Flags (generated)
 
 <!-- BEGIN COMPILE_FLAG_REPORT:FLAGS -->
-Total flags: 83
+Total flags: 85
 
 ### Features (HAS_*)
 
@@ -109,6 +109,8 @@ Total flags: 83
 - **DISPLAY_INVERSION_ON** default: `(no default)` — Enable display inversion (panel-specific).
 - **DISPLAY_NEEDS_GAMMA_FIX** default: `(no default)` — Apply gamma correction fix for this panel variant.
 - **ESP_PANEL_SWAPBUF_PREFER_INTERNAL** default: `true` — Default: true. Some panel buses are more reliable with internal/DMA-capable buffers.
+- **HEALTH_HISTORY_SECONDS** default: `300` — How much client-side history (sparklines) to keep.
+- **HEALTH_POLL_INTERVAL_MS** default: `5000` — How often the web UI polls /api/health.
 - **LCD_QSPI_HOST** default: `(no default)` — QSPI host peripheral.
 - **LED_ACTIVE_HIGH** default: `true` — LED polarity: true if HIGH turns the LED on.
 - **MEMORY_TRIPWIRE_CHECK_INTERVAL_MS** default: `5000` — How often to check tripwires from the main loop.
@@ -165,6 +167,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/board_config.h
   - src/app/config_manager.cpp
   - src/app/config_manager.h
+  - src/app/device_telemetry.cpp
   - src/app/display_drivers.cpp
   - src/app/display_manager.cpp
   - src/app/image_api.cpp
@@ -207,6 +210,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/app.ino
   - src/app/board_config.h
   - src/app/config_manager.cpp
+  - src/app/device_telemetry.cpp
   - src/app/ha_discovery.cpp
   - src/app/ha_discovery.h
   - src/app/mqtt_manager.cpp
@@ -234,6 +238,10 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
 - **DISPLAY_ROTATION**
   - src/app/touch_manager.cpp
 - **ESP_PANEL_SWAPBUF_PREFER_INTERNAL**
+  - src/app/board_config.h
+- **HEALTH_HISTORY_SECONDS**
+  - src/app/board_config.h
+- **HEALTH_POLL_INTERVAL_MS**
   - src/app/board_config.h
 - **IMAGE_API_DECODE_HEADROOM_BYTES**
   - src/app/board_config.h

@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.36] - 2026-01-14
+
+### Added
+- Web portal: device health header badge with expandable overlay, sparklines, and hover tooltip
+- Web API: health widget tuning values exposed via `GET /api/info` (`health_poll_interval_ms`, `health_history_seconds`)
+- Health telemetry: filesystem health reporting that is always present in the payload (nullable when no partition / not mounted)
+- Display telemetry: performance stats (FPS + LVGL timer/present timings)
+
+### Changed
+- Health sampling: min/max window stats are now multi-client safe (not reset by `/api/health` requests)
+- Telemetry robustness: CPU usage is nullable when runtime stats are unavailable; health payload includes internal-heap/PSRAM fragmentation and largest-block metrics
+
+### Fixed
+- Web portal header badges: `/api/info` JSON formatting regression could leave placeholders like `Firmware v?.?.?`
+- Health overlay: ensure the instantaneous request-time value is always within the returned min/max band
+
+### Documentation
+- Updated `docs/web-portal.md` to reflect the current `/api/health` fields and window semantics
+
 ## [0.0.35] - 2026-01-13
 
 ### Added
