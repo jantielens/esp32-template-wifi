@@ -14,6 +14,19 @@ struct DeviceMemorySnapshot {
 	size_t psram_largest_free_block_bytes;
 };
 
+// Subset of /api/health "*_min_window" / "*_max_window" band fields needed for sparklines.
+// All values are bytes.
+struct DeviceHealthWindowBands {
+	uint32_t heap_internal_free_min_window;
+	uint32_t heap_internal_free_max_window;
+
+	uint32_t psram_free_min_window;
+	uint32_t psram_free_max_window;
+
+	uint32_t heap_internal_largest_min_window;
+	uint32_t heap_internal_largest_max_window;
+};
+
 // Initializes cached values used by device telemetry (safe to call multiple times).
 // This exists to avoid re-entrant calls into ESP-IDF image helpers from different tasks.
 void device_telemetry_init();
@@ -43,6 +56,11 @@ void device_telemetry_start_health_window_sampling();
 
 // Capture a point-in-time memory snapshot (heap/internal heap/PSRAM).
 DeviceMemorySnapshot device_telemetry_get_memory_snapshot();
+
+// Capture a merged snapshot of the current health-window band values.
+// Returns false if bands are unavailable (early boot), in which case callers should
+// fall back to instantaneous values.
+bool device_telemetry_get_health_window_bands(DeviceHealthWindowBands* out_bands);
 
 // Convenience logging helper (single line) using LogManager.
 void device_telemetry_log_memory_snapshot(const char *tag);

@@ -123,6 +123,45 @@
 #endif
 
 // ============================================================================
+// Optional: Device-side Health History (/api/health/history)
+// ============================================================================
+// When enabled, firmware keeps a fixed-size ring buffer for sparklines so the
+// portal can render history even when no client was connected.
+// Default: enabled.
+#ifndef HEALTH_HISTORY_ENABLED
+#define HEALTH_HISTORY_ENABLED 1
+#endif
+
+// Sampling cadence for the device-side history (ms). Default aligns with UI poll.
+#ifndef HEALTH_HISTORY_PERIOD_MS
+#define HEALTH_HISTORY_PERIOD_MS 5000
+#endif
+
+#if HEALTH_HISTORY_ENABLED
+// Derived number of samples.
+#ifndef HEALTH_HISTORY_SAMPLES
+#define HEALTH_HISTORY_SAMPLES ((HEALTH_HISTORY_SECONDS * 1000) / HEALTH_HISTORY_PERIOD_MS)
+#endif
+
+// Guardrails (must compile in both C and C++ translation units).
+#if (HEALTH_HISTORY_PERIOD_MS < 1000)
+#error HEALTH_HISTORY_PERIOD_MS too small
+#endif
+
+#if (((HEALTH_HISTORY_SECONDS * 1000UL) % (HEALTH_HISTORY_PERIOD_MS)) != 0)
+#error HEALTH_HISTORY_SECONDS must be divisible by HEALTH_HISTORY_PERIOD_MS
+#endif
+
+#if (HEALTH_HISTORY_SAMPLES < 10)
+#error HEALTH_HISTORY_SAMPLES too small
+#endif
+
+#if (HEALTH_HISTORY_SAMPLES > 600)
+#error HEALTH_HISTORY_SAMPLES too large
+#endif
+#endif
+
+// ============================================================================
 // Display Configuration
 // ============================================================================
 // Enable display + LVGL UI support.

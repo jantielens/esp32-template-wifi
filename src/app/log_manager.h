@@ -4,6 +4,7 @@
  * Provides structured logging with:
  * - Nested blocks with automatic indentation
  * - Automatic timing for each block
+ * - Monotonic timestamp prefix per line (milliseconds since boot)
  * - Printf-style formatting
  */
 
