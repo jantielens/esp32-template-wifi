@@ -19,9 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Web portal: uses device-side history when available; falls back to point-in-time fields when unavailable
 - Web API: `GET /api/info` advertises health history availability and parameters
+- MQTT: `devices/<sanitized>/health/state` no longer includes `mqtt_*` self-report fields (kept in `/api/health` only)
+- Home Assistant: expanded default MQTT discovery to cover more of the published health payload (adds `binary_sensor` discovery for boolean fields)
 
 ### Documentation
 - Regenerated `docs/compile-time-flags.md`
+- Updated `docs/home-assistant-mqtt.md` to reflect current default discovery + payload fields
 
 ## [0.0.36] - 2026-01-14
 
