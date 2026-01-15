@@ -244,8 +244,11 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
 - **ESP_PANEL_SWAPBUF_PREFER_INTERNAL**
   - src/app/board_config.h
 - **HEALTH_HISTORY_ENABLED**
+  - src/app/app.ino
   - src/app/board_config.h
   - src/app/health_history.cpp
+  - src/app/web_portal_device_api.cpp
+  - src/app/web_portal_routes.cpp
 - **HEALTH_HISTORY_PERIOD_MS**
   - src/app/board_config.h
 - **HEALTH_HISTORY_SAMPLES**
