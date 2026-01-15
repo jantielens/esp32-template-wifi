@@ -67,6 +67,8 @@ static void hist_write_sample(const HealthHistorySample& s) {
 static void hist_timer_cb(TimerHandle_t) {
     HealthHistorySample s = {};
 
+    s.uptime_ms = (uint32_t)millis();
+
     const int cpu_usage = device_telemetry_get_cpu_usage();
     s.cpu_usage = (cpu_usage < 0) ? (int16_t)-1 : (int16_t)cpu_usage;
 

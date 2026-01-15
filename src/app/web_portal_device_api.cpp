@@ -244,6 +244,8 @@ void handleGetHealthHistory(AsyncWebServerRequest *request) {
     }
     response->print("]");
 
+    PRINT_U32_ARRAY_FIELD("uptime_ms", s.uptime_ms);
+
     PRINT_U32_ARRAY_FIELD("heap_internal_free", s.heap_internal_free);
     PRINT_U32_ARRAY_FIELD("heap_internal_free_min_window", s.heap_internal_free_min_window);
     PRINT_U32_ARRAY_FIELD("heap_internal_free_max_window", s.heap_internal_free_max_window);

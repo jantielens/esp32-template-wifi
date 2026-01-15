@@ -13,6 +13,8 @@ struct HealthHistoryParams {
 };
 
 struct HealthHistorySample {
+    uint32_t uptime_ms;
+
     int16_t cpu_usage; // -1 => unknown
 
     uint32_t heap_internal_free;
