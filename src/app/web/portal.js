@@ -431,6 +431,10 @@ async function loadVersion() {
         const version = await response.json();
         deviceInfoCache = version;
 
+        // Health widget tuning + optional device-side history support
+        healthConfigureFromDeviceInfo(deviceInfoCache);
+        healthConfigureHistoryFromDeviceInfo(deviceInfoCache);
+
         // Strategy B: Hide/disable MQTT settings if firmware was built without MQTT support
         const mqttSection = document.getElementById('mqtt-settings-section');
         if (mqttSection && version.has_mqtt === false) {
@@ -1392,6 +1396,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // ===== HEALTH WIDGET =====
 
 const API_HEALTH = '/api/health';
+const API_HEALTH_HISTORY = '/api/health/history';
 
 let healthExpanded = false;
 let healthPollTimer = null;
@@ -1400,6 +1405,10 @@ const HEALTH_POLL_INTERVAL_DEFAULT_MS = 5000;
 const HEALTH_HISTORY_DEFAULT_SECONDS = 300;
 let healthPollIntervalMs = HEALTH_POLL_INTERVAL_DEFAULT_MS;
 let healthHistoryMaxSamples = 60;
+
+let healthDeviceHistoryAvailable = false;
+let healthDeviceHistoryPeriodMs = HEALTH_POLL_INTERVAL_DEFAULT_MS;
+let healthLastHistoryFetchMs = 0;
 
 const healthHistory = {
     cpu: [],
@@ -1412,15 +1421,17 @@ const healthHistory = {
     psramFreeTs: [],
     psramFreeMin: [],
     psramFreeMax: [],
-    wifiRssi: [],
-    wifiRssiTs: [],
+    heapInternalLargest: [],
+    heapInternalLargestTs: [],
+    heapInternalLargestMin: [],
+    heapInternalLargestMax: [],
 };
 
 const healthSeriesStats = {
     cpu: { min: null, max: null },
     heapInternalFree: { min: null, max: null },
     psramFree: { min: null, max: null },
-    wifiRssi: { min: null, max: null },
+    heapInternalLargest: { min: null, max: null },
 };
 
 function healthComputeMinMaxMulti(arrays) {
@@ -1474,9 +1485,13 @@ function healthUpdateSeriesStats({ hasPsram = null } = {}) {
         healthSeriesStats.psramFree.max = null;
     }
     {
-        const mm = healthComputeMinMaxMulti([healthHistory.wifiRssi]);
-        healthSeriesStats.wifiRssi.min = mm.min;
-        healthSeriesStats.wifiRssi.max = mm.max;
+        const mm = healthComputeMinMaxMulti([
+            healthHistory.heapInternalLargest,
+            healthHistory.heapInternalLargestMin,
+            healthHistory.heapInternalLargestMax,
+        ]);
+        healthSeriesStats.heapInternalLargest.min = mm.min;
+        healthSeriesStats.heapInternalLargest.max = mm.max;
     }
 }
 
@@ -1487,6 +1502,81 @@ function healthConfigureFromDeviceInfo(info) {
     healthPollIntervalMs = Math.max(1000, Math.min(60000, Math.trunc(pollMs)));
     const seconds = Math.max(30, Math.min(3600, Math.trunc(windowSeconds)));
     healthHistoryMaxSamples = Math.max(10, Math.min(600, Math.floor((seconds * 1000) / healthPollIntervalMs)));
+}
+
+function healthConfigureHistoryFromDeviceInfo(info) {
+    healthDeviceHistoryAvailable = (info && info.health_history_available === true);
+    const p = (info && typeof info.health_history_period_ms === 'number') ? info.health_history_period_ms : null;
+    healthDeviceHistoryPeriodMs = (typeof p === 'number' && isFinite(p) && p > 0) ? Math.trunc(p) : healthPollIntervalMs;
+
+    const pointsWrap = document.getElementById('health-points-wrap');
+    const sparklinesWrap = document.getElementById('health-sparklines-wrap');
+    if (pointsWrap) pointsWrap.style.display = healthDeviceHistoryAvailable ? 'none' : '';
+    if (sparklinesWrap) sparklinesWrap.style.display = healthDeviceHistoryAvailable ? '' : 'none';
+}
+
+function healthMakeSyntheticTs(count, periodMs) {
+    const n = (typeof count === 'number' && isFinite(count)) ? Math.max(0, Math.trunc(count)) : 0;
+    const p = (typeof periodMs === 'number' && isFinite(periodMs)) ? Math.max(1, Math.trunc(periodMs)) : HEALTH_POLL_INTERVAL_DEFAULT_MS;
+    const now = Date.now();
+    const out = new Array(n);
+    for (let i = 0; i < n; i++) {
+        // Oldest sample first.
+        const age = (n - 1 - i) * p;
+        out[i] = now - age;
+    }
+    return out;
+}
+
+function healthReplaceArray(dst, src) {
+    if (!Array.isArray(dst)) return;
+    dst.length = 0;
+    if (Array.isArray(src)) {
+        for (let i = 0; i < src.length; i++) dst.push(src[i]);
+    }
+}
+
+async function updateHealthHistory({ hasPsram = null } = {}) {
+    if (!healthDeviceHistoryAvailable) return;
+    if (!healthExpanded) return;
+
+    const now = Date.now();
+    const minInterval = Math.max(1500, healthDeviceHistoryPeriodMs);
+    if (now - healthLastHistoryFetchMs < minInterval) return;
+    healthLastHistoryFetchMs = now;
+
+    try {
+        const resp = await fetch(API_HEALTH_HISTORY);
+        if (!resp.ok) return;
+        const hist = await resp.json();
+        if (!hist || hist.available !== true) return;
+
+        const periodMs = (typeof hist.period_ms === 'number' && isFinite(hist.period_ms) && hist.period_ms > 0) ? Math.trunc(hist.period_ms) : healthDeviceHistoryPeriodMs;
+        const ts = healthMakeSyntheticTs(Array.isArray(hist.cpu_usage) ? hist.cpu_usage.length : 0, periodMs);
+
+        healthReplaceArray(healthHistory.cpu, hist.cpu_usage);
+        healthReplaceArray(healthHistory.cpuTs, ts);
+
+        healthReplaceArray(healthHistory.heapInternalFree, hist.heap_internal_free);
+        healthReplaceArray(healthHistory.heapInternalFreeTs, ts);
+        healthReplaceArray(healthHistory.heapInternalFreeMin, hist.heap_internal_free_min_window);
+        healthReplaceArray(healthHistory.heapInternalFreeMax, hist.heap_internal_free_max_window);
+
+        healthReplaceArray(healthHistory.psramFree, hist.psram_free);
+        healthReplaceArray(healthHistory.psramFreeTs, ts);
+        healthReplaceArray(healthHistory.psramFreeMin, hist.psram_free_min_window);
+        healthReplaceArray(healthHistory.psramFreeMax, hist.psram_free_max_window);
+
+        healthReplaceArray(healthHistory.heapInternalLargest, hist.heap_internal_largest);
+        healthReplaceArray(healthHistory.heapInternalLargestTs, ts);
+        healthReplaceArray(healthHistory.heapInternalLargestMin, hist.heap_internal_largest_min_window);
+        healthReplaceArray(healthHistory.heapInternalLargestMax, hist.heap_internal_largest_max_window);
+
+        healthUpdateSeriesStats({ hasPsram });
+        healthDrawSparklinesOnly({ hasPsram });
+    } catch (e) {
+        console.error('Failed to fetch /api/health/history:', e);
+    }
 }
 
 function formatUptime(seconds) {
@@ -1622,7 +1712,7 @@ const healthSparklineHoverIndex = {
     'health-sparkline-cpu': null,
     'health-sparkline-heap': null,
     'health-sparkline-psram': null,
-    'health-sparkline-rssi': null,
+    'health-sparkline-largest': null,
 };
 
 function healthSetSparklineHoverIndex(canvasId, index) {
@@ -1834,11 +1924,12 @@ function healthDrawSparklinesOnly({ hasPsram = null } = {}) {
         highlightIndex: resolvedHasPsram ? healthGetSparklineHoverIndex('health-sparkline-psram') : null,
     });
 
-    sparklineDraw(document.getElementById('health-sparkline-rssi'), healthHistory.wifiRssi, {
-        color: '#ff9500',
-        min: -100,
-        max: -30,
-        highlightIndex: healthGetSparklineHoverIndex('health-sparkline-rssi'),
+    sparklineDraw(document.getElementById('health-sparkline-largest'), healthHistory.heapInternalLargest, {
+        color: '#ff2d55',
+        bandMin: healthHistory.heapInternalLargestMin,
+        bandMax: healthHistory.heapInternalLargestMax,
+        bandColor: 'rgba(255, 45, 85, 0.16)',
+        highlightIndex: healthGetSparklineHoverIndex('health-sparkline-largest'),
     });
 }
 
@@ -1965,7 +2056,7 @@ function healthInitSparklineTooltips() {
             html: tooltipHtml({
                 title: 'CPU Usage',
                 age,
-                hero: `${val}%`,
+                hero: (typeof val === 'number' && isFinite(val)) ? `${val}%` : '—',
                 windowLineHtml: null,
                 sparklineLineHtml: sparklineLine,
             }),
@@ -2036,32 +2127,33 @@ function healthInitSparklineTooltips() {
         };
     });
 
-    const rssiCanvas = document.getElementById('health-sparkline-rssi');
-    healthAttachSparklineTooltip(rssiCanvas, (t) => {
-        const v = healthHistory.wifiRssi;
-        const ts = healthHistory.wifiRssiTs;
+    const largestCanvas = document.getElementById('health-sparkline-largest');
+    healthAttachSparklineTooltip(largestCanvas, (t) => {
+        const v = healthHistory.heapInternalLargest;
+        const ts = healthHistory.heapInternalLargestTs;
+        const bmin = healthHistory.heapInternalLargestMin;
+        const bmax = healthHistory.heapInternalLargestMax;
         const n = v.length;
         if (n < 1) return null;
         const i = Math.max(0, Math.min(n - 1, Math.round(t * (n - 1))));
         const val = v[i];
         const tsv = ts[i];
+        const wmin = (i < bmin.length) ? bmin[i] : val;
+        const wmax = (i < bmax.length) ? bmax[i] : val;
         const age = healthFormatAgeMs(Date.now() - tsv);
-        const smin = healthSeriesStats.wifiRssi.min;
-        const smax = healthSeriesStats.wifiRssi.max;
+        const smin = healthSeriesStats.heapInternalLargest.min;
+        const smax = healthSeriesStats.heapInternalLargest.max;
 
-        const sparklineLine = formatMinMaxDeltaLine(
-            (typeof smin === 'number') ? smin : NaN,
-            (typeof smax === 'number') ? smax : NaN,
-            (x) => `${Math.round(x)} dBm`
-        );
+        const windowLine = formatMinMaxDeltaLine(wmin, wmax, healthFormatBytes);
+        const sparklineLine = formatMinMaxDeltaLine(smin, smax, healthFormatBytes);
 
         return {
             index: i,
             html: tooltipHtml({
-                title: 'WiFi RSSI',
+                title: 'Internal Largest Block',
                 age,
-                hero: `${val} dBm`,
-                windowLineHtml: null,
+                hero: healthFormatBytes(val),
+                windowLineHtml: windowLine,
                 sparklineLineHtml: sparklineLine,
             }),
         };
@@ -2219,45 +2311,23 @@ async function updateHealth() {
 
         const health = await response.json();
 
-        const sampleTs = Date.now();
-
         const cpuUsage = (typeof health.cpu_usage === 'number' && isFinite(health.cpu_usage)) ? Math.floor(health.cpu_usage) : null;
         const hasPsram = (
             (deviceInfoCache && typeof deviceInfoCache.psram_size === 'number' && deviceInfoCache.psram_size > 0) ||
             (typeof health.psram_free === 'number' && health.psram_free > 0)
         );
 
-        if (cpuUsage !== null) {
-            healthPushSampleWithTs(healthHistory.cpu, healthHistory.cpuTs, cpuUsage, sampleTs);
-        }
-
-        healthPushSampleWithTs(healthHistory.heapInternalFree, healthHistory.heapInternalFreeTs, health.heap_internal_free, sampleTs);
-        {
-            const cur = health.heap_internal_free;
-            // Window bands are sampled independently (200ms timer) but firmware includes the
-            // instantaneous request-time value in the returned window.
-            const wmin = (typeof health.heap_internal_free_min_window === 'number') ? health.heap_internal_free_min_window : cur;
-            const wmax = (typeof health.heap_internal_free_max_window === 'number') ? health.heap_internal_free_max_window : cur;
-            healthPushSample(healthHistory.heapInternalFreeMin, wmin);
-            healthPushSample(healthHistory.heapInternalFreeMax, wmax);
-        }
-
-        if (hasPsram) {
-            healthPushSampleWithTs(healthHistory.psramFree, healthHistory.psramFreeTs, health.psram_free, sampleTs);
-            {
-                const cur = health.psram_free;
-                const wmin = (typeof health.psram_free_min_window === 'number') ? health.psram_free_min_window : cur;
-                const wmax = (typeof health.psram_free_max_window === 'number') ? health.psram_free_max_window : cur;
-                healthPushSample(healthHistory.psramFreeMin, wmin);
-                healthPushSample(healthHistory.psramFreeMax, wmax);
-            }
-        }
-
-        if (health.wifi_rssi !== null && health.wifi_rssi !== undefined) {
-            healthPushSampleWithTs(healthHistory.wifiRssi, healthHistory.wifiRssiTs, health.wifi_rssi, sampleTs);
-        }
-
-        healthUpdateSeriesStats({ hasPsram });
+        // Update point-in-time rows (shown when history is unavailable).
+        const ptCpu = document.getElementById('health-point-cpu-value');
+        if (ptCpu) ptCpu.textContent = (cpuUsage !== null) ? `${cpuUsage}%` : '—';
+        const ptHeap = document.getElementById('health-point-heap-value');
+        if (ptHeap) ptHeap.textContent = healthFormatBytes(health.heap_internal_free);
+        const ptPsramWrap = document.getElementById('health-point-psram-wrap');
+        if (ptPsramWrap) ptPsramWrap.style.display = hasPsram ? '' : 'none';
+        const ptPsram = document.getElementById('health-point-psram-value');
+        if (ptPsram) ptPsram.textContent = hasPsram ? healthFormatBytes(health.psram_free) : '—';
+        const ptLargest = document.getElementById('health-point-largest-value');
+        if (ptLargest) ptLargest.textContent = healthFormatBytes(health.heap_internal_largest);
 
         // Update sparkline header values.
         const cpuSparkValue = document.getElementById('health-sparkline-cpu-value');
@@ -2271,14 +2341,12 @@ async function updateHealth() {
         const psramSparkValue = document.getElementById('health-sparkline-psram-value');
         if (psramSparkValue) psramSparkValue.textContent = hasPsram ? healthFormatBytes(health.psram_free) : '—';
 
-        const rssiSparkValue = document.getElementById('health-sparkline-rssi-value');
-        if (rssiSparkValue) {
-            rssiSparkValue.textContent = (health.wifi_rssi !== null && health.wifi_rssi !== undefined) ? `${health.wifi_rssi} dBm` : 'N/A';
-        }
+        const largestSparkValue = document.getElementById('health-sparkline-largest-value');
+        if (largestSparkValue) largestSparkValue.textContent = healthFormatBytes(health.heap_internal_largest);
 
         renderHealth(health);
         if (healthExpanded) {
-            healthDrawSparklinesOnly({ hasPsram });
+            await updateHealthHistory({ hasPsram });
         }
     } catch (error) {
         console.error('Failed to fetch health stats:', error);
@@ -2293,7 +2361,7 @@ function toggleHealthWidget() {
     expandedEl.style.display = healthExpanded ? 'block' : 'none';
     if (healthExpanded) {
         updateHealth();
-        healthDrawSparklinesOnly({
+        updateHealthHistory({
             hasPsram: (() => {
                 const wrap = document.getElementById('health-sparkline-psram-wrap');
                 return wrap ? (wrap.style.display !== 'none') : null;
@@ -2316,6 +2384,7 @@ function initHealthWidget() {
 
     // Configure polling based on device info if available.
     healthConfigureFromDeviceInfo(deviceInfoCache);
+    healthConfigureHistoryFromDeviceInfo(deviceInfoCache);
 
     // Attach hover/touch tooltips once.
     healthInitSparklineTooltips();
@@ -2327,6 +2396,7 @@ function initHealthWidget() {
             healthPollTimer = null;
         }
         healthConfigureFromDeviceInfo(deviceInfoCache);
+        healthConfigureHistoryFromDeviceInfo(deviceInfoCache);
         healthPollTimer = setInterval(updateHealth, healthPollIntervalMs);
     };
 

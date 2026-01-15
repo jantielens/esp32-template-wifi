@@ -5,6 +5,7 @@
 #include "log_manager.h"
 #include "mqtt_manager.h"
 #include "device_telemetry.h"
+#include "health_history.h"
 #include <WiFi.h>
 #include <ESPmDNS.h>
 #include <lwip/netif.h>
@@ -59,6 +60,10 @@ void onWiFiDisconnected(WiFiEvent_t event, WiFiEventInfo_t info) {
 
 void setup()
 {
+  // Optional device-side history for sparklines (/api/health/history)
+  // Start as early as possible after a device boot.
+  health_history_start();
+
   // Initialize log manager (wraps Serial for web streaming)
   Logger.begin(115200);
   delay(1000);

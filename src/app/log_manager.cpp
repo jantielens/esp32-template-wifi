@@ -15,11 +15,13 @@ uint8_t LogManager::nestLevel = 0;
 // Global LogManager instance
 LogManager Logger;
 
+static bool g_log_manager_begun = false;
+
 static inline bool serial_ready_for_logging() {
 #if defined(ARDUINO_USB_CDC_ON_BOOT) && (ARDUINO_USB_CDC_ON_BOOT == 1)
     return (bool)Serial;
 #else
-    return true;
+    return g_log_manager_begun;
 #endif
 }
 
@@ -30,6 +32,7 @@ LogManager::LogManager() {
 // Initialize (sets baud rate for Serial)
 void LogManager::begin(unsigned long baud) {
     Serial.begin(baud);
+    g_log_manager_begun = true;
 }
 
 // Get indentation string based on nesting level

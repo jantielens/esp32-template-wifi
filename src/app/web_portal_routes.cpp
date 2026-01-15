@@ -38,6 +38,7 @@ void web_portal_register_routes(AsyncWebServer* server) {
 
     server->on("/api/config", HTTP_DELETE, handleDeleteConfig);
     server->on("/api/info", HTTP_GET, handleGetVersion);
+    server->on("/api/health/history", HTTP_GET, handleGetHealthHistory);
     server->on("/api/health", HTTP_GET, handleGetHealth);
     server->on("/api/reboot", HTTP_POST, handleReboot);
 

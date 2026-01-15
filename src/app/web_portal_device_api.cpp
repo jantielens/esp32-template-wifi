@@ -10,6 +10,7 @@
 #include "psram_json_allocator.h"
 #include "project_branding.h"
 #include "web_portal_json.h"
+#include "health_history.h"
 #include "../version.h"
 
 #include <ArduinoJson.h>
@@ -91,6 +92,16 @@ void handleGetVersion(AsyncWebServerRequest *request) {
     response->print(",\"health_history_seconds\":");
     response->print((unsigned long)HEALTH_HISTORY_SECONDS);
 
+    // Optional: Device-side history endpoint (/api/health/history)
+    const bool hist_available = health_history_available();
+    const HealthHistoryParams hist_params = health_history_params();
+    response->print(",\"health_history_available\":");
+    response->print(hist_available ? "true" : "false");
+    response->print(",\"health_history_period_ms\":");
+    response->print((unsigned long)hist_params.period_ms);
+    response->print(",\"health_history_samples\":");
+    response->print((unsigned long)hist_params.samples);
+
     response->print(",\"github_updates_enabled\":");
     response->print(GITHUB_UPDATES_ENABLED ? "true" : "false");
     #if GITHUB_UPDATES_ENABLED
@@ -168,6 +179,87 @@ void handleGetHealth(AsyncWebServerRequest *request) {
     }
 
     web_portal_send_json_chunked(request, doc);
+}
+
+// GET /api/health/history - Get device-side health history for sparklines
+void handleGetHealthHistory(AsyncWebServerRequest *request) {
+    if (!portal_auth_gate(request)) return;
+
+    if (!health_history_available()) {
+        request->send(404, "application/json", "{\"available\":false}");
+        return;
+    }
+
+    const HealthHistoryParams params = health_history_params();
+    const size_t count = health_history_count();
+    const size_t capacity = health_history_capacity();
+
+    AsyncResponseStream *response = request->beginResponseStream("application/json");
+    response->addHeader("Cache-Control", "no-store");
+
+    response->print("{\"available\":true");
+    response->print(",\"period_ms\":");
+    response->print((unsigned long)params.period_ms);
+    response->print(",\"seconds\":");
+    response->print((unsigned long)params.seconds);
+    response->print(",\"samples\":");
+    response->print((unsigned long)params.samples);
+    response->print(",\"count\":");
+    response->print((unsigned long)count);
+    response->print(",\"capacity\":");
+    response->print((unsigned long)capacity);
+
+    // Helper macro to print a uint32 array field with minimal overhead.
+#define PRINT_U32_ARRAY_FIELD(field_name, expr_u32) \
+    do { \
+        response->print(",\""); \
+        response->print(field_name); \
+        response->print("\":["); \
+        for (size_t i = 0; i < count; i++) { \
+            if (i > 0) response->print(","); \
+            HealthHistorySample s = {}; \
+            if (health_history_get_sample(i, &s)) { \
+                response->print((unsigned long)(expr_u32)); \
+            } else { \
+                response->print("0"); \
+            } \
+        } \
+        response->print("]"); \
+    } while (0)
+
+    // cpu_usage is int16 and may be -1 (unknown).
+    response->print(",\"cpu_usage\":[");
+    for (size_t i = 0; i < count; i++) {
+        if (i > 0) response->print(",");
+        HealthHistorySample s = {};
+        if (health_history_get_sample(i, &s)) {
+            if (s.cpu_usage < 0) {
+                response->print("null");
+            } else {
+                response->print((int)s.cpu_usage);
+            }
+        } else {
+            response->print("null");
+        }
+    }
+    response->print("]");
+
+    PRINT_U32_ARRAY_FIELD("heap_internal_free", s.heap_internal_free);
+    PRINT_U32_ARRAY_FIELD("heap_internal_free_min_window", s.heap_internal_free_min_window);
+    PRINT_U32_ARRAY_FIELD("heap_internal_free_max_window", s.heap_internal_free_max_window);
+
+    PRINT_U32_ARRAY_FIELD("psram_free", s.psram_free);
+    PRINT_U32_ARRAY_FIELD("psram_free_min_window", s.psram_free_min_window);
+    PRINT_U32_ARRAY_FIELD("psram_free_max_window", s.psram_free_max_window);
+
+    PRINT_U32_ARRAY_FIELD("heap_internal_largest", s.heap_internal_largest);
+    PRINT_U32_ARRAY_FIELD("heap_internal_largest_min_window", s.heap_internal_largest_min_window);
+    PRINT_U32_ARRAY_FIELD("heap_internal_largest_max_window", s.heap_internal_largest_max_window);
+
+#undef PRINT_U32_ARRAY_FIELD
+
+    response->print("}");
+    request->send(response);
 }
 
 // POST /api/reboot - Reboot device without saving
