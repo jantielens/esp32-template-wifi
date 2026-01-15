@@ -163,7 +163,7 @@ static bool flash_cache_initialized = false;
 static size_t cached_sketch_size = 0;
 static size_t cached_free_sketch_space = 0;
 
-static void fill_common(JsonDocument &doc, bool include_ip_and_channel, bool include_debug_fields);
+static void fill_common(JsonDocument &doc, bool include_ip_and_channel, bool include_debug_fields, bool include_mqtt_self_report);
 
 static void fill_health_window_fields(JsonDocument &doc);
 
@@ -483,7 +483,7 @@ void device_telemetry_check_tripwires() {
 }
 
 void device_telemetry_fill_api(JsonDocument &doc) {
-    fill_common(doc, true, true);
+    fill_common(doc, true, true, true);
 
     // Min/max fields sampled by a background timer (multi-client safe).
     // We report a merged snapshot across the last complete window and the current
@@ -509,7 +509,11 @@ void device_telemetry_fill_api(JsonDocument &doc) {
 }
 
 void device_telemetry_fill_mqtt(JsonDocument &doc) {
-    fill_common(doc, false, false);
+    // For MQTT publishing we keep the payload focused on device/system telemetry.
+    // MQTT connection/publish status is better represented by availability/LWT,
+    // and many consumers can infer publish cadence from broker-side timestamps.
+    // Keep mqtt_* fields in /api/health only.
+    fill_common(doc, false, false, false);
 
     // =====================================================================
     // USER-EXTEND: Add your own sensors to the MQTT state payload
@@ -771,7 +775,7 @@ bool device_telemetry_get_health_window_bands(DeviceHealthWindowBands* out_bands
     return true;
 }
 
-static void fill_common(JsonDocument &doc, bool include_ip_and_channel, bool include_debug_fields) {
+static void fill_common(JsonDocument &doc, bool include_ip_and_channel, bool include_debug_fields, bool include_mqtt_self_report) {
     // System
     uint64_t uptime_us = esp_timer_get_time();
     doc["uptime_seconds"] = uptime_us / 1000000;
@@ -916,28 +920,32 @@ static void fill_common(JsonDocument &doc, bool include_ip_and_channel, bool inc
     }
 
     // MQTT health (self-report)
-    #if HAS_MQTT
-    {
-        doc["mqtt_enabled"] = mqtt_manager.enabled() ? true : false;
-        doc["mqtt_publish_enabled"] = mqtt_manager.publishEnabled() ? true : false;
-        doc["mqtt_connected"] = mqtt_manager.connected() ? true : false;
+    // Only included in the web API (/api/health). For MQTT consumers, availability/LWT is a better
+    // source of truth, and retained state can make connection booleans misleading.
+    if (include_mqtt_self_report) {
+        #if HAS_MQTT
+        {
+            doc["mqtt_enabled"] = mqtt_manager.enabled() ? true : false;
+            doc["mqtt_publish_enabled"] = mqtt_manager.publishEnabled() ? true : false;
+            doc["mqtt_connected"] = mqtt_manager.connected() ? true : false;
 
-        const unsigned long last_pub = mqtt_manager.lastHealthPublishMs();
-        if (last_pub == 0) {
-            doc["mqtt_last_health_publish_ms"] = nullptr;
-            doc["mqtt_health_publish_age_ms"] = nullptr;
-        } else {
-            doc["mqtt_last_health_publish_ms"] = last_pub;
-            doc["mqtt_health_publish_age_ms"] = (unsigned long)(millis() - last_pub);
+            const unsigned long last_pub = mqtt_manager.lastHealthPublishMs();
+            if (last_pub == 0) {
+                doc["mqtt_last_health_publish_ms"] = nullptr;
+                doc["mqtt_health_publish_age_ms"] = nullptr;
+            } else {
+                doc["mqtt_last_health_publish_ms"] = last_pub;
+                doc["mqtt_health_publish_age_ms"] = (unsigned long)(millis() - last_pub);
+            }
         }
+        #else
+        doc["mqtt_enabled"] = false;
+        doc["mqtt_publish_enabled"] = false;
+        doc["mqtt_connected"] = false;
+        doc["mqtt_last_health_publish_ms"] = nullptr;
+        doc["mqtt_health_publish_age_ms"] = nullptr;
+        #endif
     }
-    #else
-    doc["mqtt_enabled"] = false;
-    doc["mqtt_publish_enabled"] = false;
-    doc["mqtt_connected"] = false;
-    doc["mqtt_last_health_publish_ms"] = nullptr;
-    doc["mqtt_health_publish_age_ms"] = nullptr;
-    #endif
 
     // Display perf (best-effort)
     #if HAS_DISPLAY
