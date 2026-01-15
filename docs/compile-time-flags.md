@@ -173,6 +173,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/device_telemetry.cpp
   - src/app/display_drivers.cpp
   - src/app/display_manager.cpp
+  - src/app/ha_discovery.cpp
   - src/app/image_api.cpp
   - src/app/lvgl_jpeg_decoder.cpp
   - src/app/lvgl_jpeg_decoder.h
