@@ -18,7 +18,7 @@ This document is a template. Sections marked with `COMPILE_FLAG_REPORT` markers 
 ## Flags (generated)
 
 <!-- BEGIN COMPILE_FLAG_REPORT:FLAGS -->
-Total flags: 85
+Total flags: 88
 
 ### Features (HAS_*)
 
@@ -86,6 +86,7 @@ Total flags: 85
 
 ### Limits & Tuning
 
+- **HEALTH_HISTORY_PERIOD_MS** default: `5000` — Sampling cadence for the device-side history (ms). Default aligns with UI poll.
 - **IMAGE_API_DECODE_HEADROOM_BYTES** default: `(50 * 1024)` — Extra free RAM required for decoding (bytes).
 - **IMAGE_API_DEFAULT_TIMEOUT_MS** default: `10000` — Default image display timeout in milliseconds.
 - **IMAGE_API_MAX_SIZE_BYTES** default: `(100 * 1024)` — Max bytes accepted for full image uploads (JPEG).
@@ -109,6 +110,8 @@ Total flags: 85
 - **DISPLAY_INVERSION_ON** default: `(no default)` — Enable display inversion (panel-specific).
 - **DISPLAY_NEEDS_GAMMA_FIX** default: `(no default)` — Apply gamma correction fix for this panel variant.
 - **ESP_PANEL_SWAPBUF_PREFER_INTERNAL** default: `true` — Default: true. Some panel buses are more reliable with internal/DMA-capable buffers.
+- **HEALTH_HISTORY_ENABLED** default: `1` — Default: enabled.
+- **HEALTH_HISTORY_SAMPLES** default: `((HEALTH_HISTORY_SECONDS * 1000) / HEALTH_HISTORY_PERIOD_MS)` — Derived number of samples.
 - **HEALTH_HISTORY_SECONDS** default: `300` — How much client-side history (sparklines) to keep.
 - **HEALTH_POLL_INTERVAL_MS** default: `5000` — How often the web UI polls /api/health.
 - **LCD_QSPI_HOST** default: `(no default)` — QSPI host peripheral.
@@ -238,6 +241,13 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
 - **DISPLAY_ROTATION**
   - src/app/touch_manager.cpp
 - **ESP_PANEL_SWAPBUF_PREFER_INTERNAL**
+  - src/app/board_config.h
+- **HEALTH_HISTORY_ENABLED**
+  - src/app/board_config.h
+  - src/app/health_history.cpp
+- **HEALTH_HISTORY_PERIOD_MS**
+  - src/app/board_config.h
+- **HEALTH_HISTORY_SAMPLES**
   - src/app/board_config.h
 - **HEALTH_HISTORY_SECONDS**
   - src/app/board_config.h

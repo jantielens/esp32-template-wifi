@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.37] - 2026-01-15
+
+### Added
+- Web API: optional device-side health history endpoint `GET /api/health/history` for sparklines
+- Health history: monotonic `uptime_ms` array to correlate samples with logs
+- Logging: prefix all log lines with a monotonic `millis()` timestamp (e.g. `[123456ms] ...`)
+
+### Changed
+- Web portal: uses device-side history when available; falls back to point-in-time fields when unavailable
+- Web API: `GET /api/info` advertises health history availability and parameters
+
+### Documentation
+- Regenerated `docs/compile-time-flags.md`
+
 ## [0.0.36] - 2026-01-14
 
 ### Added
