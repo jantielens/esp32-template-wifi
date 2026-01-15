@@ -484,9 +484,9 @@ async function loadVersion() {
             `${version.chip_cores} ${version.chip_cores === 1 ? 'Core' : 'Cores'}`;
         document.getElementById('cpu-freq').textContent = `${version.cpu_freq} MHz`;
         document.getElementById('flash-size').textContent = 
-            `${(version.flash_chip_size / 1048576).toFixed(0)} MB Flash`;
+            `${formatBytes(version.flash_chip_size)} Flash`;
         document.getElementById('psram-status').textContent = 
-            version.psram_size > 0 ? `${(version.psram_size / 1024).toFixed(0)} KB PSRAM` : 'No PSRAM';
+            version.psram_size > 0 ? `${formatBytes(version.psram_size)} PSRAM` : 'No PSRAM';
 
         // Update Firmware page online update UI if present
         updateGitHubUpdateSection(version);
@@ -1484,8 +1484,8 @@ function healthConfigureFromDeviceInfo(info) {
     const pollMs = (info && typeof info.health_poll_interval_ms === 'number') ? info.health_poll_interval_ms : HEALTH_POLL_INTERVAL_DEFAULT_MS;
     const windowSeconds = (info && typeof info.health_history_seconds === 'number') ? info.health_history_seconds : HEALTH_HISTORY_DEFAULT_SECONDS;
 
-    healthPollIntervalMs = Math.max(1000, Math.min(60000, pollMs | 0));
-    const seconds = Math.max(30, Math.min(3600, windowSeconds | 0));
+    healthPollIntervalMs = Math.max(1000, Math.min(60000, Math.trunc(pollMs)));
+    const seconds = Math.max(30, Math.min(3600, Math.trunc(windowSeconds)));
     healthHistoryMaxSamples = Math.max(10, Math.min(600, Math.floor((seconds * 1000) / healthPollIntervalMs)));
 }
 
@@ -1632,14 +1632,14 @@ function healthSetSparklineHoverIndex(canvasId, index) {
         healthSparklineHoverIndex[canvasId] = null;
         return;
     }
-    healthSparklineHoverIndex[canvasId] = index | 0;
+    healthSparklineHoverIndex[canvasId] = Math.trunc(index);
 }
 
 function healthGetSparklineHoverIndex(canvasId) {
     if (!canvasId) return null;
     if (!(canvasId in healthSparklineHoverIndex)) return null;
     const v = healthSparklineHoverIndex[canvasId];
-    return (typeof v === 'number' && isFinite(v)) ? (v | 0) : null;
+    return (typeof v === 'number' && isFinite(v)) ? Math.trunc(v) : null;
 }
 
 function healthFormatBytes(bytes) {
@@ -1786,7 +1786,7 @@ function sparklineDraw(canvas, values, {
     ctx.stroke();
 
     if (typeof highlightIndex === 'number' && isFinite(highlightIndex)) {
-        const idx = Math.max(0, Math.min(data.length - 1, highlightIndex | 0));
+        const idx = Math.max(0, Math.min(data.length - 1, Math.trunc(highlightIndex)));
         const v = data[idx];
         if (typeof v === 'number' && isFinite(v)) {
             const x = pad + idx * xStep;
@@ -1877,7 +1877,7 @@ function healthAttachSparklineTooltip(canvas, getPayloadForIndex) {
 
         if (typeof payload.index === 'number' && isFinite(payload.index)) {
             const prev = healthGetSparklineHoverIndex(canvas.id);
-            const next = payload.index | 0;
+            const next = Math.trunc(payload.index);
             if (prev !== next) {
                 healthSetSparklineHoverIndex(canvas.id, next);
                 healthDrawSparklinesOnly({
@@ -1957,7 +1957,7 @@ function healthInitSparklineTooltips() {
         const sparklineLine = formatMinMaxDeltaLine(
             (typeof smin === 'number') ? smin : NaN,
             (typeof smax === 'number') ? smax : NaN,
-            (x) => `${(x | 0)}%`
+            (x) => `${Math.trunc(x)}%`
         );
 
         return {
@@ -2052,7 +2052,7 @@ function healthInitSparklineTooltips() {
         const sparklineLine = formatMinMaxDeltaLine(
             (typeof smin === 'number') ? smin : NaN,
             (typeof smax === 'number') ? smax : NaN,
-            (x) => `${(x | 0)} dBm`
+            (x) => `${Math.round(x)} dBm`
         );
 
         return {
@@ -2135,7 +2135,7 @@ function renderHealth(health) {
     const psramMinWrap = document.getElementById('health-psram-min-wrap');
     if (psramMinWrap) psramMinWrap.style.display = hasPsram ? '' : 'none';
     const psramMinEl = document.getElementById('health-psram-min');
-    if (psramMinEl) psramMinEl.textContent = hasPsram ? healthFormatBytesKB(health.psram_min) : '—';
+    if (psramMinEl) psramMinEl.textContent = hasPsram ? healthFormatBytes(health.psram_min) : '—';
 
     const psramFragWrap = document.getElementById('health-psram-frag-wrap');
     if (psramFragWrap) psramFragWrap.style.display = hasPsram ? '' : 'none';
@@ -2151,9 +2151,7 @@ function renderHealth(health) {
     // Flash
     const flashEl = document.getElementById('health-flash');
     if (flashEl) {
-        const flashUsed = (health.flash_used / 1024).toFixed(0);
-        const flashTotal = (health.flash_total / 1024).toFixed(0);
-        flashEl.textContent = `${flashUsed} / ${flashTotal} KB`;
+        flashEl.textContent = `${formatBytes(health.flash_used)} / ${formatBytes(health.flash_total)}`;
     }
 
     // Filesystem
@@ -2271,7 +2269,7 @@ async function updateHealth() {
         const psramWrap = document.getElementById('health-sparkline-psram-wrap');
         if (psramWrap) psramWrap.style.display = hasPsram ? '' : 'none';
         const psramSparkValue = document.getElementById('health-sparkline-psram-value');
-        if (psramSparkValue) psramSparkValue.textContent = hasPsram ? healthFormatBytesKB(health.psram_free) : '—';
+        if (psramSparkValue) psramSparkValue.textContent = hasPsram ? healthFormatBytes(health.psram_free) : '—';
 
         const rssiSparkValue = document.getElementById('health-sparkline-rssi-value');
         if (rssiSparkValue) {
