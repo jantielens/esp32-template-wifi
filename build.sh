@@ -135,7 +135,7 @@ build_board() {
         # If a board provides src/boards/<board>/User_Setup.h, force-include it and
         # mark USER_SETUP_LOADED so TFT_eSPI skips its default setup.
         if [[ -f "$board_override_dir/User_Setup.h" ]]; then
-            EXTRA_GLOBAL_FLAGS+=" -DUSER_SETUP_LOADED=1 -include$board_override_dir/User_Setup.h"
+            EXTRA_GLOBAL_FLAGS+=" -DUSER_SETUP_LOADED=1 -include $board_override_dir/User_Setup.h"
         fi
 
     fi

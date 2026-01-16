@@ -31,9 +31,6 @@ bool rtos_create_task_psram_stack(
         return false;
     }
 
-#if !SOC_SPIRAM_SUPPORTED
-    return false;
-#else
     StackType_t* stack = static_cast<StackType_t*>(
         heap_caps_malloc(stackDepthWords * sizeof(StackType_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)
     );
@@ -67,5 +64,4 @@ bool rtos_create_task_psram_stack(
 
     *outHandle = handle;
     return true;
-#endif
 }
