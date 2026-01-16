@@ -39,7 +39,7 @@ void handleSetDisplayBrightness(AsyncWebServerRequest *request, uint8_t *data, s
     if (brightness < 0) brightness = 0;
     if (brightness > 100) brightness = 100;
 
-    Logger.logMessagef("API", "PUT /api/display/brightness: %d%%", brightness);
+    LOGI("API", "PUT /api/display/brightness: %d%%", brightness);
 
     // Update the in-RAM target brightness (does not persist to NVS).
     // This keeps the screen saver target consistent with what the user sees.
@@ -84,7 +84,7 @@ void handleGetDisplaySleep(AsyncWebServerRequest *request) {
 void handlePostDisplaySleep(AsyncWebServerRequest *request) {
     if (!portal_auth_gate(request)) return;
 
-    Logger.logMessage("API", "POST /api/display/sleep");
+    LOGI("API", "POST /api/display/sleep");
     screen_saver_manager_sleep_now();
     request->send(200, "application/json", "{\"success\":true}");
 }
@@ -92,7 +92,7 @@ void handlePostDisplaySleep(AsyncWebServerRequest *request) {
 void handlePostDisplayWake(AsyncWebServerRequest *request) {
     if (!portal_auth_gate(request)) return;
 
-    Logger.logMessage("API", "POST /api/display/wake");
+    LOGI("API", "POST /api/display/wake");
     screen_saver_manager_wake();
     request->send(200, "application/json", "{\"success\":true}");
 }
@@ -105,7 +105,7 @@ void handlePostDisplayActivity(AsyncWebServerRequest *request) {
         wake = (request->getParam("wake")->value() == "1");
     }
 
-    Logger.logMessagef("API", "POST /api/display/activity (wake=%d)", (int)wake);
+    LOGI("API", "POST /api/display/activity (wake=%d)", (int)wake);
     screen_saver_manager_notify_activity(wake);
     request->send(200, "application/json", "{\"success\":true}");
 }
@@ -137,7 +137,7 @@ void handleSetDisplayScreen(AsyncWebServerRequest *request, uint8_t *data, size_
         return;
     }
 
-    Logger.logMessagef("API", "PUT /api/display/screen: %s", screen_id);
+    LOGI("API", "PUT /api/display/screen: %s", screen_id);
 
     bool success = false;
     display_manager_show_screen(screen_id, &success);

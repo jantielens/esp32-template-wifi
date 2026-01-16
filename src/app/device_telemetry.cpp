@@ -220,7 +220,7 @@ static int calculate_cpu_usage() {
     const UBaseType_t expected_tasks = uxTaskGetNumberOfTasks();
     if (expected_tasks > kMaxTasks) {
         if (log_every_ms(now_ms, &last_truncation_log_ms, 5000)) {
-            Logger.logQuickf(
+            LOGI(
                 "CPU",
                 "Runtime stats truncated: tasks=%u > max=%u (cpu_usage unavailable)",
                 (unsigned)expected_tasks,
@@ -236,7 +236,7 @@ static int calculate_cpu_usage() {
     static unsigned long last_runtime_stats_log_ms = 0;
     if (task_count <= 0 || total_runtime == 0) {
         if (log_every_ms(now_ms, &last_runtime_stats_log_ms, 5000)) {
-            Logger.logQuickf(
+            LOGI(
                 "CPU",
                 "Runtime stats unavailable: uxTaskGetSystemState=%d total_runtime=%lu",
                 task_count,
@@ -347,7 +347,7 @@ static void log_task_stack_watermarks_one_shot() {
         tasks = (TaskStatus_t*)heap_caps_malloc(sizeof(TaskStatus_t) * task_count, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     }
     if (!tasks) {
-        Logger.logMessage("Mem", "TRIPWIRE: OOM while allocating task list");
+        LOGE("Mem", "TRIPWIRE: OOM while allocating task list");
         return;
     }
 
@@ -355,7 +355,7 @@ static void log_task_stack_watermarks_one_shot() {
     const UBaseType_t got = uxTaskGetSystemState(tasks, task_count, &total_runtime);
     if (got == 0) {
         heap_caps_free(tasks);
-        Logger.logMessage("Mem", "TRIPWIRE: uxTaskGetSystemState returned 0");
+        LOGE("Mem", "TRIPWIRE: uxTaskGetSystemState returned 0");
         return;
     }
 
@@ -376,10 +376,10 @@ static void log_task_stack_watermarks_one_shot() {
 
     // Keep logs bounded.
     const UBaseType_t max_to_log = (got > 16) ? 16 : got;
-    Logger.logMessagef("Mem", "TRIPWIRE: task stack watermarks (worst %u/%u)", (unsigned)max_to_log, (unsigned)got);
+    LOGI("Mem", "TRIPWIRE: task stack watermarks (worst %u/%u)", (unsigned)max_to_log, (unsigned)got);
     for (UBaseType_t i = 0; i < max_to_log; i++) {
         const unsigned bytes = (unsigned)tasks[i].usStackHighWaterMark * (unsigned)sizeof(StackType_t);
-        Logger.logMessagef("Stack", "%s hw=%u", tasks[i].pcTaskName ? tasks[i].pcTaskName : "(null)", bytes);
+        LOGI("Stack", "%s hw=%u", tasks[i].pcTaskName ? tasks[i].pcTaskName : "(null)", bytes);
     }
 
     heap_caps_free(tasks);
@@ -423,7 +423,7 @@ void device_telemetry_log_memory_snapshot(const char *tag) {
         &psram_largest
     );
 
-    // Keep this line short to avoid LogManager's internal fixed buffers truncating the output.
+    // Keep this line short to avoid fixed log buffers truncating the output.
     // Keys:
     // hf=heap_free hm=heap_min hl=heap_largest hi=internal_free hin=internal_min
     // pf=psram_free pm=psram_min pl=psram_largest
@@ -437,7 +437,7 @@ void device_telemetry_log_memory_snapshot(const char *tag) {
         frag_percent = (unsigned)fragmentation;
     }
 
-    Logger.logMessagef(
+    LOGI(
         "Mem",
         "%s hf=%u hm=%u hl=%u hi=%u hin=%u frag=%u pf=%u pm=%u pl=%u",
         tag ? tag : "(null)",
@@ -474,7 +474,7 @@ void device_telemetry_check_tripwires() {
     }
 
     fired = true;
-    Logger.logMessagef(
+    LOGI(
         "Mem",
         "TRIPWIRE fired: internal_min=%u <= %u",
         (unsigned)snapshot.heap_internal_min_free_bytes,
@@ -576,7 +576,7 @@ void device_telemetry_start_cpu_monitoring() {
     
     cpu_mutex = xSemaphoreCreateMutex();
     if (cpu_mutex == nullptr) {
-        Logger.logMessage("CPU Monitor", "Failed to create mutex");
+        LOGE("CPU", "Failed to create mutex");
         return;
     }
     
@@ -593,11 +593,11 @@ void device_telemetry_start_cpu_monitoring() {
         );
 
         if (!ok) {
-            Logger.logMessage("CPU Monitor", "FATAL: failed to create PSRAM-backed cpu_monitor task");
+            LOGE("CPU", "Failed to create PSRAM-backed cpu_monitor task");
             abort();
         }
 
-        Logger.logMessage("CPU Monitor", "Created task with PSRAM-backed stack");
+        LOGI("CPU", "Created task with PSRAM-backed stack");
         return;
     }
 #endif
@@ -612,7 +612,7 @@ void device_telemetry_start_cpu_monitoring() {
     );
 
     if (result != pdPASS) {
-        Logger.logMessage("CPU Monitor", "Failed to create task");
+        LOGE("CPU", "Failed to create task");
         vSemaphoreDelete(cpu_mutex);
         cpu_mutex = nullptr;
     }
@@ -641,12 +641,12 @@ void device_telemetry_start_health_window_sampling() {
     );
 
     if (!g_health_window_timer) {
-        Logger.logMessage("Health", "Failed to create health window timer");
+        LOGE("Health", "Failed to create health window timer");
         return;
     }
 
     if (xTimerStart(g_health_window_timer, 0) != pdPASS) {
-        Logger.logMessage("Health", "Failed to start health window timer");
+        LOGE("Health", "Failed to start health window timer");
         xTimerDelete(g_health_window_timer, 0);
         g_health_window_timer = nullptr;
         return;

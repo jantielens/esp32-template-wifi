@@ -198,6 +198,9 @@ See `docs/wsl-development.md` for complete USB/IP setup guide.
 - `src/app/web/portal.js` - Client-side logic (multi-page support, API calls, health updates)
 - `src/version.h` - Firmware version tracking
 
+### Documentation
+- docs/logging-guidelines.md - Logging rules and format (LOGx macros, severity, modules)
+
 ### Tools
 - `tools/minify-web-assets.sh` - Minifies and embeds web assets into `web_assets.h`
   - Replaces `{{HEADER}}`, `{{NAV}}`, `{{FOOTER}}` placeholders in HTML files

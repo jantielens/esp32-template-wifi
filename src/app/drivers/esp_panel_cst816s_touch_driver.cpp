@@ -15,7 +15,7 @@ ESPPanel_CST816S_TouchDriver::~ESPPanel_CST816S_TouchDriver() {
 }
 
 void ESPPanel_CST816S_TouchDriver::init() {
-    Logger.logLine("ESP_Panel: Initializing CST816S touch");
+    LOGI("ESP_Panel", "Initializing CST816S touch");
 
     auto* touch_bus = new ESP_PanelBus_I2C(TOUCH_I2C_SCL, TOUCH_I2C_SDA, ESP_LCD_TOUCH_IO_I2C_CST816S_CONFIG());
     touch_bus->configI2cFreqHz(400000);

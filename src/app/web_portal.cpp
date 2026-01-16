@@ -59,9 +59,9 @@ static void log_async_tcp_stack_watermark_once() {
     const unsigned high_water_bytes = (unsigned)high_water_words * (unsigned)sizeof(StackType_t);
 
     #ifdef CONFIG_ASYNC_TCP_STACK_SIZE
-        Logger.logMessagef("Portal", "AsyncTCP stack watermark: %u bytes (CONFIG_ASYNC_TCP_STACK_SIZE=%u)", high_water_bytes, (unsigned)CONFIG_ASYNC_TCP_STACK_SIZE);
+        LOGI("Portal", "AsyncTCP stack watermark: %u bytes (CONFIG_ASYNC_TCP_STACK_SIZE=%u)", high_water_bytes, (unsigned)CONFIG_ASYNC_TCP_STACK_SIZE);
     #else
-        Logger.logMessagef("Portal", "AsyncTCP stack watermark: %u bytes (CONFIG_ASYNC_TCP_STACK_SIZE not set)", high_water_bytes);
+        LOGI("Portal", "AsyncTCP stack watermark: %u bytes (CONFIG_ASYNC_TCP_STACK_SIZE not set)", high_water_bytes);
     #endif
 }
 
@@ -98,10 +98,10 @@ static volatile bool pending_image_hide_request = false;
 
 // Initialize web portal
 void web_portal_init(DeviceConfig *config) {
-    Logger.logBegin("Portal Init");
+    LOGI("Portal", "Init start");
     
     current_config = config;
-    Logger.logLinef("Portal config pointer: %p, backlight_brightness: %d", 
+    LOGI("Portal", "Config ptr: %p, backlight_brightness: %d", 
                     current_config, current_config->backlight_brightness);
     
     // Create web server instance (avoid global constructor issues)
@@ -120,7 +120,7 @@ void web_portal_init(DeviceConfig *config) {
     
     // Image API integration (if enabled)
     #if HAS_IMAGE_API && HAS_DISPLAY
-    Logger.logMessage("Portal", "Initializing image API");
+    LOGI("Portal", "Initializing image API");
     
     // Setup backend adapter
     ImageApiBackend backend;
@@ -137,7 +137,7 @@ void web_portal_init(DeviceConfig *config) {
         (void)start_time;
         DirectImageScreen* screen = display_manager_get_direct_image_screen();
         if (!screen) {
-            Logger.logMessage("ImageAPI", "ERROR: No direct image screen");
+            LOGE("IMG", "No direct image screen");
             return false;
         }
         
@@ -161,7 +161,7 @@ void web_portal_init(DeviceConfig *config) {
         #if HAS_DISPLAY
         DirectImageScreen* screen = display_manager_get_direct_image_screen();
         if (!screen) {
-            Logger.logMessage("ImageAPI", "ERROR: No direct image screen");
+            LOGE("IMG", "No direct image screen");
             return false;
         }
         
@@ -193,11 +193,11 @@ void web_portal_init(DeviceConfig *config) {
     image_cfg.max_timeout_ms = IMAGE_API_MAX_TIMEOUT_MS;
     
     // Initialize and register routes
-    Logger.logMessage("Portal", "Calling image_api_init...");
+    LOGI("Portal", "Calling image_api_init...");
     image_api_init(image_cfg, backend);
-    Logger.logMessage("Portal", "Calling image_api_register_routes...");
+    LOGI("Portal", "Calling image_api_register_routes...");
     image_api_register_routes(server, portal_auth_gate);
-    Logger.logMessage("Portal", "Image API initialized");
+    LOGI("Portal", "Image API initialized");
     #endif // HAS_IMAGE_API && HAS_DISPLAY
     
     // Captive portal 404 handler
@@ -209,7 +209,7 @@ void web_portal_init(DeviceConfig *config) {
     server->begin();
 
     log_async_tcp_stack_watermark_once();
-    Logger.logEnd();
+    LOGI("Portal", "Init complete");
 }
 
 // Handle web server (call in loop)
