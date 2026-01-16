@@ -85,17 +85,59 @@ build_board() {
     # see macros defined only in board_overrides.h.
     # Keep this allowlisted to avoid arbitrary #define injection.
     EXTRA_GLOBAL_DEFINES=""
+    EXTRA_GLOBAL_FLAGS=""
     if [[ -f "$board_overrides_file" ]]; then
-        async_tcp_stack_size=$(grep -E '^[[:space:]]*#define[[:space:]]+CONFIG_ASYNC_TCP_STACK_SIZE[[:space:]]+' "$board_overrides_file" \
-            | head -n 1 \
-            | awk '{print $3}')
-        if [[ -n "${async_tcp_stack_size:-}" ]]; then
-            if [[ "$async_tcp_stack_size" =~ ^[0-9]+$ ]]; then
-                EXTRA_GLOBAL_DEFINES+=" -DCONFIG_ASYNC_TCP_STACK_SIZE=${async_tcp_stack_size}"
-            else
-                echo -e "${YELLOW}Warning: ignoring invalid CONFIG_ASYNC_TCP_STACK_SIZE value in $board_overrides_file: '$async_tcp_stack_size'${NC}"
+        # Numeric-valued defines (exported as -DNAME=value)
+        # NOTE: Keep this allowlist tight; only export values needed by libraries.
+        numeric_allowlist=(
+            CONFIG_ASYNC_TCP_STACK_SIZE
+
+            # TFT_eSPI pinout and SPI frequencies
+            TFT_MISO
+            TFT_MOSI
+            TFT_SCLK
+            TFT_CS
+            TFT_DC
+            TFT_RST
+            TFT_BL
+            SPI_FREQUENCY
+            SPI_READ_FREQUENCY
+            SPI_TOUCH_FREQUENCY
+        )
+
+        for macro in "${numeric_allowlist[@]}"; do
+            value=$(grep -E "^[[:space:]]*#define[[:space:]]+${macro}[[:space:]]+" "$board_overrides_file" \
+                | head -n 1 \
+                | awk '{print $3}')
+            if [[ -n "${value:-}" ]]; then
+                if [[ "$value" =~ ^-?[0-9]+$ ]]; then
+                    EXTRA_GLOBAL_DEFINES+=" -D${macro}=${value}"
+                else
+                    echo -e "${YELLOW}Warning: ignoring invalid ${macro} value in $board_overrides_file: '$value'${NC}"
+                fi
             fi
+        done
+
+        # Flag-only defines (exported as -DNAME)
+        flag_allowlist=(
+            # TFT_eSPI controller + bus selection
+            ILI9341_2_DRIVER
+            USE_HSPI_PORT
+        )
+
+        for macro in "${flag_allowlist[@]}"; do
+            if grep -Eq "^[[:space:]]*#define[[:space:]]+${macro}([[:space:]]+|$)" "$board_overrides_file"; then
+                EXTRA_GLOBAL_DEFINES+=" -D${macro}"
+            fi
+        done
+
+        # TFT_eSPI: support per-board setup without modifying global Arduino libraries.
+        # If a board provides src/boards/<board>/User_Setup.h, force-include it and
+        # mark USER_SETUP_LOADED so TFT_eSPI skips its default setup.
+        if [[ -f "$board_override_dir/User_Setup.h" ]]; then
+            EXTRA_GLOBAL_FLAGS+=" -DUSER_SETUP_LOADED=1 -include$board_override_dir/User_Setup.h"
         fi
+
     fi
 
     # Always embed board name for runtime identification (used by firmware update UX).
@@ -110,12 +152,12 @@ build_board() {
         # Sanitize board name for valid C++ macro (alphanumeric + underscore only)
         board_macro="BOARD_${board_name^^}"
         board_macro="${board_macro//[^A-Z0-9_]/_}"
-        EXTRA_FLAGS+=(--build-property "compiler.cpp.extra_flags=-I$board_override_dir -D$board_macro -DBOARD_HAS_OVERRIDE=1 $BOARD_NAME_DEFINE$EXTRA_GLOBAL_DEFINES")
-        EXTRA_FLAGS+=(--build-property "compiler.c.extra_flags=-I$board_override_dir -D$board_macro -DBOARD_HAS_OVERRIDE=1 $BOARD_NAME_DEFINE$EXTRA_GLOBAL_DEFINES")
+        EXTRA_FLAGS+=(--build-property "compiler.cpp.extra_flags=-I$board_override_dir -D$board_macro -DBOARD_HAS_OVERRIDE=1 $BOARD_NAME_DEFINE$EXTRA_GLOBAL_DEFINES$EXTRA_GLOBAL_FLAGS")
+        EXTRA_FLAGS+=(--build-property "compiler.c.extra_flags=-I$board_override_dir -D$board_macro -DBOARD_HAS_OVERRIDE=1 $BOARD_NAME_DEFINE$EXTRA_GLOBAL_DEFINES$EXTRA_GLOBAL_FLAGS")
     else
         echo "Config:    Using default configuration"
-        EXTRA_FLAGS+=(--build-property "compiler.cpp.extra_flags=$BOARD_NAME_DEFINE$EXTRA_GLOBAL_DEFINES")
-        EXTRA_FLAGS+=(--build-property "compiler.c.extra_flags=$BOARD_NAME_DEFINE$EXTRA_GLOBAL_DEFINES")
+        EXTRA_FLAGS+=(--build-property "compiler.cpp.extra_flags=$BOARD_NAME_DEFINE$EXTRA_GLOBAL_DEFINES$EXTRA_GLOBAL_FLAGS")
+        EXTRA_FLAGS+=(--build-property "compiler.c.extra_flags=$BOARD_NAME_DEFINE$EXTRA_GLOBAL_DEFINES$EXTRA_GLOBAL_FLAGS")
     fi
     echo ""
 
