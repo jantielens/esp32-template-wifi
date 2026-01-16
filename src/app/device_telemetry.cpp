@@ -3,6 +3,7 @@
 #include "log_manager.h"
 #include "board_config.h"
 #include "fs_health.h"
+#include "rtos_task_utils.h"
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -30,6 +31,7 @@
 static SemaphoreHandle_t cpu_mutex = nullptr;
 static int cpu_usage_current = -1;
 static TaskHandle_t cpu_task_handle = nullptr;
+static RtosTaskPsramAlloc cpu_task_alloc = {};
 
 // Delta tracking for calculation
 static uint32_t last_idle_runtime = 0;
@@ -578,15 +580,37 @@ void device_telemetry_start_cpu_monitoring() {
         return;
     }
     
+#if SOC_SPIRAM_SUPPORTED
+    if (heap_caps_get_total_size(MALLOC_CAP_SPIRAM) > 0) {
+        const bool ok = rtos_create_task_psram_stack(
+            cpu_monitoring_task,
+            "cpu_monitor",
+            2048,  // Stack depth (words)
+            nullptr,
+            1,  // Low priority
+            &cpu_task_handle,
+            &cpu_task_alloc
+        );
+
+        if (!ok) {
+            Logger.logMessage("CPU Monitor", "FATAL: failed to create PSRAM-backed cpu_monitor task");
+            abort();
+        }
+
+        Logger.logMessage("CPU Monitor", "Created task with PSRAM-backed stack");
+        return;
+    }
+#endif
+
     BaseType_t result = xTaskCreate(
         cpu_monitoring_task,
         "cpu_monitor",
-        2048,  // Stack size
+        2048,  // Stack depth (words)
         nullptr,
         1,  // Low priority
         &cpu_task_handle
     );
-    
+
     if (result != pdPASS) {
         Logger.logMessage("CPU Monitor", "Failed to create task");
         vSemaphoreDelete(cpu_mutex);
