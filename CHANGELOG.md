@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.38] - 2026-01-16
+
+### Changed
+- Telemetry: move the cpu monitor FreeRTOS task stack to PSRAM on PSRAM-capable targets to free internal heap
+- Build: make TFT_eSPI configuration reproducible in clean/CI builds via per-board `User_Setup.h` support (fixes CYD v2 white screen when flashed from web installer)
+
 ## [0.0.37] - 2026-01-15
 
 ### Added
