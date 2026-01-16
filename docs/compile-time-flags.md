@@ -13,12 +13,15 @@ This document is a template. Sections marked with `COMPILE_FLAG_REPORT` markers 
 
 - Some Arduino libraries are compiled as separate translation units and may not see macros that are only defined in `src/boards/<board>/board_overrides.h`.
 - The build script propagates a small allowlist of board override defines into global compiler flags so libraries are compiled with the same values.
-  - Currently allowlisted: `CONFIG_ASYNC_TCP_STACK_SIZE`
+  - Currently allowlisted:
+    - `CONFIG_ASYNC_TCP_STACK_SIZE`
+    - TFT_eSPI essentials for clean/CI builds (pins + SPI frequencies + controller/bus flags)
+  - For TFT_eSPI specifically, `build.sh` also supports a per-board `src/boards/<board>/User_Setup.h` which is force-included for that board (so the build does not depend on a locally modified Arduino library install).
 
 ## Flags (generated)
 
 <!-- BEGIN COMPILE_FLAG_REPORT:FLAGS -->
-Total flags: 88
+Total flags: 93
 
 ### Features (HAS_*)
 
@@ -32,6 +35,7 @@ Total flags: 88
 ### Selectors (*_DRIVER)
 
 - **DISPLAY_DRIVER** default: `DISPLAY_DRIVER_TFT_ESPI` (values: DISPLAY_DRIVER_ARDUINO_GFX, DISPLAY_DRIVER_ESP_PANEL, DISPLAY_DRIVER_ST7789V2, DISPLAY_DRIVER_TFT_ESPI) — Select the display HAL backend (one of the DISPLAY_DRIVER_* constants).
+- **ILI9341_2_DRIVER** default: `(no default)` — These macros are consumed by the TFT_eSPI library itself.
 - **TOUCH_DRIVER** default: `TOUCH_DRIVER_XPT2046` (values: TOUCH_DRIVER_AXS15231B, TOUCH_DRIVER_CST816S_ESP_PANEL, TOUCH_DRIVER_XPT2046) — Select the touch HAL backend (one of the TOUCH_DRIVER_* constants).
 
 ### Hardware (Geometry)
@@ -96,6 +100,9 @@ Total flags: 88
 - **LVGL_BUFFER_SIZE** default: `(DISPLAY_WIDTH * 10)` — LVGL draw buffer size in pixels (larger = faster, more RAM).
 - **LVGL_TICK_PERIOD_MS** default: `5` — LVGL tick period in milliseconds.
 - **MEMORY_TRIPWIRE_INTERNAL_MIN_BYTES** default: `0` — Default: disabled (0). Enable per-board if you want early warning logs.
+- **SPI_FREQUENCY** default: `(no default)` — TFT_eSPI: SPI write frequency (Hz).
+- **SPI_READ_FREQUENCY** default: `(no default)` — TFT_eSPI: SPI read frequency (Hz).
+- **SPI_TOUCH_FREQUENCY** default: `(no default)` — TFT_eSPI: SPI touch frequency (Hz).
 - **TFT_SPI_FREQUENCY** default: `(no default)` — TFT SPI clock frequency.
 - **TFT_SPI_FREQ_HZ** default: `(no default)` — QSPI clock frequency (Hz).
 - **TOUCH_I2C_FREQ_HZ** default: `(no default)` — I2C frequency (Hz).
@@ -125,6 +132,7 @@ Total flags: 88
 - **TOUCH_CAL_Y_MAX** default: `(no default)` — Touch calibration: Y maximum.
 - **TOUCH_CAL_Y_MIN** default: `(no default)` — Touch calibration: Y minimum.
 - **TOUCH_I2C_PORT** default: `(no default)` — I2C controller index.
+- **USE_HSPI_PORT** default: `(no default)` — CYD uses HSPI for the display.
 <!-- END COMPILE_FLAG_REPORT:FLAGS -->
 
 ## Board Matrix: Features (generated)

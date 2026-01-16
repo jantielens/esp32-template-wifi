@@ -90,8 +90,18 @@ BOARD_PROFILE=psram ./build.sh esp32-nodisplay  # Optional build profile (if def
 
 Some compile-time settings need to apply not only to the sketch, but also to separately-built Arduino libraries (which may compile as their own translation units). For a small allowlist of known-safe settings, `build.sh` propagates values found in `src/boards/<board>/board_overrides.h` into global compiler flags (C and C++).
 
-- Currently allowlisted: `CONFIG_ASYNC_TCP_STACK_SIZE` (AsyncTCP task stack size).
+- Currently allowlisted includes:
+  - `CONFIG_ASYNC_TCP_STACK_SIZE` (AsyncTCP task stack size)
+  - TFT_eSPI essentials needed for clean/CI builds (pins + SPI frequencies + controller/bus flags)
 - Example (inside `src/boards/<board>/board_overrides.h`): `#define CONFIG_ASYNC_TCP_STACK_SIZE 16384`
+
+**TFT_eSPI per-board setup (recommended for reproducibility):**
+
+If a board depends on TFT_eSPI and needs a full TFT_eSPI `User_Setup.h` (or you want to avoid relying on a locally modified Arduino library install), you can add:
+
+- `src/boards/<board>/User_Setup.h`
+
+When present, `build.sh` will force-include that file for the board and set `USER_SETUP_LOADED=1` so TFT_eSPI skips its default setup.
 
 **Build Output Structure:**
 ```
