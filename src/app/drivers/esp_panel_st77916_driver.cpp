@@ -228,7 +228,7 @@ ESPPanel_ST77916_Driver::~ESPPanel_ST77916_Driver() {
 }
 
 void ESPPanel_ST77916_Driver::init() {
-    Logger.logLine("ESP_Panel: Initializing ST77916 QSPI display");
+    LOGI("ESP_Panel", "Initializing ST77916 QSPI display");
 
     // Backlight PWM (LEDC), mirrored from sample.
     ledc_timer_config_t ledc_timer = {
@@ -274,18 +274,18 @@ void ESPPanel_ST77916_Driver::init() {
     if (ESP_PANEL_SWAPBUF_PREFER_INTERNAL) {
         swapBuf = (uint16_t*)heap_caps_malloc(sizeof(uint16_t) * swapBufCapacityPixels, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
         if (!swapBuf) {
-            Logger.logLine("ESP_Panel: swapBuf internal alloc failed, trying PSRAM...");
+            LOGW("ESP_Panel", "swapBuf internal alloc failed, trying PSRAM...");
             swapBuf = (uint16_t*)heap_caps_malloc(sizeof(uint16_t) * swapBufCapacityPixels, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         }
     } else {
         swapBuf = (uint16_t*)heap_caps_malloc(sizeof(uint16_t) * swapBufCapacityPixels, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (!swapBuf) {
-            Logger.logLine("ESP_Panel: swapBuf PSRAM alloc failed, trying internal...");
+            LOGW("ESP_Panel", "swapBuf PSRAM alloc failed, trying internal...");
             swapBuf = (uint16_t*)heap_caps_malloc(sizeof(uint16_t) * swapBufCapacityPixels, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
         }
     }
 
-    Logger.logLine("ESP_Panel: Display initialized");
+    LOGI("ESP_Panel", "Display initialized");
 }
 
 void ESPPanel_ST77916_Driver::setRotation(uint8_t rotation) {

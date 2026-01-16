@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.39] - 2026-01-16
+
+### Changed
+- Logging: replace nested LogManager with flat LOGx macros (single-line, timestamped)
+
 ## [0.0.38] - 2026-01-16
 
 ### Changed

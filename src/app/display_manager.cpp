@@ -216,9 +216,7 @@ bool DisplayManager::tryLock(uint32_t timeoutMs) {
 void DisplayManager::lvglTask(void* pvParameter) {
     DisplayManager* mgr = (DisplayManager*)pvParameter;
     
-    Logger.logBegin("LVGL Rendering Task");
-    Logger.logLinef("Started on core %d", xPortGetCoreID());
-    Logger.logEnd();
+    LOGI("Display", "LVGL render task start (core %d)", xPortGetCoreID());
     
     while (true) {
         mgr->lock();
@@ -266,7 +264,7 @@ void DisplayManager::lvglTask(void* pvParameter) {
             #endif
 
             const char* screenId = mgr->getScreenIdForInstance(mgr->currentScreen);
-            Logger.logMessagef("Display", "Switched to %s", screenId ? screenId : "(unregistered)");
+            LOGI("Display", "Switched to %s", screenId ? screenId : "(unregistered)");
         }
         
         // Handle LVGL rendering (animations, timers, etc.)
@@ -337,7 +335,7 @@ bool display_manager_get_perf_stats(DisplayPerfStats* out) {
 }
 
 void DisplayManager::initHardware() {
-    Logger.logBegin("Display Init");
+    LOGI("Display", "Init start");
     
     // Initialize display driver
     driver->init();
@@ -348,24 +346,24 @@ void DisplayManager::initHardware() {
     uint8_t brightness = config ? config->backlight_brightness : 100;
     if (brightness > 100) brightness = 100;
     driver->setBacklightBrightness(brightness);
-    Logger.logLinef("Backlight: %d%%", brightness);
+    LOGI("Display", "Backlight: %d%%", brightness);
     #else
     // Turn on backlight (on/off only)
     driver->setBacklight(true);
-    Logger.logLine("Backlight: ON");
+    LOGI("Display", "Backlight: ON");
     #endif
     
-    Logger.logLinef("Resolution: %dx%d", DISPLAY_WIDTH, DISPLAY_HEIGHT);
-    Logger.logLinef("Rotation: %d", DISPLAY_ROTATION);
+    LOGI("Display", "Resolution: %dx%d", DISPLAY_WIDTH, DISPLAY_HEIGHT);
+    LOGI("Display", "Rotation: %d", DISPLAY_ROTATION);
     
     // Apply display-specific settings (inversion, gamma, etc.)
     driver->applyDisplayFixes();
     
-    Logger.logEnd();
+    LOGI("Display", "Init complete");
 }
 
 void DisplayManager::initLVGL() {
-    Logger.logBegin("LVGL Init");
+    LOGI("Display", "LVGL init start");
     
     lv_init();
     
@@ -374,23 +372,22 @@ void DisplayManager::initLVGL() {
     if (LVGL_BUFFER_PREFER_INTERNAL) {
         buf = (lv_color_t*)heap_caps_malloc(LVGL_BUFFER_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
         if (!buf) {
-            Logger.logLine("Internal RAM allocation failed, trying PSRAM...");
+            LOGW("Display", "Internal RAM alloc failed, trying PSRAM...");
             buf = (lv_color_t*)heap_caps_malloc(LVGL_BUFFER_SIZE * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
         }
     } else {
         // Default: PSRAM first, fallback to internal.
         buf = (lv_color_t*)heap_caps_malloc(LVGL_BUFFER_SIZE * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
         if (!buf) {
-            Logger.logLine("PSRAM allocation failed, trying internal RAM...");
+            LOGW("Display", "PSRAM alloc failed, trying internal RAM...");
             buf = (lv_color_t*)heap_caps_malloc(LVGL_BUFFER_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
         }
     }
     if (!buf) {
-        Logger.logLine("ERROR: Failed to allocate LVGL buffer!");
-        Logger.logEnd();
+        LOGE("Display", "Failed to allocate LVGL buffer");
         return;
     }
-    Logger.logLinef("Buffer allocated: %d bytes (%d pixels)", LVGL_BUFFER_SIZE * sizeof(lv_color_t), LVGL_BUFFER_SIZE);
+    LOGI("Display", "Buffer allocated: %d bytes (%d pixels)", LVGL_BUFFER_SIZE * sizeof(lv_color_t), LVGL_BUFFER_SIZE);
     
     // Initialize default theme (dark mode with custom primary color)
     lv_theme_t* theme = lv_theme_default_init(
@@ -401,7 +398,7 @@ void DisplayManager::initLVGL() {
         LV_FONT_DEFAULT                // Default font
     );
     lv_disp_set_theme(NULL, theme);
-    Logger.logLine("Theme: Default dark mode initialized");
+    LOGI("Display", "Theme: Default dark mode initialized");
     
     // Set up display buffer
     lv_disp_draw_buf_init(&draw_buf, buf, NULL, LVGL_BUFFER_SIZE);
@@ -419,8 +416,8 @@ void DisplayManager::initLVGL() {
     
     lv_disp_drv_register(&disp_drv);
     
-    Logger.logLinef("Buffer: %d pixels (%d lines)", LVGL_BUFFER_SIZE, LVGL_BUFFER_SIZE / DISPLAY_WIDTH);
-    Logger.logEnd();
+    LOGI("Display", "Buffer: %d pixels (%d lines)", LVGL_BUFFER_SIZE, LVGL_BUFFER_SIZE / DISPLAY_WIDTH);
+    LOGI("Display", "LVGL init complete");
 }
 
 void DisplayManager::init() {
@@ -430,7 +427,7 @@ void DisplayManager::init() {
     // Initialize LVGL
     initLVGL();
     
-    Logger.logBegin("Display Manager Init");
+    LOGI("Display", "Manager init start");
     
     // Create all screens
     splashScreen.create();
@@ -442,7 +439,7 @@ void DisplayManager::init() {
     #endif
     #endif
     
-    Logger.logLine("Screens created");
+    LOGI("Display", "Screens created");
     
     // Show splash immediately
     showSplash();
@@ -453,13 +450,13 @@ void DisplayManager::init() {
     // On single-core: runs on Core 0 (time-sliced with Arduino loop)
     #if CONFIG_FREERTOS_UNICORE
     xTaskCreate(lvglTask, "LVGL", 8192, this, 1, &lvglTaskHandle);
-    Logger.logLine("Rendering task created (single-core)");
+    LOGI("Display", "Rendering task created (single-core)");
     #else
     xTaskCreatePinnedToCore(lvglTask, "LVGL", 8192, this, 1, &lvglTaskHandle, 0);
-    Logger.logLine("Rendering task created (pinned to Core 0)");
+    LOGI("Display", "Rendering task created (pinned to Core 0)");
     #endif
     
-    Logger.logEnd();
+    LOGI("Display", "Manager init complete");
 }
 
 void DisplayManager::showSplash() {
@@ -471,19 +468,19 @@ void DisplayManager::showSplash() {
     currentScreen = &splashScreen;
     currentScreen->show();
     unlock();
-    Logger.logMessage("Display", "Switched to SplashScreen");
+    LOGI("Display", "Switched to SplashScreen");
 }
 
 void DisplayManager::showInfo() {
     // Defer screen switch to lvglTask (non-blocking)
     pendingScreen = &infoScreen;
-    Logger.logMessage("Display", "Queued switch to InfoScreen");
+    LOGI("Display", "Queued switch to InfoScreen");
 }
 
 void DisplayManager::showTest() {
     // Defer screen switch to lvglTask (non-blocking)
     pendingScreen = &testScreen;
-    Logger.logMessage("Display", "Queued switch to TestScreen");
+    LOGI("Display", "Queued switch to TestScreen");
 }
 
 #if HAS_IMAGE_API
@@ -492,7 +489,7 @@ void DisplayManager::showDirectImage() {
     // LVGL screen switch (it would also risk clobbering previousScreen).
     if (currentScreen == &directImageScreen) {
         directImageActive = true;
-        Logger.logMessage("Display", "Already on DirectImageScreen");
+        LOGI("Display", "Already on DirectImageScreen");
         return;
     }
 
@@ -510,7 +507,7 @@ void DisplayManager::showDirectImage() {
     flushPending = false;
     directImageActive = true;
     pendingScreen = &directImageScreen;
-    Logger.logMessage("Display", "Queued switch to DirectImageScreen");
+    LOGI("Display", "Queued switch to DirectImageScreen");
 }
 
 void DisplayManager::returnToPreviousScreen() {
@@ -520,7 +517,7 @@ void DisplayManager::returnToPreviousScreen() {
     directImageActive = false;
     pendingScreen = targetScreen;
     previousScreen = nullptr;  // Clear previous screen reference
-    Logger.logMessage("Display", "Queued return to previous screen");
+    LOGI("Display", "Queued return to previous screen");
 }
 #endif
 
@@ -549,12 +546,12 @@ bool DisplayManager::showScreen(const char* screen_id) {
         if (strcmp(availableScreens[i].id, screen_id) == 0) {
             // Defer screen switch to lvglTask (non-blocking)
             pendingScreen = availableScreens[i].instance;
-            Logger.logMessagef("Display", "Queued switch to screen: %s", screen_id);
+            LOGI("Display", "Queued switch to screen: %s", screen_id);
             return true;
         }
     }
     
-    Logger.logMessagef("Display", "Screen not found: %s", screen_id);
+    LOGW("Display", "Screen not found: %s", screen_id);
     return false;
 }
 

@@ -77,7 +77,7 @@ bool MqttManager::publishJson(const char *topic, JsonDocument &doc, bool retaine
     char payload[MQTT_MAX_PACKET_SIZE];
     size_t n = serializeJson(doc, payload, sizeof(payload));
     if (n == 0 || n >= sizeof(payload)) {
-        Logger.logMessagef("MQTT", "ERROR: JSON payload too large for MQTT_MAX_PACKET_SIZE (%u)", (unsigned)sizeof(payload));
+        LOGE("MQTT", "JSON payload too large for MQTT_MAX_PACKET_SIZE (%u)", (unsigned)sizeof(payload));
         return false;
     }
 
@@ -97,7 +97,7 @@ void MqttManager::publishAvailability(bool online) {
 void MqttManager::publishDiscoveryOncePerBoot() {
     if (_discovery_published_this_boot) return;
 
-    Logger.logMessage("MQTT", "Publishing HA discovery");
+    LOGI("MQTT", "Publishing HA discovery");
     ha_discovery_publish_health(*this);
     _discovery_published_this_boot = true;
 }
@@ -109,14 +109,14 @@ void MqttManager::publishHealthNow() {
     device_telemetry_fill_mqtt(doc);
 
     if (doc.overflowed()) {
-        Logger.logMessage("MQTT", "ERROR: health JSON overflow (StaticJsonDocument too small)");
+        LOGE("MQTT", "Health JSON overflow (StaticJsonDocument too small)");
         return;
     }
 
     char payload[MQTT_MAX_PACKET_SIZE];
     size_t n = serializeJson(doc, payload, sizeof(payload));
     if (n == 0 || n >= sizeof(payload)) {
-        Logger.logMessagef("MQTT", "ERROR: health JSON payload too large for MQTT_MAX_PACKET_SIZE (%u)", (unsigned)sizeof(payload));
+        LOGE("MQTT", "Health JSON payload too large for MQTT_MAX_PACKET_SIZE (%u)", (unsigned)sizeof(payload));
         return;
     }
     _client.publish(_health_state_topic, (const uint8_t*)payload, (unsigned)n, true);
@@ -134,14 +134,14 @@ void MqttManager::publishHealthIfDue() {
         device_telemetry_fill_mqtt(doc);
 
         if (doc.overflowed()) {
-            Logger.logMessage("MQTT", "ERROR: health JSON overflow (StaticJsonDocument too small)");
+            LOGE("MQTT", "Health JSON overflow (StaticJsonDocument too small)");
             return;
         }
 
         char payload[MQTT_MAX_PACKET_SIZE];
         size_t n = serializeJson(doc, payload, sizeof(payload));
         if (n == 0 || n >= sizeof(payload)) {
-            Logger.logMessagef("MQTT", "ERROR: health JSON payload too large for MQTT_MAX_PACKET_SIZE (%u)", (unsigned)sizeof(payload));
+            LOGE("MQTT", "Health JSON payload too large for MQTT_MAX_PACKET_SIZE (%u)", (unsigned)sizeof(payload));
             return;
         }
 
@@ -174,7 +174,7 @@ void MqttManager::ensureConnected() {
     bool has_user = strlen(_config->mqtt_username) > 0;
     bool has_pass = strlen(_config->mqtt_password) > 0;
 
-    Logger.logMessagef("MQTT", "Connecting to %s:%d", _config->mqtt_host, resolvedPort());
+    LOGI("MQTT", "Connecting to %s:%d", _config->mqtt_host, resolvedPort());
 
     bool connected = false;
     if (has_user) {
@@ -199,7 +199,7 @@ void MqttManager::ensureConnected() {
     }
 
     if (connected) {
-        Logger.logMessage("MQTT", "Connected");
+        LOGI("MQTT", "Connected");
         publishAvailability(true);
         publishDiscoveryOncePerBoot();
 
@@ -210,7 +210,7 @@ void MqttManager::ensureConnected() {
         // If periodic publishing is enabled, start interval timing from now.
         _last_health_publish_ms = millis();
     } else {
-        Logger.logMessagef("MQTT", "Connect failed (state %d)", _client.state());
+        LOGW("MQTT", "Connect failed (state %d)", _client.state());
     }
 }
 

@@ -32,7 +32,7 @@ void web_portal_ap_register_not_found(AsyncWebServer *server) {
 }
 
 void web_portal_start_ap() {
-    Logger.logBegin("AP Mode");
+    LOGI("AP", "Mode start");
 
     // Generate AP name with chip ID
     uint32_t chipId = 0;
@@ -45,7 +45,7 @@ void web_portal_start_ap() {
     apPrefix.toUpperCase();
     String apName = apPrefix + "-" + String(chipId, HEX);
 
-    Logger.logLinef("SSID: %s", apName.c_str());
+    LOGI("AP", "SSID: %s", apName.c_str());
 
     // Configure AP
     WiFi.mode(WIFI_AP);
@@ -60,14 +60,14 @@ void web_portal_start_ap() {
     // Mark AP mode active so watchdog/DNS handling knows we're in captive portal
     ap_mode_active = true;
 
-    Logger.logLinef("IP: %s", WiFi.softAPIP().toString().c_str());
-    Logger.logEnd("Captive portal active");
+    LOGI("AP", "IP: %s", WiFi.softAPIP().toString().c_str());
+    LOGI("AP", "Captive portal active");
 }
 
 void web_portal_stop_ap() {
     if (!ap_mode_active) return;
 
-    Logger.logMessage("Portal", "Stopping AP mode");
+    LOGI("Portal", "Stopping AP mode");
     dnsServer.stop();
     WiFi.softAPdisconnect(true);
     ap_mode_active = false;

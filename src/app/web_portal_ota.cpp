@@ -40,16 +40,16 @@ void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t ind
             return;
         }
 
-        Logger.logBegin("OTA Update");
-        Logger.logLinef("File: %s", filename.c_str());
-        Logger.logLinef("Size: %d bytes", request->contentLength());
+            LOGI("OTA", "Update start");
+            LOGI("OTA", "File: %s", filename.c_str());
+            LOGI("OTA", "Size: %d bytes", request->contentLength());
 
         ota_progress = 0;
         ota_total = request->contentLength();
 
         // Check if filename ends with .bin
         if (!filename.endsWith(".bin")) {
-            Logger.logEnd("Not a .bin file");
+                LOGE("OTA", "Not a .bin file");
             request->send(400, "application/json", "{\"success\":false,\"message\":\"Only .bin files are supported\"}");
             portENTER_CRITICAL(&g_ota_upload_mux);
             web_portal_set_ota_in_progress(false);
@@ -61,11 +61,11 @@ void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t ind
         size_t updateSize = (ota_total > 0) ? ota_total : UPDATE_SIZE_UNKNOWN;
         size_t freeSpace = device_telemetry_free_sketch_space();
 
-        Logger.logLinef("Free space: %d bytes", freeSpace);
+            LOGI("OTA", "Free space: %d bytes", freeSpace);
 
         // Validate size before starting
         if (ota_total > 0 && ota_total > freeSpace) {
-            Logger.logEnd("Firmware too large");
+                LOGE("OTA", "Firmware too large");
             request->send(400, "application/json", "{\"success\":false,\"message\":\"Firmware too large\"}");
             portENTER_CRITICAL(&g_ota_upload_mux);
             web_portal_set_ota_in_progress(false);
@@ -75,7 +75,7 @@ void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t ind
 
         // Begin OTA update
         if (!Update.begin(updateSize, U_FLASH)) {
-            Logger.logEnd("Begin failed");
+                LOGE("OTA", "Begin failed");
             Update.printError(Serial);
             request->send(500, "application/json", "{\"success\":false,\"message\":\"OTA begin failed\"}");
             portENTER_CRITICAL(&g_ota_upload_mux);
@@ -88,7 +88,7 @@ void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t ind
     // Write chunk to flash
     if (len) {
         if (Update.write(data, len) != len) {
-            Logger.logEnd("Write failed");
+                LOGE("OTA", "Write failed");
             Update.printError(Serial);
             Update.abort();
             request->send(500, "application/json", "{\"success\":false,\"message\":\"Write failed\"}");
@@ -104,7 +104,7 @@ void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t ind
         if (ota_total > 0) {
             uint8_t percent = (ota_progress * 100) / ota_total;
             if (percent >= (uint8_t)(g_ota_last_percent + 10)) {
-                Logger.logLinef("Progress: %d%%", percent);
+                    LOGI("OTA", "Progress: %d%%", percent);
                 g_ota_last_percent = percent;
             }
         }
@@ -113,15 +113,15 @@ void handleOTAUpload(AsyncWebServerRequest *request, String filename, size_t ind
     // Final chunk - complete OTA
     if (final) {
         if (Update.end(true)) {
-            Logger.logLinef("Written: %d bytes", ota_progress);
-            Logger.logEnd("Success - rebooting");
+                LOGI("OTA", "Written: %d bytes", ota_progress);
+                LOGI("OTA", "Success - rebooting");
 
             request->send(200, "application/json", "{\"success\":true,\"message\":\"Update successful! Rebooting...\"}");
 
             delay(500);
             ESP.restart();
         } else {
-            Logger.logEnd("Update failed");
+                LOGE("OTA", "Update failed");
             Update.printError(Serial);
             request->send(500, "application/json", "{\"success\":false,\"message\":\"Update failed\"}");
         }

@@ -182,7 +182,7 @@ void handleGetHealth(AsyncWebServerRequest *request) {
     if (doc && doc->capacity() > 0) {
         device_telemetry_fill_api(*doc);
         if (doc->overflowed()) {
-            Logger.logMessage("Portal", "ERROR: /api/health JSON overflow");
+            LOGE("Portal", "/api/health JSON overflow");
         }
     }
 
@@ -281,11 +281,11 @@ void handleGetHealthHistory(AsyncWebServerRequest *request) {
 void handleReboot(AsyncWebServerRequest *request) {
     if (!portal_auth_gate(request)) return;
 
-    Logger.logMessage("API", "POST /api/reboot");
+    LOGI("API", "POST /api/reboot");
     request->send(200, "application/json", "{\"success\":true,\"message\":\"Rebooting device...\"}");
 
     // Schedule reboot after response is sent
     delay(100);
-    Logger.logMessage("Portal", "Rebooting");
+    LOGI("Portal", "Rebooting");
     ESP.restart();
 }

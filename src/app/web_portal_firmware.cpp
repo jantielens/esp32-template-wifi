@@ -241,6 +241,7 @@ static void firmware_update_task(void *pv) {
     if (!http.begin(client, url)) {
         strlcpy(firmware_update_state, "error", sizeof(firmware_update_state));
         strlcpy(firmware_update_error, "Failed to start download", sizeof(firmware_update_error));
+        LOGE("OTA", "Download start failed");
         firmware_update_in_progress = false;
         web_portal_set_ota_in_progress(false);
         vTaskDelete(nullptr);
@@ -251,6 +252,7 @@ static void firmware_update_task(void *pv) {
     if (http_code != 200) {
         strlcpy(firmware_update_state, "error", sizeof(firmware_update_state));
         snprintf(firmware_update_error, sizeof(firmware_update_error), "Download HTTP %d", http_code);
+        LOGE("OTA", "Download HTTP %d", http_code);
         http.end();
         firmware_update_in_progress = false;
         web_portal_set_ota_in_progress(false);
@@ -263,10 +265,13 @@ static void firmware_update_task(void *pv) {
     size_t total = (http_len > 0) ? (size_t)http_len : expected_total;
     firmware_update_total = total;
 
+    LOGI("OTA", "Download started version=%s total=%u", latest_version, (unsigned)total);
+
     const size_t freeSpace = device_telemetry_free_sketch_space();
     if (total > 0 && total > freeSpace) {
         strlcpy(firmware_update_state, "error", sizeof(firmware_update_state));
         snprintf(firmware_update_error, sizeof(firmware_update_error), "Firmware too large (%u > %u)", (unsigned)total, (unsigned)freeSpace);
+        LOGE("OTA", "Firmware too large total=%u free=%u", (unsigned)total, (unsigned)freeSpace);
         http.end();
         firmware_update_in_progress = false;
         web_portal_set_ota_in_progress(false);
@@ -277,6 +282,7 @@ static void firmware_update_task(void *pv) {
     if (!Update.begin((total > 0) ? total : UPDATE_SIZE_UNKNOWN, U_FLASH)) {
         strlcpy(firmware_update_state, "error", sizeof(firmware_update_state));
         strlcpy(firmware_update_error, "OTA begin failed", sizeof(firmware_update_error));
+        LOGE("OTA", "OTA begin failed");
         http.end();
         firmware_update_in_progress = false;
         web_portal_set_ota_in_progress(false);
@@ -306,6 +312,7 @@ static void firmware_update_task(void *pv) {
         if (written != (size_t)read_bytes) {
             strlcpy(firmware_update_state, "error", sizeof(firmware_update_state));
             strlcpy(firmware_update_error, "Flash write failed", sizeof(firmware_update_error));
+            LOGE("OTA", "Flash write failed");
             Update.abort();
             http.end();
             firmware_update_in_progress = false;
@@ -325,6 +332,7 @@ static void firmware_update_task(void *pv) {
     if (!Update.end(true)) {
         strlcpy(firmware_update_state, "error", sizeof(firmware_update_state));
         strlcpy(firmware_update_error, "OTA finalize failed", sizeof(firmware_update_error));
+        LOGE("OTA", "OTA finalize failed");
         firmware_update_in_progress = false;
         web_portal_set_ota_in_progress(false);
         vTaskDelete(nullptr);
@@ -333,6 +341,8 @@ static void firmware_update_task(void *pv) {
 
     strlcpy(firmware_update_state, "rebooting", sizeof(firmware_update_state));
     (void)latest_version;
+
+    LOGI("OTA", "Update complete, rebooting");
 
     // Give the HTTP response/polling a moment to observe completion.
     delay(300);
@@ -381,6 +391,7 @@ void handlePostFirmwareUpdate(AsyncWebServerRequest *request) {
     return;
 #else
     if (web_portal_ota_in_progress() || firmware_update_in_progress) {
+        LOGW("OTA", "Update already in progress");
         request->send(409, "application/json", "{\"success\":false,\"message\":\"Update already in progress\"}");
         return;
     }
@@ -391,6 +402,7 @@ void handlePostFirmwareUpdate(AsyncWebServerRequest *request) {
     char err[192];
 
     if (!github_fetch_latest_release(latest, sizeof(latest), url, sizeof(url), &size, err, sizeof(err))) {
+        LOGW("OTA", "Latest fetch failed: %s", err[0] ? err : "Failed");
         char resp[256];
         snprintf(resp, sizeof(resp), "{\"success\":false,\"message\":\"%s\"}", err[0] ? err : "Failed");
         request->send(500, "application/json", resp);
@@ -399,6 +411,7 @@ void handlePostFirmwareUpdate(AsyncWebServerRequest *request) {
 
     // If no update is available, still allow re-install? For now, require newer.
     if (compare_semver(FIRMWARE_VERSION, latest) >= 0) {
+        LOGI("OTA", "Already up to date (%s)", FIRMWARE_VERSION);
         request->send(200, "application/json", "{\"success\":true,\"message\":\"Already up to date\",\"update_started\":false}");
         return;
     }
@@ -411,6 +424,8 @@ void handlePostFirmwareUpdate(AsyncWebServerRequest *request) {
     strlcpy(firmware_update_download_url, url, sizeof(firmware_update_download_url));
     firmware_update_error[0] = '\0';
     strlcpy(firmware_update_state, "downloading", sizeof(firmware_update_state));
+
+    LOGI("OTA", "Update requested latest=%s size=%u", latest, (unsigned)size);
 
     // Spawn background task to avoid blocking AsyncTCP.
     const BaseType_t ok = xTaskCreate(
@@ -426,6 +441,7 @@ void handlePostFirmwareUpdate(AsyncWebServerRequest *request) {
         firmware_update_in_progress = false;
         strlcpy(firmware_update_state, "error", sizeof(firmware_update_state));
         strlcpy(firmware_update_error, "Failed to start update task", sizeof(firmware_update_error));
+        LOGE("OTA", "Failed to start update task");
         request->send(500, "application/json", "{\"success\":false,\"message\":\"Failed to start update\"}");
         return;
     }

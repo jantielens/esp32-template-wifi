@@ -49,21 +49,20 @@ static Preferences preferences;
 
 // Initialize NVS
 void config_manager_init() {
-    Logger.logBegin("Config NVS Init");
+    LOGI("Config", "NVS init start");
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        Logger.logLinef("NVS init error (%d) - erasing NVS", (int)err);
+        LOGW("Config", "NVS init error (%d) - erasing NVS", (int)err);
         nvs_flash_erase();
         err = nvs_flash_init();
     }
 
     if (err != ESP_OK) {
-        Logger.logLinef("NVS init FAILED (%d)", (int)err);
-        Logger.logEnd("FAILED");
+        LOGE("Config", "NVS init FAILED (%d)", (int)err);
         return;
     }
 
-    Logger.logEnd("OK");
+    LOGI("Config", "NVS init OK");
 }
 
 // Get default device name with unique chip ID
@@ -112,14 +111,14 @@ void config_manager_sanitize_device_name(const char *input, char *output, size_t
 // Load configuration from NVS
 bool config_manager_load(DeviceConfig *config) {
     if (!config) {
-        Logger.logMessage("Config", "Load failed: NULL pointer");
+        LOGE("Config", "Load failed: NULL pointer");
         return false;
     }
-    
-    Logger.logBegin("Config Load");
+
+    LOGI("Config", "Load start");
 
     if (!preferences.begin(CONFIG_NAMESPACE, true)) { // Read-only mode
-        Logger.logEnd("Preferences begin failed");
+        LOGE("Config", "Preferences begin failed");
         return false;
     }
     
@@ -127,7 +126,7 @@ bool config_manager_load(DeviceConfig *config) {
     uint32_t magic = preferences.getUInt(KEY_MAGIC, 0);
     if (magic != CONFIG_MAGIC) {
         preferences.end();
-        Logger.logEnd("No config found");
+        LOGW("Config", "No config found");
         
         // Initialize defaults for fields that need sensible values even when no config exists
         config->backlight_brightness = 100;  // Default to full brightness
@@ -185,7 +184,7 @@ bool config_manager_load(DeviceConfig *config) {
     
     // Load display settings
     config->backlight_brightness = preferences.getUChar(KEY_BACKLIGHT_BRIGHTNESS, 100);
-    Logger.logLinef("Loaded brightness: %d%%", config->backlight_brightness);
+    LOGI("Config", "Loaded brightness: %d%%", config->backlight_brightness);
 
     // Load Basic Auth settings
     config->basic_auth_enabled = preferences.getBool(KEY_BASIC_AUTH_ENABLED, false);
@@ -211,28 +210,28 @@ bool config_manager_load(DeviceConfig *config) {
     
     // Validate loaded config
     if (!config_manager_is_valid(config)) {
-        Logger.logEnd("Invalid config");
+        LOGE("Config", "Invalid config");
         return false;
     }
     
     config_manager_print(config);
-    Logger.logEnd();
+    LOGI("Config", "Load complete");
     return true;
 }
 
 // Save configuration to NVS
 bool config_manager_save(const DeviceConfig *config) {
     if (!config) {
-        Logger.logMessage("Config", "Save failed: NULL pointer");
+        LOGE("Config", "Save failed: NULL pointer");
         return false;
     }
     
     if (!config_manager_is_valid(config)) {
-        Logger.logMessage("Config", "Save failed: Invalid config");
+        LOGE("Config", "Save failed: Invalid config");
         return false;
     }
-    
-    Logger.logBegin("Config Save");
+
+    LOGI("Config", "Save start");
     
     preferences.begin(CONFIG_NAMESPACE, false); // Read-write mode
     
@@ -261,7 +260,7 @@ bool config_manager_save(const DeviceConfig *config) {
     preferences.putUShort(KEY_MQTT_INTERVAL, config->mqtt_interval_seconds);
     
     // Save display settings
-    Logger.logLinef("Saving brightness: %d%%", config->backlight_brightness);
+    LOGI("Config", "Saving brightness: %d%%", config->backlight_brightness);
     preferences.putUChar(KEY_BACKLIGHT_BRIGHTNESS, config->backlight_brightness);
 
     // Save Basic Auth settings
@@ -284,22 +283,22 @@ bool config_manager_save(const DeviceConfig *config) {
     preferences.end();
     
     config_manager_print(config);
-    Logger.logEnd();
+    LOGI("Config", "Save complete");
     return true;
 }
 
 // Reset configuration (erase from NVS)
 bool config_manager_reset() {
-    Logger.logBegin("Config Reset");
+    LOGI("Config", "Reset start");
     
     preferences.begin(CONFIG_NAMESPACE, false);
     bool success = preferences.clear();
     preferences.end();
     
     if (success) {
-        Logger.logEnd();
+        LOGI("Config", "Reset complete");
     } else {
-        Logger.logEnd("Failed to reset");
+        LOGE("Config", "Failed to reset");
     }
     
     return success;
@@ -323,40 +322,40 @@ bool config_manager_is_valid(const DeviceConfig *config) {
 void config_manager_print(const DeviceConfig *config) {
     if (!config) return;
     
-    Logger.logLinef("Device: %s", config->device_name);
+    LOGI("Config", "Device: %s", config->device_name);
     
     // Show sanitized name for mDNS
     char sanitized[CONFIG_DEVICE_NAME_MAX_LEN];
     config_manager_sanitize_device_name(config->device_name, sanitized, CONFIG_DEVICE_NAME_MAX_LEN);
-    Logger.logLinef("mDNS: %s.local", sanitized);
+    LOGI("Config", "mDNS: %s.local", sanitized);
     
-    Logger.logLinef("WiFi SSID: %s", config->wifi_ssid);
-    Logger.logLinef("WiFi Pass: %s", strlen(config->wifi_password) > 0 ? "***" : "(none)");
+    LOGI("Config", "WiFi SSID: %s", config->wifi_ssid);
+    LOGI("Config", "WiFi Pass: %s", strlen(config->wifi_password) > 0 ? "***" : "(none)");
     
     if (strlen(config->fixed_ip) > 0) {
-        Logger.logLinef("IP: %s", config->fixed_ip);
-        Logger.logLinef("Subnet: %s", config->subnet_mask);
-        Logger.logLinef("Gateway: %s", config->gateway);
-        Logger.logLinef("DNS: %s, %s", config->dns1, strlen(config->dns2) > 0 ? config->dns2 : "(none)");
+        LOGI("Config", "IP: %s", config->fixed_ip);
+        LOGI("Config", "Subnet: %s", config->subnet_mask);
+        LOGI("Config", "Gateway: %s", config->gateway);
+        LOGI("Config", "DNS: %s, %s", config->dns1, strlen(config->dns2) > 0 ? config->dns2 : "(none)");
     } else {
-        Logger.logLine("IP: DHCP");
+        LOGI("Config", "IP: DHCP");
     }
 
 #if HAS_MQTT
     if (strlen(config->mqtt_host) > 0) {
         uint16_t port = config->mqtt_port > 0 ? config->mqtt_port : 1883;
         if (config->mqtt_interval_seconds > 0) {
-            Logger.logLinef("MQTT: %s:%d (%ds)", config->mqtt_host, port, config->mqtt_interval_seconds);
+            LOGI("Config", "MQTT: %s:%d (%ds)", config->mqtt_host, port, config->mqtt_interval_seconds);
         } else {
-            Logger.logLinef("MQTT: %s:%d (publish disabled)", config->mqtt_host, port);
+            LOGI("Config", "MQTT: %s:%d (publish disabled)", config->mqtt_host, port);
         }
-        Logger.logLinef("MQTT User: %s", strlen(config->mqtt_username) > 0 ? config->mqtt_username : "(none)");
-        Logger.logLinef("MQTT Pass: %s", strlen(config->mqtt_password) > 0 ? "***" : "(none)");
+        LOGI("Config", "MQTT User: %s", strlen(config->mqtt_username) > 0 ? config->mqtt_username : "(none)");
+        LOGI("Config", "MQTT Pass: %s", strlen(config->mqtt_password) > 0 ? "***" : "(none)");
     } else {
-        Logger.logLine("MQTT: disabled");
+        LOGI("Config", "MQTT: disabled");
     }
 #else
     // MQTT config can still exist in NVS, but the firmware has MQTT support compiled out.
-    Logger.logLine("MQTT: disabled (feature not compiled into firmware)");
+    LOGI("Config", "MQTT: disabled (feature not compiled into firmware)");
 #endif
 }

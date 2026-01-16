@@ -115,7 +115,7 @@ void health_history_start() {
     g_hist_samples = (HealthHistorySample*)hist_alloc(bytes);
 
     if (!g_hist_samples) {
-        Logger.logMessage("HealthHist", "Failed to allocate history buffer");
+        LOGE("HealthHist", "Failed to allocate history buffer");
         g_hist_capacity = 0;
         return;
     }
@@ -131,7 +131,7 @@ void health_history_start() {
     );
 
     if (!g_hist_timer) {
-        Logger.logMessage("HealthHist", "Failed to create history timer");
+        LOGE("HealthHist", "Failed to create history timer");
         hist_free(g_hist_samples);
         g_hist_samples = nullptr;
         g_hist_capacity = 0;
@@ -139,7 +139,7 @@ void health_history_start() {
     }
 
     if (xTimerStart(g_hist_timer, 0) != pdPASS) {
-        Logger.logMessage("HealthHist", "Failed to start history timer");
+        LOGE("HealthHist", "Failed to start history timer");
         xTimerDelete(g_hist_timer, 0);
         g_hist_timer = nullptr;
         hist_free(g_hist_samples);
@@ -151,7 +151,7 @@ void health_history_start() {
     // Take an immediate first sample so UI has data quickly.
     hist_timer_cb(nullptr);
 
-    Logger.logLinef("HealthHist", "Enabled: %u samples @ %u ms (~%u bytes)",
+    LOGI("HealthHist", "Enabled: %u samples @ %u ms (~%u bytes)",
         (unsigned)g_hist_capacity,
         (unsigned)HEALTH_HISTORY_PERIOD_MS,
         (unsigned)bytes

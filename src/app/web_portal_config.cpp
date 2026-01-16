@@ -55,7 +55,7 @@ void web_portal_config_loop() {
     portEXIT_CRITICAL(&g_config_post_mux);
 
     if (stale) {
-        Logger.logMessage("Portal", "Config upload timed out (loop cleanup)");
+        LOGW("Portal", "Config upload timed out (loop cleanup)");
     }
 }
 
@@ -116,7 +116,7 @@ void handleGetConfig(AsyncWebServerRequest *request) {
         #endif
 
         if (doc->overflowed()) {
-            Logger.logMessage("Portal", "ERROR: /api/config JSON overflow");
+            LOGE("Portal", "/api/config JSON overflow");
         }
     }
 
@@ -140,7 +140,7 @@ void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len,
         const bool stale = g_config_post.in_progress && g_config_post.started_ms && (now - g_config_post.started_ms > WEB_PORTAL_CONFIG_BODY_TIMEOUT_MS);
         portEXIT_CRITICAL(&g_config_post_mux);
         if (stale) {
-            Logger.logMessage("Portal", "Config upload timed out; resetting state");
+            LOGW("Portal", "Config upload timed out; resetting state");
             portENTER_CRITICAL(&g_config_post_mux);
             config_post_reset();
             portEXIT_CRITICAL(&g_config_post_mux);
@@ -229,7 +229,7 @@ void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len,
     DeserializationError error = deserializeJson(doc, body, body_len);
 
     if (error) {
-        Logger.logMessagef("Portal", "JSON parse error: %s", error.c_str());
+        LOGE("Portal", "JSON parse error: %s", error.c_str());
         if (error == DeserializationError::NoMemory) {
             request->send(413, "application/json", "{\"success\":false,\"message\":\"JSON body too large\"}");
             portENTER_CRITICAL(&g_config_post_mux);
@@ -375,7 +375,7 @@ void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len,
         if (brightness > 100) brightness = 100;
         current_config->backlight_brightness = brightness;
 
-        Logger.logLinef("Config: Backlight brightness set to %d%%", brightness);
+        LOGI("Config", "Backlight brightness set to %d%%", brightness);
 
         // Apply brightness immediately (will also be persisted when config saved)
         #if HAS_DISPLAY
@@ -449,7 +449,7 @@ void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len,
 
     // Save to NVS
     if (config_manager_save(current_config)) {
-        Logger.logMessage("Portal", "Config saved");
+        LOGI("Portal", "Config saved");
         request->send(200, "application/json", "{\"success\":true,\"message\":\"Configuration saved\"}");
 
         portENTER_CRITICAL(&g_config_post_mux);
@@ -458,13 +458,13 @@ void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len,
 
         // Check for no_reboot parameter
         if (!request->hasParam("no_reboot")) {
-            Logger.logMessage("Portal", "Rebooting device");
+            LOGI("Portal", "Rebooting device");
             // Schedule reboot after response is sent
             delay(100);
             ESP.restart();
         }
     } else {
-        Logger.logMessage("Portal", "Config save failed");
+        LOGE("Portal", "Config save failed");
         request->send(500, "application/json", "{\"success\":false,\"message\":\"Failed to save\"}");
 
         portENTER_CRITICAL(&g_config_post_mux);
