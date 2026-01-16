@@ -19,6 +19,20 @@
 #define HAS_DISPLAY true
 
 // ============================================================================
+// PoC: Boot Health Overlay Tuning
+// ============================================================================
+// Capture boot memory dynamics with high temporal resolution.
+// 20s window @ 50ms => 400 samples.
+#define HEALTH_HISTORY_SECONDS 20
+#define HEALTH_HISTORY_PERIOD_MS 50
+
+// Enable extra boot-time memory snapshots around WiFi init/scan/connect.
+#define WIFI_MEM_TRACE_ENABLED 1
+
+// CYD v2 doesn't use BLE/BT; release BT memory to free internal heap.
+#define DISABLE_BLUETOOTH_ON_BOOT 1
+
+// ============================================================================
 // Driver Selection (HAL)
 // ============================================================================
 // Display backend: TFT_eSPI (ILI9341 over SPI)

@@ -4,6 +4,8 @@
 #include "board_config.h"
 #include "fs_health.h"
 
+#include "rtos_task_utils.h"
+
 #include <Arduino.h>
 #include <WiFi.h>
 #include "soc/soc_caps.h"
@@ -12,6 +14,8 @@
 #include <freertos/task.h>
 #include <freertos/semphr.h>
 #include <freertos/timers.h>
+
+#include <esp_memory_utils.h>
 
 #if HAS_MQTT
 #include "mqtt_manager.h"
@@ -30,6 +34,7 @@
 static SemaphoreHandle_t cpu_mutex = nullptr;
 static int cpu_usage_current = -1;
 static TaskHandle_t cpu_task_handle = nullptr;
+static TaskPsramAlloc cpu_task_alloc = {nullptr, nullptr};
 
 // Delta tracking for calculation
 static uint32_t last_idle_runtime = 0;
@@ -578,16 +583,29 @@ void device_telemetry_start_cpu_monitoring() {
         return;
     }
     
-    BaseType_t result = xTaskCreate(
+    const bool ok = rtos_create_task_psram_stack(
         cpu_monitoring_task,
         "cpu_monitor",
-        2048,  // Stack size
+        2048,
         nullptr,
-        1,  // Low priority
-        &cpu_task_handle
+        1,
+        &cpu_task_handle,
+        0,
+        false,
+        &cpu_task_alloc
     );
-    
-    if (result != pdPASS) {
+
+    if (ok && cpu_task_handle) {
+        TaskStatus_t info;
+        vTaskGetInfo(cpu_task_handle, &info, pdTRUE, eRunning);
+        Logger.logLinef(
+            "cpu_monitor stack base: %p (external=%d)",
+            info.pxStackBase,
+            esp_ptr_external_ram(info.pxStackBase) ? 1 : 0
+        );
+    }
+
+    if (!ok) {
         Logger.logMessage("CPU Monitor", "Failed to create task");
         vSemaphoreDelete(cpu_mutex);
         cpu_mutex = nullptr;

@@ -114,4 +114,7 @@
 // Max JPEG bytes accepted for full image uploads.
 #define IMAGE_API_MAX_SIZE_BYTES (300 * 1024)
 
+// Use PSRAM for selected FreeRTOS task stacks (LVGL + some background tasks).
+#define USE_PSRAM_TASK_STACKS 1
+
 #endif // BOARD_OVERRIDES_JC3248W535_H

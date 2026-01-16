@@ -1,5 +1,7 @@
 #include "web_portal_firmware.h"
 
+#include "rtos_task_utils.h"
+
 #include "web_portal_auth.h"
 #include "web_portal_state.h"
 
@@ -243,7 +245,6 @@ static void firmware_update_task(void *pv) {
         strlcpy(firmware_update_error, "Failed to start download", sizeof(firmware_update_error));
         firmware_update_in_progress = false;
         web_portal_set_ota_in_progress(false);
-        vTaskDelete(nullptr);
         return;
     }
 
@@ -254,7 +255,6 @@ static void firmware_update_task(void *pv) {
         http.end();
         firmware_update_in_progress = false;
         web_portal_set_ota_in_progress(false);
-        vTaskDelete(nullptr);
         return;
     }
 
@@ -270,7 +270,6 @@ static void firmware_update_task(void *pv) {
         http.end();
         firmware_update_in_progress = false;
         web_portal_set_ota_in_progress(false);
-        vTaskDelete(nullptr);
         return;
     }
 
@@ -280,7 +279,6 @@ static void firmware_update_task(void *pv) {
         http.end();
         firmware_update_in_progress = false;
         web_portal_set_ota_in_progress(false);
-        vTaskDelete(nullptr);
         return;
     }
 
@@ -310,7 +308,6 @@ static void firmware_update_task(void *pv) {
             http.end();
             firmware_update_in_progress = false;
             web_portal_set_ota_in_progress(false);
-            vTaskDelete(nullptr);
             return;
         }
 
@@ -327,7 +324,6 @@ static void firmware_update_task(void *pv) {
         strlcpy(firmware_update_error, "OTA finalize failed", sizeof(firmware_update_error));
         firmware_update_in_progress = false;
         web_portal_set_ota_in_progress(false);
-        vTaskDelete(nullptr);
         return;
     }
 
@@ -337,7 +333,7 @@ static void firmware_update_task(void *pv) {
     // Give the HTTP response/polling a moment to observe completion.
     delay(300);
     ESP.restart();
-    vTaskDelete(nullptr);
+    return;
 }
 
 // GET /api/firmware/latest - Query GitHub releases/latest and compare with current firmware.
@@ -413,16 +409,18 @@ void handlePostFirmwareUpdate(AsyncWebServerRequest *request) {
     strlcpy(firmware_update_state, "downloading", sizeof(firmware_update_state));
 
     // Spawn background task to avoid blocking AsyncTCP.
-    const BaseType_t ok = xTaskCreate(
+    const bool ok = rtos_create_task_psram_stack_autofree(
         firmware_update_task,
         "fw_update",
         12288,
         nullptr,
         1,
-        &firmware_update_task_handle
+        &firmware_update_task_handle,
+        0,
+        false
     );
 
-    if (ok != pdPASS) {
+    if (!ok) {
         firmware_update_in_progress = false;
         strlcpy(firmware_update_state, "error", sizeof(firmware_update_state));
         strlcpy(firmware_update_error, "Failed to start update task", sizeof(firmware_update_error));

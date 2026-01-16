@@ -19,6 +19,8 @@
 #include <freertos/task.h>
 #include <freertos/semphr.h>
 
+#include "rtos_task_utils.h"
+
 // ============================================================================
 // Screen Registry
 // ============================================================================
@@ -60,6 +62,7 @@ private:
     
     // FreeRTOS task and mutex
     TaskHandle_t lvglTaskHandle;
+    TaskPsramAlloc lvglTaskAlloc;
     SemaphoreHandle_t lvglMutex;
     
     // Screen management

@@ -12,6 +12,14 @@
 #include <ESPmDNS.h>
 #include <lwip/netif.h>
 
+// Bluetooth is unused on many boards; when disabled we can release its memory.
+// Keep all BT APIs behind compile-time guards to avoid build failures on targets
+// that don't ship BT support.
+#if DISABLE_BLUETOOTH_ON_BOOT && CONFIG_BT_ENABLED
+#include <esp_bt.h>
+#endif
+#include <esp_bt.h>
+
 #if HAS_DISPLAY
 #include "display_manager.h"
 #include "screen_saver_manager.h"
@@ -39,6 +47,18 @@ unsigned long lastHeartbeat = 0;
 // WiFi watchdog for connection monitoring
 const unsigned long WIFI_CHECK_INTERVAL = 10000; // 10 seconds
 unsigned long lastWiFiCheck = 0;
+
+#if DISABLE_BLUETOOTH_ON_BOOT && CONFIG_BT_ENABLED
+static void log_bluetooth_status(const char* where) {
+  Logger.logBegin("Bluetooth Check");
+  Logger.logLinef("where: %s", where ? where : "(null)");
+  Logger.logLinef("ctrl_status: %d", (int)esp_bt_controller_get_status());
+  Logger.logEnd();
+
+  // Tag kept short for LogManager buffers.
+  device_telemetry_log_memory_snapshot(where ? where : "bt:chk");
+}
+#endif
 
 // WiFi event handlers for connection lifecycle monitoring
 void onWiFiConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
@@ -94,6 +114,19 @@ void setup()
 
   // Baseline memory snapshot as early as possible.
   device_telemetry_log_memory_snapshot("boot");
+
+  // Free internal RAM by disabling Bluetooth (if unused).
+  #if DISABLE_BLUETOOTH_ON_BOOT
+  #if CONFIG_BT_ENABLED
+  Logger.logBegin("Bluetooth");
+  const bool bt_stopped = btStop();
+  const esp_err_t bt_release_err = esp_bt_controller_mem_release(ESP_BT_MODE_BTDM);
+  Logger.logLinef("btStop: %s", bt_stopped ? "ok" : "no");
+  Logger.logLinef("mem_release: %d", (int)bt_release_err);
+  Logger.logEnd();
+  device_telemetry_log_memory_snapshot("bt");
+  #endif
+  #endif
 
   // Initialize device_config with sensible defaults
   // (Important: must happen before display_manager_init uses the config)
@@ -181,20 +214,12 @@ void setup()
     web_portal_start_ap();
   } else {
     Logger.logMessage("Main", "Config loaded - connecting to WiFi");
-    if (connect_wifi()) {
+    if (connect_wifi(false)) {
       start_mdns();
     } else {
-      // Hard reset retry - WiFi hardware may be in bad state
-      Logger.logMessage("Main", "WiFi failed - attempting hard reset");
-      Logger.logBegin("WiFi Hard Reset");
-      WiFi.mode(WIFI_OFF);
-      delay(1000);  // Longer delay to fully reset hardware
-      WiFi.mode(WIFI_STA);
-      delay(500);
-      Logger.logEnd("Reset complete");
-
-      // One more attempt after hard reset
-      if (connect_wifi()) {
+      // Escalation retry - WiFi hardware may be in bad state
+      Logger.logMessage("Main", "WiFi failed - retrying with full reset");
+      if (connect_wifi(true)) {
         start_mdns();
       } else {
         Logger.logMessage("Main", "WiFi failed after reset - fallback to AP");
@@ -218,6 +243,10 @@ void setup()
 
   // Snapshot after all subsystems are initialized.
   device_telemetry_log_memory_snapshot("setup");
+
+  #if DISABLE_BLUETOOTH_ON_BOOT && CONFIG_BT_ENABLED
+  log_bluetooth_status("bt:setup");
+  #endif
 
   #if HAS_DISPLAY
   // Show splash for minimum duration to ensure visibility
@@ -265,8 +294,13 @@ void loop()
   if (config_loaded && !web_portal_is_ap_mode() && currentMillis - lastWiFiCheck >= WIFI_CHECK_INTERVAL) {
     if (WiFi.status() != WL_CONNECTED && strlen(device_config.wifi_ssid) > 0) {
       Logger.logMessage("WiFi Watchdog", "Connection lost - attempting reconnect");
-      if (connect_wifi()) {
+      if (connect_wifi(false)) {
         start_mdns();
+      } else {
+        Logger.logMessage("WiFi Watchdog", "Reconnect failed - escalating reset");
+        if (connect_wifi(true)) {
+          start_mdns();
+        }
       }
     }
     lastWiFiCheck = currentMillis;
@@ -293,9 +327,13 @@ void loop()
 }
 
 // Connect to WiFi with exponential backoff
-bool connect_wifi() {
+bool connect_wifi(bool aggressive_reset) {
   Logger.logBegin("WiFi Connection");
   Logger.logLinef("SSID: %s", device_config.wifi_ssid);
+
+  #if WIFI_MEM_TRACE_ENABLED
+  device_telemetry_log_memory_snapshot("w:begin");
+  #endif
 
   // Helper: format BSSID as string
   auto format_bssid = [](const uint8_t *bssid, char *out, size_t out_len) {
@@ -313,10 +351,22 @@ bool connect_wifi() {
     if (!target_ssid || strlen(target_ssid) == 0) return false;
 
     // Clear prior results to avoid stale entries and reduce memory usage.
+    #if WIFI_MEM_TRACE_ENABLED
+    device_telemetry_log_memory_snapshot("w:scan:pre_del");
+    #endif
     WiFi.scanDelete();
+    #if WIFI_MEM_TRACE_ENABLED
+    device_telemetry_log_memory_snapshot("w:scan:post_del");
+    #endif
 
     Logger.logBegin("WiFi Scan");
+    #if WIFI_MEM_TRACE_ENABLED
+    device_telemetry_log_memory_snapshot("w:scan:pre_scan");
+    #endif
     const int16_t n = WiFi.scanNetworks();
+    #if WIFI_MEM_TRACE_ENABLED
+    device_telemetry_log_memory_snapshot("w:scan:post_scan");
+    #endif
     if (n < 0) {
       Logger.logEnd("Scan failed");
       return false;
@@ -364,21 +414,71 @@ bool connect_wifi() {
     Logger.logEnd();
 
     // Free scan results to save memory.
+    #if WIFI_MEM_TRACE_ENABLED
+    device_telemetry_log_memory_snapshot("w:scan:pre_free");
+    #endif
     WiFi.scanDelete();
+    #if WIFI_MEM_TRACE_ENABLED
+    device_telemetry_log_memory_snapshot("w:scan:post_free");
+    #endif
     return true;
   };
 
-  // === WiFi Hardware Reset Sequence ===
   // Disable persistent WiFi config (we manage our own via NVS)
   WiFi.persistent(false);
 
-  // Full WiFi reset to clear stale state and prevent hardware corruption
-  WiFi.disconnect(true);  // Disconnect + erase stored credentials
-  delay(100);
-  WiFi.mode(WIFI_OFF);    // Turn off WiFi hardware
-  delay(500);             // Wait for hardware to settle
-  WiFi.mode(WIFI_STA);    // Back to station mode
-  delay(100);
+  // WiFi init strategy:
+  // - Normal path: keep WiFi stack in STA mode and avoid cycling WIFI_OFF.
+  // - Aggressive path: full reset sequence to clear stale state.
+  if (aggressive_reset) {
+    // Full WiFi reset to clear stale state and prevent hardware corruption
+    #if WIFI_MEM_TRACE_ENABLED
+    device_telemetry_log_memory_snapshot("w:pre_disc");
+    #endif
+    WiFi.disconnect(true);
+    #if WIFI_MEM_TRACE_ENABLED
+    device_telemetry_log_memory_snapshot("w:post_disc");
+    #endif
+    delay(100);
+    #if WIFI_MEM_TRACE_ENABLED
+    device_telemetry_log_memory_snapshot("w:pre_off");
+    #endif
+    WiFi.mode(WIFI_OFF);
+    #if WIFI_MEM_TRACE_ENABLED
+    device_telemetry_log_memory_snapshot("w:post_off");
+    #endif
+    delay(500);
+    #if WIFI_MEM_TRACE_ENABLED
+    device_telemetry_log_memory_snapshot("w:pre_sta");
+    #endif
+    WiFi.mode(WIFI_STA);
+    #if WIFI_MEM_TRACE_ENABLED
+    device_telemetry_log_memory_snapshot("w:post_sta");
+    #endif
+    delay(100);
+  } else {
+    // Ensure we're in STA mode, but avoid cycling WIFI_OFF on every connect.
+    if (WiFi.getMode() != WIFI_STA) {
+      #if WIFI_MEM_TRACE_ENABLED
+      device_telemetry_log_memory_snapshot("w:pre_sta");
+      #endif
+      WiFi.mode(WIFI_STA);
+      #if WIFI_MEM_TRACE_ENABLED
+      device_telemetry_log_memory_snapshot("w:post_sta");
+      #endif
+      delay(50);
+    }
+
+    // Ensure a clean reconnect attempt without erasing credentials.
+    #if WIFI_MEM_TRACE_ENABLED
+    device_telemetry_log_memory_snapshot("w:pre_disc");
+    #endif
+    WiFi.disconnect(false);
+    #if WIFI_MEM_TRACE_ENABLED
+    device_telemetry_log_memory_snapshot("w:post_disc");
+    #endif
+    delay(50);
+  }
 
   // Disable WiFi sleep (power-save). Improves latency and often stability,
   // at the cost of higher power consumption.
@@ -386,6 +486,10 @@ bool connect_wifi() {
 
   // Enable auto-reconnect at WiFi stack level
   WiFi.setAutoReconnect(true);
+
+  #if WIFI_MEM_TRACE_ENABLED
+  device_telemetry_log_memory_snapshot("w:post_cfg");
+  #endif
 
   // Prepare sanitized hostname
   char sanitized[CONFIG_DEVICE_NAME_MAX_LEN];
@@ -397,8 +501,15 @@ bool connect_wifi() {
   // Use mDNS (.local) or NetBIOS for reliable device discovery instead
   if (strlen(sanitized) > 0) {
     // Set via WiFi library
+    #if WIFI_MEM_TRACE_ENABLED
+    device_telemetry_log_memory_snapshot("w:pre_host");
+    #endif
     WiFi.setHostname(sanitized);
     Logger.logLinef("Hostname: %s", sanitized);
+
+    #if WIFI_MEM_TRACE_ENABLED
+    device_telemetry_log_memory_snapshot("w:post_host");
+    #endif
 
     // Also set via esp_netif API (for compatibility)
     esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
@@ -410,6 +521,10 @@ bool connect_wifi() {
   // Configure fixed IP if provided
   if (strlen(device_config.fixed_ip) > 0) {
     Logger.logBegin("Fixed IP Config");
+
+    #if WIFI_MEM_TRACE_ENABLED
+    device_telemetry_log_memory_snapshot("w:ip:begin");
+    #endif
 
     IPAddress local_ip, gateway, subnet, dns1, dns2;
 
@@ -451,6 +566,10 @@ bool connect_wifi() {
       return false;
     }
 
+    #if WIFI_MEM_TRACE_ENABLED
+    device_telemetry_log_memory_snapshot("w:ip:after");
+    #endif
+
     Logger.logLinef("IP: %s", device_config.fixed_ip);
     Logger.logEnd();
   }
@@ -460,11 +579,19 @@ bool connect_wifi() {
   int best_channel = 0;
   int best_rssi = 0;
   const bool has_best_ap = select_strongest_ap(device_config.wifi_ssid, best_bssid, &best_channel, &best_rssi);
+
+  #if WIFI_MEM_TRACE_ENABLED
+  device_telemetry_log_memory_snapshot(has_best_ap ? "w:pre_begin_b" : "w:pre_begin");
+  #endif
   if (has_best_ap) {
     WiFi.begin(device_config.wifi_ssid, device_config.wifi_password, best_channel, best_bssid);
   } else {
     WiFi.begin(device_config.wifi_ssid, device_config.wifi_password);
   }
+
+  #if WIFI_MEM_TRACE_ENABLED
+  device_telemetry_log_memory_snapshot("w:post_begin");
+  #endif
 
   // Try to connect with exponential backoff
   for (int attempt = 0; attempt < WIFI_MAX_ATTEMPTS; attempt++) {
@@ -473,9 +600,16 @@ bool connect_wifi() {
 
     Logger.logLinef("Attempt %d/%d (timeout %ds)", attempt + 1, WIFI_MAX_ATTEMPTS, backoff / 1000);
 
+    #if WIFI_MEM_TRACE_ENABLED
+    device_telemetry_log_memory_snapshot("w:att:begin");
+    #endif
+
     while (millis() - start < backoff) {
       wl_status_t status = WiFi.status();
       if (status == WL_CONNECTED) {
+        #if WIFI_MEM_TRACE_ENABLED
+        device_telemetry_log_memory_snapshot("w:connected");
+        #endif
         Logger.logLinef("IP: %s", WiFi.localIP().toString().c_str());
         Logger.logLinef("Hostname: %s", WiFi.getHostname());
         Logger.logLinef("MAC: %s", WiFi.macAddress().c_str());
@@ -486,10 +620,18 @@ bool connect_wifi() {
         Logger.logLinef("  http://%s.local", WiFi.getHostname());
         Logger.logEnd("Connected");
 
+        #if DISABLE_BLUETOOTH_ON_BOOT && CONFIG_BT_ENABLED
+        log_bluetooth_status("bt:wifi");
+        #endif
+
         return true;
       }
       delay(100);
     }
+
+    #if WIFI_MEM_TRACE_ENABLED
+    device_telemetry_log_memory_snapshot("w:att:timeout");
+    #endif
 
     // Log detailed failure reason for diagnostics
     wl_status_t status = WiFi.status();

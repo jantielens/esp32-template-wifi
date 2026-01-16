@@ -93,4 +93,13 @@
 // Touch reset pin.
 #define TOUCH_RST 40
 
+#define HEALTH_HISTORY_SECONDS 20
+#define HEALTH_HISTORY_PERIOD_MS 50
+
+// Enable extra boot-time memory snapshots around WiFi init/scan/connect.
+#define WIFI_MEM_TRACE_ENABLED 1
+
+// Use PSRAM for selected FreeRTOS task stacks (LVGL + some background tasks).
+#define USE_PSRAM_TASK_STACKS 1
+
 #endif // BOARD_OVERRIDES_H

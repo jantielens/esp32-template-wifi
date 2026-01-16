@@ -5,6 +5,10 @@
 #include "display_manager.h"
 #include "log_manager.h"
 
+#include "rtos_task_utils.h"
+
+#include <esp_memory_utils.h>
+
 #include <esp_timer.h>
 
 // Include selected display driver header.
@@ -38,7 +42,7 @@ DisplayManager::DisplayManager(DeviceConfig* cfg)
       #if HAS_IMAGE_API
       directImageScreen(this),
       #endif
-                lvglTaskHandle(nullptr), lvglMutex(nullptr), screenCount(0), buf(nullptr), flushPending(false), directImageActive(false), pendingSplashStatusSet(false) {
+                                lvglTaskHandle(nullptr), lvglTaskAlloc{nullptr, nullptr}, lvglMutex(nullptr), screenCount(0), buf(nullptr), flushPending(false), directImageActive(false), pendingSplashStatusSet(false) {
         pendingSplashStatus[0] = '\0';
     // Instantiate selected display driver
     #if DISPLAY_DRIVER == DISPLAY_DRIVER_TFT_ESPI
@@ -85,6 +89,8 @@ DisplayManager::~DisplayManager() {
         vTaskDelete(lvglTaskHandle);
         lvglTaskHandle = nullptr;
     }
+
+    rtos_free_task_psram_alloc(&lvglTaskAlloc);
     
     if (currentScreen) {
         currentScreen->hide();
@@ -452,12 +458,42 @@ void DisplayManager::init() {
     // On dual-core: pin to Core 0 (Arduino loop runs on Core 1)
     // On single-core: runs on Core 0 (time-sliced with Arduino loop)
     #if CONFIG_FREERTOS_UNICORE
-    xTaskCreate(lvglTask, "LVGL", 8192, this, 1, &lvglTaskHandle);
-    Logger.logLine("Rendering task created (single-core)");
+    const bool task_ok = rtos_create_task_psram_stack(
+        lvglTask,
+        "LVGL",
+        8192,
+        this,
+        1,
+        &lvglTaskHandle,
+        0,
+        false,
+        &lvglTaskAlloc
+    );
+    Logger.logLine(task_ok ? "Rendering task created (single-core)" : "ERROR: Failed to create rendering task");
     #else
-    xTaskCreatePinnedToCore(lvglTask, "LVGL", 8192, this, 1, &lvglTaskHandle, 0);
-    Logger.logLine("Rendering task created (pinned to Core 0)");
+    const bool task_ok = rtos_create_task_psram_stack(
+        lvglTask,
+        "LVGL",
+        8192,
+        this,
+        1,
+        &lvglTaskHandle,
+        0,
+        true,
+        &lvglTaskAlloc
+    );
+    Logger.logLine(task_ok ? "Rendering task created (pinned to Core 0)" : "ERROR: Failed to create rendering task");
     #endif
+
+    if (task_ok && lvglTaskHandle) {
+        TaskStatus_t info;
+        vTaskGetInfo(lvglTaskHandle, &info, pdTRUE, eRunning);
+        Logger.logLinef(
+            "LVGL stack base: %p (external=%d)",
+            info.pxStackBase,
+            esp_ptr_external_ram(info.pxStackBase) ? 1 : 0
+        );
+    }
     
     Logger.logEnd();
 }

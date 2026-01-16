@@ -144,8 +144,8 @@
 #endif
 
 // Guardrails (must compile in both C and C++ translation units).
-#if (HEALTH_HISTORY_PERIOD_MS < 1000)
-#error HEALTH_HISTORY_PERIOD_MS too small
+#if (HEALTH_HISTORY_PERIOD_MS < 50)
+#error HEALTH_HISTORY_PERIOD_MS too small (min 50ms)
 #endif
 
 #if (((HEALTH_HISTORY_SECONDS * 1000UL) % (HEALTH_HISTORY_PERIOD_MS)) != 0)
@@ -159,6 +159,35 @@
 #if (HEALTH_HISTORY_SAMPLES > 600)
 #error HEALTH_HISTORY_SAMPLES too large
 #endif
+#endif
+
+// ============================================================================
+// Optional: WiFi Memory Trace (boot instrumentation)
+// ============================================================================
+// When enabled, firmware logs extra memory snapshots around WiFi init/scan/connect.
+// Default: disabled (avoids log noise).
+#ifndef WIFI_MEM_TRACE_ENABLED
+#define WIFI_MEM_TRACE_ENABLED 0
+#endif
+
+// ============================================================================
+// Optional: Disable Bluetooth to free internal RAM
+// ============================================================================
+// Many ESP32 Arduino builds include Bluetooth support even when unused.
+// Releasing BT memory can free a meaningful amount of internal heap.
+// Default: disabled (some projects may use BLE).
+#ifndef DISABLE_BLUETOOTH_ON_BOOT
+#define DISABLE_BLUETOOTH_ON_BOOT 0
+#endif
+
+// ============================================================================
+// Optional: PSRAM-backed task stacks
+// ============================================================================
+// When enabled (and PSRAM is present), selected FreeRTOS task stacks can be
+// allocated from PSRAM to reduce internal heap pressure.
+// Default: disabled (slightly higher risk; depends on PSRAM).
+#ifndef USE_PSRAM_TASK_STACKS
+#define USE_PSRAM_TASK_STACKS 0
 #endif
 
 // ============================================================================
