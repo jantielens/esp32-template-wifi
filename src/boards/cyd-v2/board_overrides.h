@@ -80,8 +80,11 @@
 #define TFT_SPI_FREQUENCY 40000000  // 40MHz (known-good for CYD)
 
 // TFT_eSPI library SPI frequency knobs
+// TFT_eSPI: SPI write frequency (Hz).
 #define SPI_FREQUENCY 40000000
+// TFT_eSPI: SPI read frequency (Hz).
 #define SPI_READ_FREQUENCY 20000000
+// TFT_eSPI: SPI touch frequency (Hz).
 #define SPI_TOUCH_FREQUENCY 2500000
 
 // Color Order

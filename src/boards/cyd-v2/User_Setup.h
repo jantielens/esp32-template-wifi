@@ -30,9 +30,12 @@
 #define USE_HSPI_PORT
 
 // SPI Frequencies
+// TFT_eSPI: SPI write frequency (Hz).
 #define SPI_FREQUENCY       40000000
+// TFT_eSPI: SPI read frequency (Hz).
 #define SPI_READ_FREQUENCY  20000000
-#define SPI_TOUCH_FREQUENCY  2500000
+// TFT_eSPI: SPI touch frequency (Hz).
+#define SPI_TOUCH_FREQUENCY 2500000
 
 // Optional: Fonts (keep default feature set reasonably complete)
 #define LOAD_GLCD
