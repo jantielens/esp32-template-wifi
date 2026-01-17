@@ -97,6 +97,16 @@ code {
   box-shadow: 0 12px 30px var(--shadow);
 }
 
+.panel-ota {
+  border: 1px solid rgba(124, 92, 255, 0.4);
+  box-shadow: 0 12px 30px rgba(124, 92, 255, 0.15);
+}
+
+.panel-sep {
+  margin: 18px 0 6px 0;
+  border-top: 1px dashed var(--panel-border);
+}
+
 .panel-title {
   font-weight: 650;
   margin-bottom: 10px;
@@ -199,6 +209,65 @@ code {
   box-shadow: 0 0 0 4px rgba(124, 92, 255, 0.18);
 }
 
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+@media (min-width: 720px) {
+  .form-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .form-grid .field:first-child {
+    grid-column: span 2;
+  }
+}
+
+.field label {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 6px;
+  color: var(--muted);
+}
+
+.field input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-2);
+  color: var(--text);
+  outline: none;
+}
+
+.field input:focus {
+  border-color: rgba(124, 92, 255, 0.55);
+  box-shadow: 0 0 0 4px rgba(124, 92, 255, 0.18);
+}
+
+.field small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+.status {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.status.success { color: #2ecc71; }
+.status.error { color: #ff6b6b; }
+.status.info { color: var(--text); }
+
 .count {
   color: var(--muted);
   font-size: 14px;
@@ -208,6 +277,10 @@ code {
   display: grid;
   grid-template-columns: 1fr;
   gap: 10px;
+}
+
+.ota-actions {
+  margin-top: 12px;
 }
 
 @media (min-width: 820px) {
@@ -259,6 +332,23 @@ code {
 
 .board-links a:hover {
   opacity: 1;
+}
+
+.ota-btn {
+  margin-top: 10px;
+  width: 100%;
+  border: 1px solid var(--panel-border);
+  background: linear-gradient(135deg, rgba(124, 92, 255, 0.9), rgba(36, 198, 255, 0.85));
+  color: white;
+  border-radius: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.ota-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .footer {

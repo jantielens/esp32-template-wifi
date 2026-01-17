@@ -5,18 +5,14 @@
     <div class="container">
         {{NAV}}
 
-        <!-- Online Firmware Update (GitHub Releases) -->
-        <section class="section ota-section" id="github-update-section">
-            <h2>🌐 Online Update (GitHub)</h2>
-            <p style="margin-bottom: 14px; color: #666;">
-                Current: <strong id="github-current-version">-.-.-</strong>
-                &nbsp;•&nbsp;
-                Latest: <strong id="github-latest-version">-.-.-</strong>
-                &nbsp;•&nbsp;
-                <span id="github-update-availability">—</span>
+        <!-- Online Firmware Update (GitHub Pages) -->
+        <section class="section ota-section" id="online-update-section">
+            <h2>🌐 Online Update (GitHub Pages)</h2>
+            <p style="margin-bottom: 10px; color: #666;">
+                This opens the GitHub Pages updater and passes this device address:
+                <strong id="github-pages-device">—</strong>
             </p>
-            <button type="button" id="github-update-btn" class="btn btn-warning" disabled>Update to Latest</button>
-            <small id="github-update-meta">Uses the latest stable release for this board.</small>
+            <a id="github-pages-link" class="btn btn-warning" href="#" target="_blank" rel="noreferrer">Open Updater</a>
         </section>
 
         <!-- Firmware Update Section -->

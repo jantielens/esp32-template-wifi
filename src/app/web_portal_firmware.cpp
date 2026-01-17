@@ -4,23 +4,23 @@
 #include "web_portal_state.h"
 
 #include "device_telemetry.h"
-#include "github_release_config.h"
 #include "log_manager.h"
-#include "project_branding.h"
 #include "psram_json_allocator.h"
 #include "web_portal_json.h"
-#include "../version.h"
 
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
 #include <Update.h>
 #include <WiFi.h>
+#include <WiFiClient.h>
 #include <WiFiClientSecure.h>
+
+#include <esp_heap_caps.h>
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
-// ===== GitHub Releases firmware update (app-only) =====
+// ===== GitHub Pages firmware update (app-only) =====
 static TaskHandle_t firmware_update_task_handle = nullptr;
 static volatile bool firmware_update_in_progress = false;
 static volatile size_t firmware_update_progress = 0;
@@ -28,196 +28,44 @@ static volatile size_t firmware_update_total = 0;
 
 static char firmware_update_state[16] = "idle"; // idle|downloading|writing|rebooting|error
 static char firmware_update_error[192] = "";
-static char firmware_update_latest_version[24] = "";
+static char firmware_update_target_version[24] = "";
 static char firmware_update_download_url[512] = "";
+static size_t firmware_update_expected_size = 0;
+
+// POST /api/firmware/update body accumulator (chunk-safe)
+static portMUX_TYPE g_fw_post_mux = portMUX_INITIALIZER_UNLOCKED;
+static struct {
+    bool in_progress;
+    uint32_t started_ms;
+    size_t total;
+    size_t received;
+    uint8_t* buf;
+} g_fw_post = {false, 0, 0, 0, nullptr};
+
+static constexpr size_t WEB_PORTAL_FIRMWARE_MAX_JSON_BYTES = 1024;
+static constexpr uint32_t WEB_PORTAL_FIRMWARE_BODY_TIMEOUT_MS = 8000;
+
+static void firmware_post_reset() {
+    if (g_fw_post.buf) {
+        heap_caps_free(g_fw_post.buf);
+        g_fw_post.buf = nullptr;
+    }
+    g_fw_post.in_progress = false;
+    g_fw_post.total = 0;
+    g_fw_post.received = 0;
+    g_fw_post.started_ms = 0;
+}
 
 bool web_portal_firmware_update_in_progress() {
     return firmware_update_in_progress;
 }
 
-static bool parse_semver_triplet(const char *s, int *major, int *minor, int *patch) {
-    if (!s || !major || !minor || !patch) return false;
-
-    // Accept optional leading 'v'
-    if (s[0] == 'v' || s[0] == 'V') {
-        s++;
-    }
-
-    int a = 0, b = 0, c = 0;
-    if (sscanf(s, "%d.%d.%d", &a, &b, &c) != 3) {
-        return false;
-    }
-    *major = a;
-    *minor = b;
-    *patch = c;
-    return true;
+static bool starts_with(const char* s, const char* prefix) {
+    if (!s || !prefix) return false;
+    const size_t prefix_len = strlen(prefix);
+    return strncmp(s, prefix, prefix_len) == 0;
 }
 
-static int compare_semver(const char *a, const char *b) {
-    int am = 0, an = 0, ap = 0;
-    int bm = 0, bn = 0, bp = 0;
-    if (!parse_semver_triplet(a, &am, &an, &ap)) return 0;
-    if (!parse_semver_triplet(b, &bm, &bn, &bp)) return 0;
-
-    if (am != bm) return (am < bm) ? -1 : 1;
-    if (an != bn) return (an < bn) ? -1 : 1;
-    if (ap != bp) return (ap < bp) ? -1 : 1;
-    return 0;
-}
-
-static bool github_fetch_latest_release(
-    char *out_version,
-    size_t out_version_len,
-    char *out_asset_url,
-    size_t out_asset_url_len,
-    size_t *out_asset_size,
-    char *out_error,
-    size_t out_error_len
-) {
-#if !GITHUB_UPDATES_ENABLED
-    (void)out_version;
-    (void)out_version_len;
-    (void)out_asset_url;
-    (void)out_asset_url_len;
-    (void)out_asset_size;
-    if (out_error && out_error_len > 0) {
-        strlcpy(out_error, "GitHub updates disabled", out_error_len);
-    }
-    return false;
-#else
-    if (out_error && out_error_len > 0) out_error[0] = '\0';
-    if (out_version && out_version_len > 0) out_version[0] = '\0';
-    if (out_asset_url && out_asset_url_len > 0) out_asset_url[0] = '\0';
-    if (out_asset_size) *out_asset_size = 0;
-
-    if (WiFi.status() != WL_CONNECTED) {
-        if (out_error && out_error_len > 0) {
-            strlcpy(out_error, "WiFi not connected", out_error_len);
-        }
-        return false;
-    }
-
-    char api_url[256];
-    snprintf(api_url, sizeof(api_url), "https://api.github.com/repos/%s/%s/releases/latest", GITHUB_OWNER, GITHUB_REPO);
-
-    WiFiClientSecure client;
-    client.setInsecure();
-    client.setTimeout(15000);
-
-    HTTPClient http;
-    http.setTimeout(15000);
-
-    if (!http.begin(client, api_url)) {
-        if (out_error && out_error_len > 0) {
-            strlcpy(out_error, "Failed to init HTTP client", out_error_len);
-        }
-        return false;
-    }
-
-    http.addHeader("User-Agent", "esp32-template-firmware");
-    http.addHeader("Accept", "application/vnd.github+json");
-
-    const int http_code = http.GET();
-    if (http_code != 200) {
-        if (out_error && out_error_len > 0) {
-            snprintf(out_error, out_error_len, "GitHub API HTTP %d", http_code);
-        }
-        http.end();
-        return false;
-    }
-
-    // Build expected app-only asset name: <project>-<board>-vX.Y.Z.bin
-    const char *board = "unknown";
-    #ifdef BUILD_BOARD_NAME
-        board = BUILD_BOARD_NAME;
-    #endif
-
-    char expected_asset_name[160];
-    expected_asset_name[0] = '\0';
-
-    // Parse JSON with filter to reduce memory.
-    // `assets` is an array, so use [0] to apply the filter to all elements.
-    StaticJsonDocument<256> filter;
-    filter["tag_name"] = true;
-    filter["assets"][0]["name"] = true;
-    filter["assets"][0]["browser_download_url"] = true;
-    filter["assets"][0]["size"] = true;
-
-    // Read the full response before parsing. Parsing directly from the stream can
-    // occasionally fail with IncompleteInput if the connection stalls.
-    String payload = http.getString();
-    if (payload.length() == 0) {
-        if (out_error && out_error_len > 0) {
-            strlcpy(out_error, "GitHub API returned empty body", out_error_len);
-        }
-        http.end();
-        return false;
-    }
-
-    BasicJsonDocument<PsramJsonAllocator> doc(8192);
-    DeserializationError err = deserializeJson(doc, payload, DeserializationOption::Filter(filter));
-    if (err) {
-        if (out_error && out_error_len > 0) {
-            snprintf(out_error, out_error_len, "GitHub JSON parse error: %s", err.c_str());
-        }
-        http.end();
-        return false;
-    }
-
-    const char *tag_name = doc["tag_name"] | "";
-    if (!tag_name || strlen(tag_name) == 0) {
-        if (out_error && out_error_len > 0) {
-            strlcpy(out_error, "GitHub response missing tag_name", out_error_len);
-        }
-        http.end();
-        return false;
-    }
-
-    // Strip leading 'v' for VERSION in filenames.
-    const char *version = tag_name;
-    if (version[0] == 'v' || version[0] == 'V') {
-        version++;
-    }
-
-    snprintf(expected_asset_name, sizeof(expected_asset_name), "%s-%s-v%s.bin", PROJECT_NAME, board, version);
-
-    JsonArray assets = doc["assets"].as<JsonArray>();
-    const char *found_url = nullptr;
-    size_t found_size = 0;
-
-    for (JsonVariant v : assets) {
-        const char *name = v["name"] | "";
-        const char *url = v["browser_download_url"] | "";
-        const size_t size = (size_t)(v["size"] | 0);
-        if (name && url && strlen(name) > 0 && strcmp(name, expected_asset_name) == 0) {
-            found_url = url;
-            found_size = size;
-            break;
-        }
-    }
-
-    if (!found_url || strlen(found_url) == 0) {
-        if (out_error && out_error_len > 0) {
-            snprintf(out_error, out_error_len, "No asset found: %s", expected_asset_name);
-        }
-        http.end();
-        return false;
-    }
-
-    if (out_version && out_version_len > 0) {
-        strlcpy(out_version, version, out_version_len);
-    }
-    if (out_asset_url && out_asset_url_len > 0) {
-        strlcpy(out_asset_url, found_url, out_asset_url_len);
-    }
-    if (out_asset_size) {
-        *out_asset_size = found_size;
-    }
-
-    http.end();
-    return true;
-#endif
-}
 
 static void firmware_update_task(void *pv) {
     (void)pv;
@@ -227,25 +75,39 @@ static void firmware_update_task(void *pv) {
     firmware_update_error[0] = '\0';
 
     const char *url = firmware_update_download_url;
-    const char *latest_version = firmware_update_latest_version;
 
     web_portal_set_ota_in_progress(true);
 
-    WiFiClientSecure client;
-    client.setInsecure();
-    client.setTimeout(30000);
+    const bool is_https = starts_with(url, "https://");
 
     HTTPClient http;
     http.setTimeout(30000);
 
-    if (!http.begin(client, url)) {
-        strlcpy(firmware_update_state, "error", sizeof(firmware_update_state));
-        strlcpy(firmware_update_error, "Failed to start download", sizeof(firmware_update_error));
-        LOGE("OTA", "Download start failed");
-        firmware_update_in_progress = false;
-        web_portal_set_ota_in_progress(false);
-        vTaskDelete(nullptr);
-        return;
+    if (is_https) {
+        WiFiClientSecure client;
+        client.setInsecure();
+        client.setTimeout(30000);
+        if (!http.begin(client, url)) {
+            strlcpy(firmware_update_state, "error", sizeof(firmware_update_state));
+            strlcpy(firmware_update_error, "Failed to start download", sizeof(firmware_update_error));
+            LOGE("OTA", "Download start failed");
+            firmware_update_in_progress = false;
+            web_portal_set_ota_in_progress(false);
+            vTaskDelete(nullptr);
+            return;
+        }
+    } else {
+        WiFiClient client;
+        client.setTimeout(30000);
+        if (!http.begin(client, url)) {
+            strlcpy(firmware_update_state, "error", sizeof(firmware_update_state));
+            strlcpy(firmware_update_error, "Failed to start download", sizeof(firmware_update_error));
+            LOGE("OTA", "Download start failed");
+            firmware_update_in_progress = false;
+            web_portal_set_ota_in_progress(false);
+            vTaskDelete(nullptr);
+            return;
+        }
     }
 
     const int http_code = http.GET();
@@ -261,11 +123,16 @@ static void firmware_update_task(void *pv) {
     }
 
     int http_len = http.getSize();
-    const size_t expected_total = firmware_update_total;
-    size_t total = (http_len > 0) ? (size_t)http_len : expected_total;
+    size_t total = firmware_update_expected_size;
+    if (total == 0 && http_len > 0) {
+        total = (size_t)http_len;
+    }
+    if (http_len <= 0 && total > 0) {
+        http_len = (int)total;
+    }
     firmware_update_total = total;
 
-    LOGI("OTA", "Download started version=%s total=%u", latest_version, (unsigned)total);
+    LOGI("OTA", "Download started total=%u", (unsigned)total);
 
     const size_t freeSpace = device_telemetry_free_sketch_space();
     if (total > 0 && total > freeSpace) {
@@ -340,7 +207,6 @@ static void firmware_update_task(void *pv) {
     }
 
     strlcpy(firmware_update_state, "rebooting", sizeof(firmware_update_state));
-    (void)latest_version;
 
     LOGI("OTA", "Update complete, rebooting");
 
@@ -350,69 +216,142 @@ static void firmware_update_task(void *pv) {
     vTaskDelete(nullptr);
 }
 
-// GET /api/firmware/latest - Query GitHub releases/latest and compare with current firmware.
-void handleGetFirmwareLatest(AsyncWebServerRequest *request) {
+// POST /api/firmware/update - Start background download+OTA from a provided URL.
+void handlePostFirmwareUpdate(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
     if (!portal_auth_gate(request)) return;
-#if !GITHUB_UPDATES_ENABLED
-    request->send(404, "application/json", "{\"success\":false,\"message\":\"GitHub updates disabled\"}");
-    return;
-#else
-    char latest[24];
-    char url[512];
-    size_t size = 0;
-    char err[192];
 
-    if (!github_fetch_latest_release(latest, sizeof(latest), url, sizeof(url), &size, err, sizeof(err))) {
-        char resp[256];
-        snprintf(resp, sizeof(resp), "{\"success\":false,\"message\":\"%s\"}", err[0] ? err : "Failed");
-        request->send(500, "application/json", resp);
+    // Accumulate the full body (chunk-safe) then parse once.
+    if (index == 0) {
+        const uint32_t now = millis();
+
+        // Cleanup stale uploads.
+        portENTER_CRITICAL(&g_fw_post_mux);
+        const bool stale = g_fw_post.in_progress && g_fw_post.started_ms && (now - g_fw_post.started_ms > WEB_PORTAL_FIRMWARE_BODY_TIMEOUT_MS);
+        portEXIT_CRITICAL(&g_fw_post_mux);
+        if (stale) {
+            LOGW("OTA", "Firmware update request timed out; resetting state");
+            portENTER_CRITICAL(&g_fw_post_mux);
+            firmware_post_reset();
+            portEXIT_CRITICAL(&g_fw_post_mux);
+        }
+
+        portENTER_CRITICAL(&g_fw_post_mux);
+        if (g_fw_post.in_progress) {
+            portEXIT_CRITICAL(&g_fw_post_mux);
+            request->send(409, "application/json", "{\"success\":false,\"message\":\"Update request already in progress\"}");
+            return;
+        }
+        g_fw_post.in_progress = true;
+        g_fw_post.started_ms = now;
+        g_fw_post.total = total;
+        g_fw_post.received = 0;
+        g_fw_post.buf = nullptr;
+        portEXIT_CRITICAL(&g_fw_post_mux);
+
+        if (total == 0 || total > WEB_PORTAL_FIRMWARE_MAX_JSON_BYTES) {
+            portENTER_CRITICAL(&g_fw_post_mux);
+            firmware_post_reset();
+            portEXIT_CRITICAL(&g_fw_post_mux);
+            request->send(413, "application/json", "{\"success\":false,\"message\":\"JSON body too large\"}");
+            return;
+        }
+
+        uint8_t* buf = (uint8_t*)heap_caps_malloc(total + 1, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        if (!buf) {
+            portENTER_CRITICAL(&g_fw_post_mux);
+            firmware_post_reset();
+            portEXIT_CRITICAL(&g_fw_post_mux);
+            request->send(503, "application/json", "{\"success\":false,\"message\":\"Out of memory\"}");
+            return;
+        }
+
+        portENTER_CRITICAL(&g_fw_post_mux);
+        g_fw_post.buf = buf;
+        portEXIT_CRITICAL(&g_fw_post_mux);
+    }
+
+    // Copy this chunk.
+    portENTER_CRITICAL(&g_fw_post_mux);
+    const bool ok = g_fw_post.in_progress && g_fw_post.buf && g_fw_post.total == total && (index + len) <= total;
+    uint8_t* dst = g_fw_post.buf;
+    portEXIT_CRITICAL(&g_fw_post_mux);
+
+    if (!ok) {
+        request->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid upload state\"}");
+        portENTER_CRITICAL(&g_fw_post_mux);
+        firmware_post_reset();
+        portEXIT_CRITICAL(&g_fw_post_mux);
         return;
     }
 
-    const bool update_available = (compare_semver(FIRMWARE_VERSION, latest) < 0);
+    memcpy(dst + index, data, len);
 
-    std::shared_ptr<BasicJsonDocument<PsramJsonAllocator>> doc = make_psram_json_doc(512);
-    if (doc && doc->capacity() > 0) {
-        (*doc)["success"] = true;
-        (*doc)["current_version"] = FIRMWARE_VERSION;
-        (*doc)["latest_version"] = latest;
-        (*doc)["update_available"] = update_available;
+    portENTER_CRITICAL(&g_fw_post_mux);
+    const size_t new_received = index + len;
+    if (new_received > g_fw_post.received) {
+        g_fw_post.received = new_received;
+    }
+    const bool done = (g_fw_post.received >= g_fw_post.total);
+    portEXIT_CRITICAL(&g_fw_post_mux);
+
+    if (!done) {
+        return;
     }
 
-    web_portal_send_json_chunked(request, doc);
-#endif
-}
+    // Finalize buffer and parse.
+    uint8_t* body = nullptr;
+    size_t body_len = 0;
+    portENTER_CRITICAL(&g_fw_post_mux);
+    body = g_fw_post.buf;
+    body_len = g_fw_post.total;
+    if (body) body[body_len] = 0;
+    portEXIT_CRITICAL(&g_fw_post_mux);
 
-// POST /api/firmware/update - Start background download+OTA of latest app-only firmware from GitHub.
-void handlePostFirmwareUpdate(AsyncWebServerRequest *request) {
-    if (!portal_auth_gate(request)) return;
-#if !GITHUB_UPDATES_ENABLED
-    request->send(404, "application/json", "{\"success\":false,\"message\":\"GitHub updates disabled\"}");
-    return;
-#else
+    BasicJsonDocument<PsramJsonAllocator> doc(768);
+    DeserializationError error = deserializeJson(doc, body, body_len);
+
+    if (error) {
+        LOGE("OTA", "JSON parse error: %s", error.c_str());
+        request->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid JSON\"}");
+        portENTER_CRITICAL(&g_fw_post_mux);
+        firmware_post_reset();
+        portEXIT_CRITICAL(&g_fw_post_mux);
+        return;
+    }
+
+    const char *url = doc["url"] | "";
+    const char *version = doc["version"] | "";
+    const size_t size = (size_t)(doc["size"] | 0);
+
+    if (!url || strlen(url) == 0) {
+        request->send(400, "application/json", "{\"success\":false,\"message\":\"Missing firmware URL\"}");
+        portENTER_CRITICAL(&g_fw_post_mux);
+        firmware_post_reset();
+        portEXIT_CRITICAL(&g_fw_post_mux);
+        return;
+    }
+
+    if (!starts_with(url, "http://") && !starts_with(url, "https://")) {
+        request->send(400, "application/json", "{\"success\":false,\"message\":\"URL must be http(s)\"}");
+        portENTER_CRITICAL(&g_fw_post_mux);
+        firmware_post_reset();
+        portEXIT_CRITICAL(&g_fw_post_mux);
+        return;
+    }
+
     if (web_portal_ota_in_progress() || firmware_update_in_progress) {
-        LOGW("OTA", "Update already in progress");
         request->send(409, "application/json", "{\"success\":false,\"message\":\"Update already in progress\"}");
+        portENTER_CRITICAL(&g_fw_post_mux);
+        firmware_post_reset();
+        portEXIT_CRITICAL(&g_fw_post_mux);
         return;
     }
 
-    char latest[24];
-    char url[512];
-    size_t size = 0;
-    char err[192];
-
-    if (!github_fetch_latest_release(latest, sizeof(latest), url, sizeof(url), &size, err, sizeof(err))) {
-        LOGW("OTA", "Latest fetch failed: %s", err[0] ? err : "Failed");
-        char resp[256];
-        snprintf(resp, sizeof(resp), "{\"success\":false,\"message\":\"%s\"}", err[0] ? err : "Failed");
-        request->send(500, "application/json", resp);
-        return;
-    }
-
-    // If no update is available, still allow re-install? For now, require newer.
-    if (compare_semver(FIRMWARE_VERSION, latest) >= 0) {
-        LOGI("OTA", "Already up to date (%s)", FIRMWARE_VERSION);
-        request->send(200, "application/json", "{\"success\":true,\"message\":\"Already up to date\",\"update_started\":false}");
+    if (WiFi.status() != WL_CONNECTED) {
+        request->send(409, "application/json", "{\"success\":false,\"message\":\"WiFi not connected\"}");
+        portENTER_CRITICAL(&g_fw_post_mux);
+        firmware_post_reset();
+        portEXIT_CRITICAL(&g_fw_post_mux);
         return;
     }
 
@@ -420,15 +359,16 @@ void handlePostFirmwareUpdate(AsyncWebServerRequest *request) {
     firmware_update_in_progress = true;
     firmware_update_progress = 0;
     firmware_update_total = size;
-    strlcpy(firmware_update_latest_version, latest, sizeof(firmware_update_latest_version));
+    firmware_update_expected_size = size;
+    strlcpy(firmware_update_target_version, version, sizeof(firmware_update_target_version));
     strlcpy(firmware_update_download_url, url, sizeof(firmware_update_download_url));
     firmware_update_error[0] = '\0';
     strlcpy(firmware_update_state, "downloading", sizeof(firmware_update_state));
 
-    LOGI("OTA", "Update requested latest=%s size=%u", latest, (unsigned)size);
+    LOGI("OTA", "Update requested url=%s size=%u", url, (unsigned)size);
 
     // Spawn background task to avoid blocking AsyncTCP.
-    const BaseType_t ok = xTaskCreate(
+    const BaseType_t task_ok = xTaskCreate(
         firmware_update_task,
         "fw_update",
         12288,
@@ -437,25 +377,30 @@ void handlePostFirmwareUpdate(AsyncWebServerRequest *request) {
         &firmware_update_task_handle
     );
 
-    if (ok != pdPASS) {
+    if (task_ok != pdPASS) {
         firmware_update_in_progress = false;
         strlcpy(firmware_update_state, "error", sizeof(firmware_update_state));
         strlcpy(firmware_update_error, "Failed to start update task", sizeof(firmware_update_error));
         LOGE("OTA", "Failed to start update task");
         request->send(500, "application/json", "{\"success\":false,\"message\":\"Failed to start update\"}");
+        portENTER_CRITICAL(&g_fw_post_mux);
+        firmware_post_reset();
+        portEXIT_CRITICAL(&g_fw_post_mux);
         return;
     }
 
-    std::shared_ptr<BasicJsonDocument<PsramJsonAllocator>> doc = make_psram_json_doc(384);
-    if (doc && doc->capacity() > 0) {
-        (*doc)["success"] = true;
-        (*doc)["update_started"] = true;
-        (*doc)["current_version"] = FIRMWARE_VERSION;
-        (*doc)["latest_version"] = latest;
+    std::shared_ptr<BasicJsonDocument<PsramJsonAllocator>> resp = make_psram_json_doc(384);
+    if (resp && resp->capacity() > 0) {
+        (*resp)["success"] = true;
+        (*resp)["update_started"] = true;
+        (*resp)["version"] = firmware_update_target_version;
     }
 
-    web_portal_send_json_chunked(request, doc);
-#endif
+    web_portal_send_json_chunked(request, resp);
+
+    portENTER_CRITICAL(&g_fw_post_mux);
+    firmware_post_reset();
+    portEXIT_CRITICAL(&g_fw_post_mux);
 }
 
 // GET /api/firmware/update/status - Progress snapshot for online update.
@@ -464,12 +409,11 @@ void handleGetFirmwareUpdateStatus(AsyncWebServerRequest *request) {
 
     std::shared_ptr<BasicJsonDocument<PsramJsonAllocator>> doc = make_psram_json_doc(512);
     if (doc && doc->capacity() > 0) {
-        (*doc)["enabled"] = (GITHUB_UPDATES_ENABLED ? true : false);
         (*doc)["in_progress"] = firmware_update_in_progress;
         (*doc)["state"] = firmware_update_state;
         (*doc)["progress"] = (uint32_t)firmware_update_progress;
         (*doc)["total"] = (uint32_t)firmware_update_total;
-        (*doc)["latest_version"] = firmware_update_latest_version;
+        (*doc)["version"] = firmware_update_target_version;
         (*doc)["error"] = firmware_update_error;
     }
 

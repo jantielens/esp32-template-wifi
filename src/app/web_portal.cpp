@@ -16,13 +16,13 @@
 #include "log_manager.h"
 #include "board_config.h"
 #include "device_telemetry.h"
-#include "github_release_config.h"
 #include "project_branding.h"
 #include "../version.h"
 #include "psram_json_allocator.h"
 #include "web_portal_routes.h"
 #include "web_portal_auth.h"
 #include "web_portal_config.h"
+#include "web_portal_cors.h"
 #include "web_portal_state.h"
 #include "web_portal_firmware.h"
 #include "web_portal_ap.h"
@@ -114,6 +114,9 @@ void web_portal_init(DeviceConfig *config) {
         yield();
         delay(100);
     }
+
+    // CORS default headers for GitHub Pages (if repo slug is available).
+    web_portal_add_default_cors_headers();
 
     // Routes (factored out for maintainability)
     web_portal_register_routes(server);

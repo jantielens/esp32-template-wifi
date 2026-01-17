@@ -426,6 +426,13 @@ body {
     font-family: inherit;
     letter-spacing: -0.2px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+    text-decoration: none;
+}
+
+/* Firmware page: keep the GitHub Pages button aligned with text */
+#online-update-section .btn {
+    display: inline-flex;
+    width: auto;
 }
 
 .btn:hover:not(:disabled) {
@@ -441,6 +448,13 @@ body {
 .btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+    transform: none !important;
+}
+
+.btn.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
     transform: none !important;
 }
 

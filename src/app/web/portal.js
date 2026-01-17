@@ -12,16 +12,12 @@ const API_MODE = '/api/mode';
 const API_UPDATE = '/api/update';
 const API_REBOOT = '/api/reboot';
 const API_VERSION = '/api/info'; // Used for connection polling
-const API_FIRMWARE_LATEST = '/api/firmware/latest';
-const API_FIRMWARE_UPDATE = '/api/firmware/update';
-const API_FIRMWARE_UPDATE_STATUS = '/api/firmware/update/status';
 
 let selectedFile = null;
 let portalMode = 'full'; // 'core' or 'full'
 let currentPage = 'home'; // Current page: 'home', 'network', or 'firmware'
 
 let deviceInfoCache = null;
-let githubAutoChecked = false;
 
 /**
  * Scroll input into view when focused (prevents mobile keyboard from covering it)
@@ -493,7 +489,7 @@ async function loadVersion() {
             version.psram_size > 0 ? `${formatBytes(version.psram_size)} PSRAM` : 'No PSRAM';
 
         // Update Firmware page online update UI if present
-        updateGitHubUpdateSection(version);
+        updateOnlineUpdateSection(version);
     } catch (error) {
         document.getElementById('firmware-version').textContent = 'Firmware v?.?.?';
         document.getElementById('chip-info').textContent = 'Chip info unavailable';
@@ -503,205 +499,44 @@ async function loadVersion() {
         document.getElementById('psram-status').textContent = 'Unknown';
 
         // Still attempt to update Firmware page UI if present
-        updateGitHubUpdateSection(null);
+        updateOnlineUpdateSection(null);
     }
 }
 
-function updateGitHubUpdateSection(info) {
-    const section = document.getElementById('github-update-section');
+function updateOnlineUpdateSection(info) {
+    const section = document.getElementById('online-update-section');
     if (!section) return; // Only on firmware page
 
-    const currentEl = document.getElementById('github-current-version');
-    const latestEl = document.getElementById('github-latest-version');
-    const availabilityEl = document.getElementById('github-update-availability');
-    const updateBtn = document.getElementById('github-update-btn');
-    const metaEl = document.getElementById('github-update-meta');
-
+    const linkEl = document.getElementById('github-pages-link');
+    const deviceEl = document.getElementById('github-pages-device');
     const hasInfo = !!info;
-    const currentVersion = hasInfo && info.version ? info.version : '-.-.-';
-    if (currentEl) currentEl.textContent = currentVersion;
-    if (latestEl && latestEl.textContent.trim() === '') latestEl.textContent = '-.-.-';
+    const owner = hasInfo ? (info.github_owner || '') : '';
+    const repo = hasInfo ? (info.github_repo || '') : '';
+    const deviceBase = window.location.origin;
 
-    const enabled = !!(hasInfo && info.github_updates_enabled === true);
+    if (deviceEl) deviceEl.textContent = deviceBase;
 
-    const hasRepo = hasInfo && info.github_owner && info.github_repo;
-    const repoText = hasRepo ? `${info.github_owner}/${info.github_repo}` : null;
-
-    if (!enabled) {
-        if (availabilityEl) availabilityEl.textContent = '—';
-        if (updateBtn) updateBtn.disabled = true;
-        if (metaEl) {
-            metaEl.textContent = repoText
-                ? `Online updates require git remote origin metadata at build time. Detected repo: ${repoText}`
-                : 'Online updates require git remote origin metadata at build time.';
+    if (!owner || !repo) {
+        if (linkEl) {
+            linkEl.href = '#';
+            linkEl.setAttribute('aria-disabled', 'true');
+            linkEl.classList.add('disabled');
         }
         return;
     }
 
-    if (updateBtn && availabilityEl && availabilityEl.textContent !== 'Update available') {
-        // Will be enabled after a successful latest-check if needed.
-        updateBtn.disabled = true;
+    const pagesBase = `https://${owner}.github.io/${repo}/`;
+    const params = new URLSearchParams();
+    params.set('device', deviceBase);
+
+    const pagesUrl = `${pagesBase}?${params.toString()}`;
+
+    if (linkEl) {
+        linkEl.href = pagesUrl;
+        linkEl.removeAttribute('aria-disabled');
+        linkEl.classList.remove('disabled');
     }
 
-    if (metaEl) {
-        const board = info.board_name || 'unknown';
-        // Split across 3 lines (as requested)
-        metaEl.innerHTML = `Repo: ${info.github_owner}/${info.github_repo}<br>Board: ${board}<br>Stable releases only`;
-    }
-
-    // Auto-check on first load so the page immediately shows update availability.
-    if (!githubAutoChecked) {
-        githubAutoChecked = true;
-        checkGitHubLatestFirmware();
-    }
-}
-
-async function checkGitHubLatestFirmware() {
-    const latestEl = document.getElementById('github-latest-version');
-    const availabilityEl = document.getElementById('github-update-availability');
-    const updateBtn = document.getElementById('github-update-btn');
-
-    try {
-        if (availabilityEl) availabilityEl.textContent = 'Checking…';
-
-        const response = await fetch(API_FIRMWARE_LATEST, { cache: 'no-cache' });
-        const data = await response.json().catch(() => ({}));
-
-        if (!response.ok || !data.success) {
-            if (availabilityEl) availabilityEl.textContent = 'Check failed';
-            showMessage(data.message || 'Failed to check latest firmware', 'error');
-            if (updateBtn) updateBtn.disabled = true;
-            return;
-        }
-
-        if (latestEl) latestEl.textContent = data.latest_version || '-.-.-';
-
-        if (data.update_available) {
-            if (availabilityEl) availabilityEl.textContent = 'Update available';
-            if (updateBtn) updateBtn.disabled = false;
-        } else {
-            if (availabilityEl) availabilityEl.textContent = 'Up to date';
-            if (updateBtn) updateBtn.disabled = true;
-        }
-    } catch (error) {
-        if (availabilityEl) availabilityEl.textContent = 'Check failed';
-        showMessage('Error checking latest firmware: ' + error.message, 'error');
-        if (updateBtn) updateBtn.disabled = true;
-    }
-}
-
-async function startGitHubFirmwareUpdate() {
-    const updateBtn = document.getElementById('github-update-btn');
-
-    if (!confirm('Download and install the latest stable firmware from GitHub Releases?')) {
-        return;
-    }
-
-    if (updateBtn) updateBtn.disabled = true;
-
-    showRebootDialog({
-        title: 'Firmware Update',
-        message: 'Downloading firmware...',
-        context: 'ota',
-        showProgress: true
-    });
-
-    const overlay = document.getElementById('reboot-overlay');
-    const message = document.getElementById('reboot-message');
-    const progressFill = document.getElementById('reboot-progress-fill');
-    const progressText = document.getElementById('reboot-progress-text');
-    const progressContainer = document.getElementById('reboot-progress-container');
-    const reconnectStatus = document.getElementById('reconnect-status');
-
-    try {
-        const startResp = await fetch(API_FIRMWARE_UPDATE, { method: 'POST' });
-        const startData = await startResp.json().catch(() => ({}));
-
-        if (!startResp.ok || !startData.success) {
-            throw new Error(startData.message || 'Failed to start update');
-        }
-
-        // If device reports up-to-date, stop.
-        if (startData.update_started === false) {
-            message.textContent = startData.message || 'Already up to date';
-            progressContainer.style.display = 'none';
-            setTimeout(() => { overlay.style.display = 'none'; }, 2000);
-            return;
-        }
-
-        message.textContent = 'Downloading firmware...';
-
-        // Poll status until reboot.
-        const poll = async () => {
-            try {
-                const statusResp = await fetch(API_FIRMWARE_UPDATE_STATUS, { cache: 'no-cache' });
-                const status = await statusResp.json().catch(() => ({}));
-
-                if (status.state === 'error') {
-                    throw new Error(status.error || 'Update failed');
-                }
-
-                const total = status.total || 0;
-                const progress = status.progress || 0;
-
-                if (total > 0) {
-                    const percent = Math.min(100, Math.round((progress / total) * 100));
-                    progressFill.style.width = percent + '%';
-                    progressText.textContent = percent + '%';
-                } else {
-                    // Unknown total; show an indeterminate-ish UI.
-                    progressText.textContent = '…';
-                }
-
-                if (status.state === 'writing') {
-                    message.textContent = 'Installing firmware...';
-                }
-
-                if (status.state === 'rebooting' || (total > 0 && progress >= total && progress > 0)) {
-                    message.textContent = 'Rebooting...';
-                    // Switch to reconnection behavior
-                    progressContainer.style.display = 'none';
-                    document.getElementById('reboot-spinner').style.display = 'block';
-                    reconnectStatus.style.display = 'block';
-                    document.getElementById('reboot-submessage').innerHTML =
-                        `Attempting automatic reconnection...<br><small style="color: #888; margin-top: 8px; display: block;">If this fails, manually navigate to: <code style="color: #667eea; font-weight: 600;">${window.location.origin}</code></small>`;
-
-                    startReconnection({
-                        context: 'ota',
-                        newDeviceName: null,
-                        statusElement: reconnectStatus,
-                        messageElement: message
-                    });
-                    return;
-                }
-
-                setTimeout(poll, 750);
-            } catch (e) {
-                // If polling fails after we've started, the device may already be rebooting.
-                console.debug('Update status polling error:', e.message);
-
-                message.textContent = 'Rebooting...';
-                progressContainer.style.display = 'none';
-                document.getElementById('reboot-spinner').style.display = 'block';
-                reconnectStatus.style.display = 'block';
-                startReconnection({
-                    context: 'ota',
-                    newDeviceName: null,
-                    statusElement: reconnectStatus,
-                    messageElement: message
-                });
-            }
-        };
-
-        poll();
-    } catch (error) {
-        message.textContent = 'Update failed: ' + error.message;
-        progressContainer.style.display = 'none';
-        setTimeout(() => { overlay.style.display = 'none'; }, 3500);
-        showMessage('Online update failed: ' + error.message, 'error');
-    } finally {
-        // updateBtn stays disabled until next check.
-    }
 }
 
 /**
@@ -1346,11 +1181,7 @@ document.addEventListener('DOMContentLoaded', () => {
         uploadBtn.addEventListener('click', uploadFirmware);
     }
 
-    // Firmware page: GitHub online update controls
-    const githubUpdateBtn = document.getElementById('github-update-btn');
-    if (githubUpdateBtn) {
-        githubUpdateBtn.addEventListener('click', startGitHubFirmwareUpdate);
-    }
+    // Firmware page: GitHub Pages link is populated in updateOnlineUpdateSection()
     
     const deviceName = document.getElementById('device_name');
     if (deviceName) {
