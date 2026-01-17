@@ -2,11 +2,11 @@
 
 #include <ESPAsyncWebServer.h>
 
-// GitHub Pages base URL (with repo path) for outbound links.
-const char* web_portal_pages_base_url();
-
 // Origin used for CORS allowlist (scheme + host).
 const char* web_portal_cors_origin();
+
+// Attach CORS headers as default headers (global).
+void web_portal_add_default_cors_headers();
 
 // Attach CORS headers to a response.
 void web_portal_add_cors_headers(AsyncWebServerResponse* response);

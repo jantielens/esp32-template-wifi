@@ -509,16 +509,12 @@ function updateOnlineUpdateSection(info) {
 
     const linkEl = document.getElementById('github-pages-link');
     const deviceEl = document.getElementById('github-pages-device');
-    const boardEl = document.getElementById('github-pages-board');
-
     const hasInfo = !!info;
     const owner = hasInfo ? (info.github_owner || '') : '';
     const repo = hasInfo ? (info.github_repo || '') : '';
-    const board = hasInfo ? (info.board_name || '') : '';
     const deviceBase = window.location.origin;
 
     if (deviceEl) deviceEl.textContent = deviceBase;
-    if (boardEl) boardEl.textContent = board || 'unknown';
 
     if (!owner || !repo) {
         if (linkEl) {
@@ -532,7 +528,6 @@ function updateOnlineUpdateSection(info) {
     const pagesBase = `https://${owner}.github.io/${repo}/`;
     const params = new URLSearchParams();
     params.set('device', deviceBase);
-    if (board) params.set('board', board);
 
     const pagesUrl = `${pagesBase}?${params.toString()}`;
 

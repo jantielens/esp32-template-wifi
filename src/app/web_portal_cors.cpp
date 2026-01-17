@@ -4,14 +4,13 @@
 
 #include <Arduino.h>
 
-static String g_pages_base_url;
 static String g_cors_origin;
 
 // CORS is restricted to the GitHub Pages origin.
 static constexpr bool kAllowAllOrigins = false;
 
 static void ensure_urls() {
-    if (g_pages_base_url.length() > 0 || g_cors_origin.length() > 0) {
+    if (g_cors_origin.length() > 0) {
         return;
     }
 
@@ -19,19 +18,26 @@ static void ensure_urls() {
         return;
     }
 
-    g_pages_base_url = String("https://") + REPO_OWNER + ".github.io/" + REPO_NAME;
     g_cors_origin = String("https://") + REPO_OWNER + ".github.io";
-}
-
-const char* web_portal_pages_base_url() {
-    ensure_urls();
-    return g_pages_base_url.c_str();
 }
 
 const char* web_portal_cors_origin() {
     ensure_urls();
     if (kAllowAllOrigins) return "*";
     return g_cors_origin.c_str();
+}
+
+static constexpr const char kCorsAllowHeaders[] = "Authorization, Content-Type";
+static constexpr const char kCorsAllowMethods[] = "GET,POST,PUT,DELETE,OPTIONS";
+
+void web_portal_add_default_cors_headers() {
+    const char* origin = web_portal_cors_origin();
+    if (!origin || strlen(origin) == 0) return;
+
+    DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", origin);
+    DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", kCorsAllowHeaders);
+    DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", kCorsAllowMethods);
+    DefaultHeaders::Instance().addHeader("Vary", "Origin");
 }
 
 void web_portal_add_cors_headers(AsyncWebServerResponse* response) {
@@ -41,8 +47,8 @@ void web_portal_add_cors_headers(AsyncWebServerResponse* response) {
     if (!origin || strlen(origin) == 0) return;
 
     response->addHeader("Access-Control-Allow-Origin", origin);
-    response->addHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
-    response->addHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+    response->addHeader("Access-Control-Allow-Headers", kCorsAllowHeaders);
+    response->addHeader("Access-Control-Allow-Methods", kCorsAllowMethods);
     response->addHeader("Vary", "Origin");
 }
 

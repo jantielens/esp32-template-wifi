@@ -116,13 +116,7 @@ void web_portal_init(DeviceConfig *config) {
     }
 
     // CORS default headers for GitHub Pages (if repo slug is available).
-    const char* cors_origin = web_portal_cors_origin();
-    if (cors_origin && cors_origin[0]) {
-        DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", cors_origin);
-        DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
-        DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-        DefaultHeaders::Instance().addHeader("Vary", "Origin");
-    }
+    web_portal_add_default_cors_headers();
 
     // Routes (factored out for maintainability)
     web_portal_register_routes(server);

@@ -242,7 +242,7 @@ Real-time device health monitoring integrated as a header badge with expandable 
 
 **Sections:**
 - **🌐 Online Update (GitHub Pages)**: Opens the GitHub Pages updater in a new tab and passes the device URL via querystring.
-  - The Pages site reads `device` (and optional `board`) and calls the device API to start the update.
+  - The Pages site reads `device` and calls the device API to start the update.
   - Repo owner/name comes from build-time git remote detection (auto-generated into `src/app/repo_slug_config.h`).
 - **📦 Manual Update (Upload)**: Upload .bin firmware file
   - Select .bin file from build directory
