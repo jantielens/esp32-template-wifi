@@ -25,12 +25,31 @@ static TaskHandle_t firmware_update_task_handle = nullptr;
 static volatile bool firmware_update_in_progress = false;
 static volatile size_t firmware_update_progress = 0;
 static volatile size_t firmware_update_total = 0;
+static volatile uint32_t firmware_update_last_progress_ms = 0;
 
 static char firmware_update_state[16] = "idle"; // idle|downloading|writing|rebooting|error
 static char firmware_update_error[192] = "";
 static char firmware_update_target_version[24] = "";
 static char firmware_update_download_url[512] = "";
 static size_t firmware_update_expected_size = 0;
+
+static portMUX_TYPE g_fw_progress_mux = portMUX_INITIALIZER_UNLOCKED;
+
+static inline void firmware_update_set_progress(size_t progress, size_t total) {
+    portENTER_CRITICAL(&g_fw_progress_mux);
+    firmware_update_progress = progress;
+    firmware_update_total = total;
+    firmware_update_last_progress_ms = millis();
+    portEXIT_CRITICAL(&g_fw_progress_mux);
+}
+
+static inline void firmware_update_get_progress(size_t &progress, size_t &total, uint32_t &last_ms) {
+    portENTER_CRITICAL(&g_fw_progress_mux);
+    progress = firmware_update_progress;
+    total = firmware_update_total;
+    last_ms = firmware_update_last_progress_ms;
+    portEXIT_CRITICAL(&g_fw_progress_mux);
+}
 
 // POST /api/firmware/update body accumulator (chunk-safe)
 static portMUX_TYPE g_fw_post_mux = portMUX_INITIALIZER_UNLOCKED;
@@ -70,7 +89,7 @@ static bool starts_with(const char* s, const char* prefix) {
 static void firmware_update_task(void *pv) {
     (void)pv;
 
-    firmware_update_progress = 0;
+    firmware_update_set_progress(0, firmware_update_total);
     strlcpy(firmware_update_state, "downloading", sizeof(firmware_update_state));
     firmware_update_error[0] = '\0';
 
@@ -83,38 +102,50 @@ static void firmware_update_task(void *pv) {
     HTTPClient http;
     http.setTimeout(30000);
 
+    WiFiClientSecure tls_client;
+    WiFiClient plain_client;
+
     if (is_https) {
-        WiFiClientSecure client;
-        client.setInsecure();
-        client.setTimeout(30000);
-        if (!http.begin(client, url)) {
-            strlcpy(firmware_update_state, "error", sizeof(firmware_update_state));
-            strlcpy(firmware_update_error, "Failed to start download", sizeof(firmware_update_error));
-            LOGE("OTA", "Download start failed");
-            firmware_update_in_progress = false;
-            web_portal_set_ota_in_progress(false);
-            vTaskDelete(nullptr);
-            return;
-        }
+        tls_client.setInsecure();
+        tls_client.setTimeout(30000);
     } else {
-        WiFiClient client;
-        client.setTimeout(30000);
-        if (!http.begin(client, url)) {
-            strlcpy(firmware_update_state, "error", sizeof(firmware_update_state));
-            strlcpy(firmware_update_error, "Failed to start download", sizeof(firmware_update_error));
-            LOGE("OTA", "Download start failed");
-            firmware_update_in_progress = false;
-            web_portal_set_ota_in_progress(false);
-            vTaskDelete(nullptr);
-            return;
+        plain_client.setTimeout(30000);
+    }
+
+    int http_code = 0;
+    constexpr int kMaxAttempts = 3;
+    for (int attempt = 1; attempt <= kMaxAttempts; ++attempt) {
+        http.end();
+        http.setReuse(false);
+        http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+
+        const bool began = is_https ? http.begin(tls_client, url) : http.begin(plain_client, url);
+        if (!began) {
+            LOGE("OTA", "Download start failed attempt %d/%d", attempt, kMaxAttempts);
+            LOGE("OTA", "WiFi status=%d RSSI=%d", (int)WiFi.status(), (int)WiFi.RSSI());
+            if (attempt < kMaxAttempts) {
+                delay(250 * attempt);
+            }
+            continue;
+        }
+
+        http_code = http.GET();
+        if (http_code == 200) {
+            break;
+        }
+
+        const String error_str = http.errorToString(http_code);
+        LOGE("OTA", "Download HTTP %d (%s) attempt %d/%d", http_code, error_str.c_str(), attempt, kMaxAttempts);
+        LOGE("OTA", "WiFi status=%d RSSI=%d", (int)WiFi.status(), (int)WiFi.RSSI());
+
+        if (attempt < kMaxAttempts) {
+            delay(250 * attempt);
         }
     }
 
-    const int http_code = http.GET();
     if (http_code != 200) {
         strlcpy(firmware_update_state, "error", sizeof(firmware_update_state));
         snprintf(firmware_update_error, sizeof(firmware_update_error), "Download HTTP %d", http_code);
-        LOGE("OTA", "Download HTTP %d", http_code);
         http.end();
         firmware_update_in_progress = false;
         web_portal_set_ota_in_progress(false);
@@ -131,6 +162,7 @@ static void firmware_update_task(void *pv) {
         http_len = (int)total;
     }
     firmware_update_total = total;
+    firmware_update_set_progress(firmware_update_progress, firmware_update_total);
 
     LOGI("OTA", "Download started total=%u", (unsigned)total);
 
@@ -188,10 +220,14 @@ static void firmware_update_task(void *pv) {
             return;
         }
 
-        firmware_update_progress += written;
+        const size_t new_progress = firmware_update_progress + written;
+        firmware_update_set_progress(new_progress, firmware_update_total);
         if (http_len > 0) {
             http_len -= (int)read_bytes;
         }
+
+        // Yield to keep the AsyncTCP task responsive for status polling.
+        delay(1);
     }
 
     http.end();
@@ -359,6 +395,8 @@ void handlePostFirmwareUpdate(AsyncWebServerRequest *request, uint8_t *data, siz
     firmware_update_in_progress = true;
     firmware_update_progress = 0;
     firmware_update_total = size;
+    firmware_update_last_progress_ms = millis();
+    firmware_update_set_progress(0, size);
     firmware_update_expected_size = size;
     strlcpy(firmware_update_target_version, version, sizeof(firmware_update_target_version));
     strlcpy(firmware_update_download_url, url, sizeof(firmware_update_download_url));
@@ -407,14 +445,19 @@ void handlePostFirmwareUpdate(AsyncWebServerRequest *request, uint8_t *data, siz
 void handleGetFirmwareUpdateStatus(AsyncWebServerRequest *request) {
     if (!portal_auth_gate(request)) return;
 
-    std::shared_ptr<BasicJsonDocument<PsramJsonAllocator>> doc = make_psram_json_doc(512);
+    std::shared_ptr<BasicJsonDocument<PsramJsonAllocator>> doc = make_psram_json_doc(640);
     if (doc && doc->capacity() > 0) {
+        size_t progress = 0;
+        size_t total = 0;
+        uint32_t last_ms = 0;
+        firmware_update_get_progress(progress, total, last_ms);
         (*doc)["in_progress"] = firmware_update_in_progress;
         (*doc)["state"] = firmware_update_state;
-        (*doc)["progress"] = (uint32_t)firmware_update_progress;
-        (*doc)["total"] = (uint32_t)firmware_update_total;
+        (*doc)["progress"] = (uint32_t)progress;
+        (*doc)["total"] = (uint32_t)total;
         (*doc)["version"] = firmware_update_target_version;
         (*doc)["error"] = firmware_update_error;
+        (*doc)["last_progress_ms"] = last_ms;
     }
 
     web_portal_send_json_chunked(request, doc);
