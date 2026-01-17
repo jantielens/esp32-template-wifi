@@ -12,7 +12,7 @@ OUT_DIR="${1:-$REPO_ROOT/site}"
 
 # Only deploy “latest” (site output is overwritten each deploy)
 rm -rf "$OUT_DIR"
-mkdir -p "$OUT_DIR/manifests" "$OUT_DIR/firmware"
+mkdir -p "$OUT_DIR/manifests" "$OUT_DIR/firmware" "$OUT_DIR/ota"
 
 # Prevent GitHub Pages from invoking Jekyll processing
 : > "$OUT_DIR/.nojekyll"
@@ -169,6 +169,31 @@ if [[ -n "${GITHUB_SERVER_URL:-}" && -n "${GITHUB_REPOSITORY:-}" ]]; then
   fi
 fi
 
+repo_owner=""
+repo_name=""
+
+if [[ -n "${GITHUB_REPOSITORY:-}" ]]; then
+  repo_owner="${GITHUB_REPOSITORY%%/*}"
+  repo_name="${GITHUB_REPOSITORY##*/}"
+else
+  origin_url=""
+  if command -v git >/dev/null 2>&1; then
+    origin_url=$(git -C "$REPO_ROOT" config --get remote.origin.url 2>/dev/null || true)
+  fi
+  if [[ -n "$origin_url" ]]; then
+    if [[ "$origin_url" =~ github\.com[:/]+([^/]+)/([^/]+)$ ]]; then
+      repo_owner="${BASH_REMATCH[1]}"
+      repo_name="${BASH_REMATCH[2]}"
+      repo_name="${repo_name%.git}"
+    fi
+  fi
+fi
+
+pages_base_url=""
+if [[ -n "$repo_owner" && -n "$repo_name" ]]; then
+  pages_base_url="https://${repo_owner}.github.io/${repo_name}"
+fi
+
 if [[ -n "${RELEASE_NOTES_PATH:-}" && -f "$RELEASE_NOTES_PATH" ]]; then
   cp "$RELEASE_NOTES_PATH" "$OUT_DIR/release-notes.md"
 else
@@ -294,6 +319,23 @@ for board_name in "${boards[@]}"; do
 }
 EOF
 
+  ota_manifest_path="$OUT_DIR/ota/$board_name.json"
+  app_size_bytes=$(stat -c%s "$app_bin")
+  app_sha256=$(sha256sum "$app_bin" | awk '{print $1}')
+  ota_url=""
+  if [[ -n "$pages_base_url" ]]; then
+    ota_url="$pages_base_url/firmware/${board_name}/app.bin"
+  fi
+
+  cat > "$ota_manifest_path" <<EOF
+{
+  "version": "${DISPLAY_VERSION}",
+  "url": "${ota_url}",
+  "sha256": "${app_sha256}",
+  "size": ${app_size_bytes}
+}
+EOF
+
   cat >> "$board_fragment_tmp" <<EOF
           <div class="board" data-board="${board_name}" data-chip="${chip_family}">
             <div>
@@ -302,6 +344,7 @@ EOF
               <div class="board-links">
                 <a href="./manifests/${board_name}.json">manifest</a>
                 <a href="./firmware/${board_name}/app.bin">app</a>
+                <a href="./ota/${board_name}.json">ota</a>
               </div>
             </div>
             <div>
@@ -320,3 +363,4 @@ render_index "$TEMPLATE_DIR/index.template.html" "$OUT_DIR/index.html" "$board_f
 echo "Built ESP Web Tools site at: $OUT_DIR" >&2
 echo "Manifests: $OUT_DIR/manifests" >&2
 echo "Firmware:  $OUT_DIR/firmware" >&2
+echo "OTA:       $OUT_DIR/ota" >&2

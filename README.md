@@ -29,7 +29,7 @@ Skip the boilerplate and start building. ESP32 Arduino template with automated b
 - **🌍 Web Firmware Installer**
   - **Browser Flashing**: GitHub Pages + ESP Web Tools (no backend required)
   - **Release-Driven Deploy**: Hosted installer updates on stable releases (see [Web Firmware Installer](#web-firmware-installer-esp-web-tools))
-  - **Device-Side Online Update**: Firmware page can download/install the latest stable release directly from GitHub Releases (board-specific app-only `.bin`, no browser download/CORS; requires build-time detection of `remote.origin.url`)
+  - **Device-Side Online Update**: Firmware page links to the GitHub Pages updater, which calls the device API with the selected OTA manifest
 
 - **⚙️ Professional Development Workflow**
   - **Automated Releases**: Tag-based releases with firmware binaries and changelogs
@@ -198,7 +198,7 @@ The template includes a full-featured web portal with multi-page architecture fo
 - Access at device IP or mDNS hostname
 - All three pages accessible
 - Real-time health monitoring
-- Manual firmware upload + optional GitHub online updates
+- Manual firmware upload + GitHub Pages online updates
 
 ### Security (Optional Basic Auth)
 
@@ -245,7 +245,7 @@ git merge template/main
 git rm --cached \
   src/app/web_assets.h \
   src/app/project_branding.h \
-  src/app/github_release_config.h \
+  src/app/repo_slug_config.h \
   src/app/png_assets.cpp \
   src/app/png_assets.h
 ```
@@ -289,8 +289,7 @@ Build-time gating:
 | DELETE | `/api/config` | Reset to defaults (triggers reboot) |
 | GET | `/api/mode` | Portal mode (core vs full) |
 | POST | `/api/update` | OTA firmware upload |
-| GET | `/api/firmware/latest` | Check latest stable firmware from GitHub Releases (device-side) |
-| POST | `/api/firmware/update` | Start GitHub Releases download+install (device-side) |
+| POST | `/api/firmware/update` | Start OTA download+install from a provided URL (GitHub Pages manifest) |
 | GET | `/api/firmware/update/status` | Online update status/progress |
 | POST | `/api/reboot` | Reboot device without saving |
 | PUT | `/api/display/brightness` | Set backlight brightness immediately (no persist) |
@@ -538,7 +537,7 @@ After the run finishes, the installer will be available at:
 - This avoids accidentally overwriting NVS on custom partition layouts.
 - Boards with names containing `beta` or `experimental` are excluded from the hosted installer list.
 
-Separately from the browser installer, the device web portal also supports a **device-side online update** (Firmware page → “Online Update (GitHub)”). That flow downloads the board-specific **app-only** release asset (`$PROJECT_NAME-<board>-vX.Y.Z.bin`) directly from GitHub Releases and installs it on the device.
+Separately from the browser installer, the device web portal links to the **GitHub Pages OTA updater** (Firmware page → “Online Update (GitHub Pages)”). The updater reads `ota/<board>.json` from Pages and calls the device API with the firmware URL.
 
 ## 🚀 Release Process
 

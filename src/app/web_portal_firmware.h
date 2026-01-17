@@ -3,8 +3,7 @@
 
 #include <ESPAsyncWebServer.h>
 
-void handleGetFirmwareLatest(AsyncWebServerRequest *request);
-void handlePostFirmwareUpdate(AsyncWebServerRequest *request);
+void handlePostFirmwareUpdate(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total);
 void handleGetFirmwareUpdateStatus(AsyncWebServerRequest *request);
 
 // Internal status used to gate concurrent OTA flows.

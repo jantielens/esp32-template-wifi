@@ -90,8 +90,8 @@ The build system automatically applies project branding during compilation:
 2. (Optional) If `assets/png/*.png` exists and you are building a display-enabled board, `build.sh` generates LVGL image assets into `src/app/png_assets.cpp` and `src/app/png_assets.h`
 3. `tools/minify-web-assets.sh` performs template substitution in HTML files
 4. Branding C++ `#define` statements are generated in `src/app/project_branding.h` (and `web_assets.h` includes it)
-5. If the repo was built from a GitHub checkout with a detectable `remote.origin.url`, GitHub update config is generated into `src/app/github_release_config.h` (used for device-side “Online Update (GitHub)”)
-6. `build.sh` also embeds the board name as a compile-time string define (`BUILD_BOARD_NAME`) so the firmware can select the correct per-board release asset
+5. If the repo was built from a GitHub checkout with a detectable `remote.origin.url`, the repo slug is generated into `src/app/repo_slug_config.h` (used to construct GitHub Pages links)
+6. `build.sh` also embeds the board name as a compile-time string define (`BUILD_BOARD_NAME`) so the portal can report the active board
 7. Firmware compiles with branded values embedded
 
 ### Board-Specific Configuration

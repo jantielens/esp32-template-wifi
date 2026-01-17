@@ -24,16 +24,44 @@
 
     <main class="container">
       <section class="panel">
-        <div class="panel-title">Before you flash</div>
+        <div class="panel-title">Two ways to update firmware</div>
         <ul class="panel-list">
-          <li>Use a data-capable USB cable; some “charge-only” cables won’t work.</li>
-          <li>Close other serial monitors (Arduino IDE, PlatformIO, `monitor.sh`).</li>
-          <li>If flashing fails, try a different USB port and reconnect the board.</li>
+          <li><strong>Device Update (Wi‑Fi)</strong>: Use this when the device is already on your network and you want to update it over the air.</li>
+          <li><strong>USB Flash (WebSerial)</strong>: Use this when the device is connected via USB (first-time flashes or recovery).</li>
         </ul>
       </section>
 
+      <section class="panel panel-ota" id="ota-panel">
+        <div class="panel-title">Device Update (Wi-Fi)</div>
+        <div class="panel-sub">
+          This flow updates a device with an older firmware, that is already on your network.
+        </div>
+        <div class="form-grid">
+          <div class="field">
+            <label for="deviceBase">Device URL</label>
+            <input id="deviceBase" type="url" placeholder="http://192.168.1.50" autocomplete="off" />
+            <small>Enter the device base URL (IP or mDNS). Example: http://esp32.local</small>
+          </div>
+          <div class="field">
+            <label for="authUsername">Basic Auth Username (required if your device has authentication enabled)</label>
+            <input id="authUsername" type="text" autocomplete="username" />
+          </div>
+          <div class="field">
+            <label for="authPassword">Basic Auth Password (required if your device has authentication enabled)</label>
+            <input id="authPassword" type="password" autocomplete="current-password" />
+          </div>
+        </div>
+        <div class="ota-actions">
+          <button id="ota-update-btn" class="ota-btn" type="button">Update device</button>
+        </div>
+        <div id="ota-status" class="status">Ready.</div>
+      </section>
+
+      <div class="panel-sep" role="separator" aria-hidden="true"></div>
+
       <section class="panel">
-        <div class="panel-title">Select your board</div>
+        <div class="panel-title">USB Flash (WebSerial)</div>
+        <div class="panel-sub">Use this flow when the device is connected via USB.</div>
         <div class="toolbar">
           <input id="boardFilter" class="filter" type="search" placeholder="Filter boards…" autocomplete="off" />
           <div id="boardCount" class="count"></div>

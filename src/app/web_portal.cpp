@@ -16,13 +16,13 @@
 #include "log_manager.h"
 #include "board_config.h"
 #include "device_telemetry.h"
-#include "github_release_config.h"
 #include "project_branding.h"
 #include "../version.h"
 #include "psram_json_allocator.h"
 #include "web_portal_routes.h"
 #include "web_portal_auth.h"
 #include "web_portal_config.h"
+#include "web_portal_cors.h"
 #include "web_portal_state.h"
 #include "web_portal_firmware.h"
 #include "web_portal_ap.h"
@@ -113,6 +113,15 @@ void web_portal_init(DeviceConfig *config) {
         
         yield();
         delay(100);
+    }
+
+    // CORS default headers for GitHub Pages (if repo slug is available).
+    const char* cors_origin = web_portal_cors_origin();
+    if (cors_origin && cors_origin[0]) {
+        DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", cors_origin);
+        DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
+        DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+        DefaultHeaders::Instance().addHeader("Vary", "Origin");
     }
 
     // Routes (factored out for maintainability)

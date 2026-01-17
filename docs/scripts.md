@@ -69,7 +69,7 @@ BOARD_PROFILE=psram ./build.sh esp32-nodisplay  # Optional build profile (if def
 **What it does:**
 - Optionally generates LVGL PNG assets from `assets/png/*.png` into `src/app/png_assets.cpp` + `src/app/png_assets.h` (only when building for at least one display-enabled board)
 - Generates minified web assets (once for all builds)
-  - Also generates `src/app/github_release_config.h` when `git remote origin` points at a GitHub repo (enables device-side “Online Update (GitHub)”)
+  - Also generates `src/app/repo_slug_config.h` when `git remote origin` points at a GitHub repo (used to construct GitHub Pages links)
 - Prints a per-board "Compile-time flags summary" (active `HAS_*` features + key selectors) to make it clear what the build will include
 - Compiles `src/app/app.ino` for specified board(s)
 - Creates board-specific directories: `./build/esp32-nodisplay/`, `./build/esp32c3-waveshare-169-st7789v2/`, etc.

@@ -5,7 +5,7 @@
 
 #include "board_config.h"
 #include "device_telemetry.h"
-#include "github_release_config.h"
+#include "repo_slug_config.h"
 #include "log_manager.h"
 #include "psram_json_allocator.h"
 #include "project_branding.h"
@@ -77,7 +77,7 @@ void handleGetVersion(AsyncWebServerRequest *request) {
     response->print("\",\"project_display_name\":\"");
     response->print(PROJECT_DISPLAY_NAME);
 
-    // Build metadata for GitHub-based updates
+    // Build metadata for GitHub Pages-based updates
     response->print("\",\"board_name\":\"");
     #ifdef BUILD_BOARD_NAME
         response->print(BUILD_BOARD_NAME);
@@ -110,15 +110,11 @@ void handleGetVersion(AsyncWebServerRequest *request) {
         response->print(",\"health_history_samples\":0");
     #endif
 
-    response->print(",\"github_updates_enabled\":");
-    response->print(GITHUB_UPDATES_ENABLED ? "true" : "false");
-    #if GITHUB_UPDATES_ENABLED
-        response->print(",\"github_owner\":\"");
-        response->print(GITHUB_OWNER);
-        response->print("\",\"github_repo\":\"");
-        response->print(GITHUB_REPO);
-        response->print("\"");
-    #endif
+    response->print(",\"github_owner\":\"");
+    response->print(REPO_OWNER);
+    response->print("\",\"github_repo\":\"");
+    response->print(REPO_NAME);
+    response->print("\"");
 
     response->print(",\"has_mqtt\":");
     response->print(HAS_MQTT ? "true" : "false");
