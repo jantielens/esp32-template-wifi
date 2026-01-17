@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.40] - 2026-01-17
+
+### Added
+- GitHub Pages OTA manifests (`site/ota/<board>.json`) with size + sha256 metadata
+- GitHub Pages updater flow that detects device board via `/api/info` and triggers OTA
+- Wi-Fi update UX separation in the installer (dedicated device update panel)
+- CORS handling for OTA API endpoints (restricted to GitHub Pages origin)
+
+### Changed
+- Firmware page now links to the GitHub Pages updater (replaces GitHub Releases OTA UI)
+- OTA update API now accepts a direct firmware URL payload
+- Repo slug header generated for GitHub Pages URL construction
+
 ## [0.0.39] - 2026-01-16
 
 ### Changed
