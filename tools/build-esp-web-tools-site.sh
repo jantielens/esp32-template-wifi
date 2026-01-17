@@ -358,6 +358,8 @@ done
 # Copy static assets and render index.html from template
 cp "$TEMPLATE_DIR/style.css" "$OUT_DIR/style.css"
 cp "$TEMPLATE_DIR/app.js" "$OUT_DIR/app.js"
+cp "$TEMPLATE_DIR/dashboard.html" "$OUT_DIR/dashboard.html"
+cp "$TEMPLATE_DIR/dashboard.js" "$OUT_DIR/dashboard.js"
 render_index "$TEMPLATE_DIR/index.template.html" "$OUT_DIR/index.html" "$board_fragment_tmp"
 
 echo "Built ESP Web Tools site at: $OUT_DIR" >&2
