@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.41] - 2026-01-17
+
+### Added
+- OTA download retry with fresh connections plus richer failure logging (HTTP error string, WiFi status/RSSI)
+
 ## [0.0.40] - 2026-01-17
 
 ### Added
