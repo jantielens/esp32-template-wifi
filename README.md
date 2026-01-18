@@ -1,5 +1,7 @@
 # ESP32 Development Template
 
+[![Deploy Release to Installer Site (Github Pages)](https://github.com/jantielens/esp32-template-wifi/actions/workflows/pages-from-release.yml/badge.svg)](https://github.com/jantielens/esp32-template-wifi/actions/workflows/pages-from-release.yml)
+
 Skip the boilerplate and start building. ESP32 Arduino template with automated builds, captive portal WiFi setup, OTA updates, and flexible multi-board build system. Add new board variants in seconds with a simple config change, customize board-specific code when needed. Same build system powers local development and GitHub Actions workflows for CI/CD and releases.
 
 ## ✨ Features
