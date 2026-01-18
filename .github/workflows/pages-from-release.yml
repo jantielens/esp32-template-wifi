@@ -1,4 +1,4 @@
-name: Deploy firmware installer (Pages)
+name: Deploy Release to Installer Site (Github Pages)
 
 on:
   release:
