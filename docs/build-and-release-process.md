@@ -793,6 +793,8 @@ Follow [Semantic Versioning](https://semver.org/):
 
 **Purpose**: Deploy a static ESP Web Tools installer to GitHub Pages without rebuilding firmware.
 
+**Note**: If GitHub Pages is not configured for the repository, the workflow will skip Pages configuration/upload/deploy steps and log a clear notice in the summary.
+
 **Process**:
 1. Download app + multi-part assets from the release
 2. Rehydrate `build/<board>/` with app/bootloader/partitions/boot_app0 binaries
