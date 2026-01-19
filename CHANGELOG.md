@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.43] - 2026-01-19
+
+### Changed
+- Compile-time flags report now honors config.project.sh and fails fast when it exists but defines no boards
+- build.sh now checks and updates docs/compile-time-flags.md during builds and reports whether it changed
+
 ## [0.0.42] - 2026-01-17
 
 ### Added
