@@ -147,6 +147,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
 | esp32c3-waveshare-169-st7789v2 | ✅ | ✅ | ✅ | ✅ | ✅ |  |
 | jc3248w535 | ✅ |  | ✅ | ✅ | ✅ | ✅ |
 | jc3636w518 | ✅ |  | ✅ | ✅ | ✅ | ✅ |
+| esp32c3 |  |  |  |  | ✅ |  |
 <!-- END COMPILE_FLAG_REPORT:MATRIX_FEATURES -->
 
 ## Board Matrix: Selectors (generated)
@@ -159,6 +160,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
 | esp32c3-waveshare-169-st7789v2 | DISPLAY_DRIVER_ST7789V2 | — |
 | jc3248w535 | DISPLAY_DRIVER_ARDUINO_GFX | TOUCH_DRIVER_AXS15231B |
 | jc3636w518 | DISPLAY_DRIVER_ESP_PANEL | TOUCH_DRIVER_CST816S_ESP_PANEL |
+| esp32c3 | — | — |
 <!-- END COMPILE_FLAG_REPORT:MATRIX_SELECTORS -->
 
 ## Usage Map (preprocessor only, generated)

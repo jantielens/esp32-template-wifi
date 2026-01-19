@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.42] - 2026-01-17
+
+### Added
+- Device Health Dashboard page for the GitHub Pages installer (Plotly-based live health chart + latest values)
+
 ## [0.0.41] - 2026-01-17
 
 ### Added
