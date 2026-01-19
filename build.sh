@@ -20,6 +20,21 @@ TARGET_BOARD="$1"
 # Optional board profile for build properties (e.g., PSRAM/flash options)
 PROFILE="${BOARD_PROFILE:-${PROFILE:-}}"
 
+COMPILE_FLAGS_DOC="$SCRIPT_DIR/docs/compile-time-flags.md"
+COMPILE_FLAGS_DOC_HASH=""
+if [[ -f "$COMPILE_FLAGS_DOC" ]]; then
+    COMPILE_FLAGS_DOC_HASH=$(python3 - "$COMPILE_FLAGS_DOC" <<'PY'
+import hashlib
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+data = path.read_bytes()
+print(hashlib.sha256(data).hexdigest())
+PY
+    )
+fi
+
 board_has_display() {
     local board_name="$1"
     local overrides_file="$SCRIPT_DIR/src/boards/$board_name/board_overrides.h"
@@ -272,4 +287,28 @@ else
     done
     
     echo -e "${GREEN}=== All Builds Complete ===${NC}"
+fi
+
+# Update compile-time flags documentation and warn if it changed.
+echo "Checking compile-time flags report..."
+python3 "$SCRIPT_DIR/tools/compile_flags_report.py" md --out "docs/compile-time-flags.md"
+
+COMPILE_FLAGS_DOC_HASH_AFTER=""
+if [[ -f "$COMPILE_FLAGS_DOC" ]]; then
+    COMPILE_FLAGS_DOC_HASH_AFTER=$(python3 - "$COMPILE_FLAGS_DOC" <<'PY'
+import hashlib
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+data = path.read_bytes()
+print(hashlib.sha256(data).hexdigest())
+PY
+    )
+fi
+
+if [[ -n "$COMPILE_FLAGS_DOC_HASH" && -n "$COMPILE_FLAGS_DOC_HASH_AFTER" && "$COMPILE_FLAGS_DOC_HASH" != "$COMPILE_FLAGS_DOC_HASH_AFTER" ]]; then
+    echo -e "${YELLOW}⚠ Note: docs/compile-time-flags.md was updated. Please commit the changes.${NC}"
+elif [[ -n "$COMPILE_FLAGS_DOC_HASH" && -n "$COMPILE_FLAGS_DOC_HASH_AFTER" ]]; then
+    echo -e "${GREEN}✓ Compile-time flags report unchanged.${NC}"
 fi

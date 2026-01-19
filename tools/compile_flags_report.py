@@ -57,8 +57,13 @@ def parse_boards_from_config_files(config_sh: Path, config_project_sh: Optional[
     boards = parse_boards_from_config_sh(config_sh)
     if config_project_sh and config_project_sh.exists():
         project_boards = parse_boards_from_config_sh(config_project_sh)
-        if project_boards:
-            return project_boards
+        if not project_boards:
+            raise SystemExit(
+                f"{config_project_sh} exists but no boards were found. "
+                "Ensure it declares FQBN_TARGETS entries like [\"board\"]=\"fqbn\", "
+                "or remove/rename the file."
+            )
+        return project_boards
     return boards
 
 
