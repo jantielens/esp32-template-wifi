@@ -31,9 +31,10 @@ arduino-cli config add board_manager.additional_urls https://raw.githubuserconte
 echo "Updating board index..."
 arduino-cli core update-index
 
-# Install ESP32 board support
-echo "Installing ESP32 board support..."
-arduino-cli core install esp32:esp32
+# Install ESP32 board support (pinned for library compatibility)
+ESP32_CORE_VERSION="3.3.5"
+echo "Installing ESP32 board support (esp32:esp32@${ESP32_CORE_VERSION})..."
+arduino-cli core install "esp32:esp32@${ESP32_CORE_VERSION}"
 
 # Install/register template-provided custom partition schemes.
 #
