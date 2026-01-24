@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Scripts: infer chip family from FQBN board id (explicit esp32* token or small heuristic) for upload/erase
 - Scripts: print resolved chip family during upload for debugging
+- Bump Arduino_GFX (GFX Library for Arduino) to 1.6.4 to fix ESP32 core 3.3.6 SPI API build failures
 
 ### Documentation
 - Documented chip-family inference behavior in scripts guide
@@ -225,7 +226,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Screen saver / burn-in prevention (v1): inactivity-based backlight fade-out and wake fade-in
-- Display control API endpoints: `GET /api/display/sleep`, `POST /api/display/sleep`, `POST /api/display/wake`, `POST /api/display/activity`, `PUT /api/display/brightness`
+- Display control API endpoints: `GET /api/display/sleep`, `POST /api/display/sleep`, `POST /api/display/activity`, `PUT /api/display/brightness`
 
 ### Changed
 - Touch input now resets the screen saver idle timer during normal UI interaction
@@ -236,8 +237,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 - Updated `README.md`, `docs/web-portal.md`, and `docs/display-touch-architecture.md` for screen saver config and APIs
-
-## [0.0.23] - 2025-12-23
 
 ### Changed
 - WiFi station mode disables power-save sleep to improve stability/latency
@@ -710,4 +709,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Security patches
 ```
 
-````
