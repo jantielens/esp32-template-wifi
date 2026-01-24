@@ -22,7 +22,7 @@ This project includes several bash scripts to streamline ESP32 development workf
 ```bash
 declare -A FQBN_TARGETS=(
   ["esp32-nodisplay"]="esp32:esp32:esp32"  # ESP32 Dev Module (no display)
-  ["esp32c3-waveshare-169-st7789v2"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"  # ESP32-C3 + Waveshare 1.69\" ST7789V2
+  ["esp32c3-waveshare-169-st7789v2"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"  # ESP32-C3 + Waveshare 1.69" ST7789V2
   ["esp32c3_ota_1_9mb"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb"  # ESP32-C3 w/ custom partitions
   ["cyd-v2"]="esp32:esp32:esp32"  # CYD v2 (same FQBN, different board_overrides.h)
 )
@@ -61,7 +61,7 @@ declare -A FQBN_TARGETS=(
 ```bash
 ./build.sh              # Build all configured boards
 ./build.sh esp32-nodisplay        # Build only ESP32 Dev Module (no display)
-./build.sh esp32c3-waveshare-169-st7789v2  # Build ESP32-C3 + Waveshare 1.69\" ST7789V2
+./build.sh esp32c3-waveshare-169-st7789v2  # Build ESP32-C3 + Waveshare 1.69" ST7789V2
 ./build.sh esp32c3_ota_1_9mb  # Build ESP32-C3 using custom partitions (example)
 BOARD_PROFILE=psram ./build.sh esp32-nodisplay  # Optional build profile (if defined in config.sh)
 ```
@@ -255,6 +255,7 @@ This script automates both steps.
 **What it does:**
 - Validates board name (required when multiple boards configured)
 - Detects connected ESP32 boards
+- Infers chip family from the FQBN board id (explicit `esp32*` token or a small heuristic) and prints the resolved chip
 - Uploads firmware from board-specific `./build/<board>/` directory to the device
 - Auto-detects serial port if not specified
 
@@ -332,7 +333,7 @@ This script automates both steps.
 
 **What it does:**
 - Validates board name (required when multiple boards configured)
-- Extracts chip type from FQBN for correct esptool invocation
+- Infers chip family from the FQBN board id (explicit `esp32*` token or a small heuristic)
 - Uses esptool.py to completely erase ESP32 flash
 - Prompts for confirmation before erasing
 - Auto-detects serial port if not specified

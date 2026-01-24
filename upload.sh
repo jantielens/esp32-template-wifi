@@ -85,24 +85,6 @@ get_bootloader_offset_for_chip() {
     esac
 }
 
-get_chip_type_from_fqbn() {
-    local fqbn="$1"
-
-    # Extract chip type from the board segment of FQBN (3rd segment).
-    # Examples:
-    #  - esp32:esp32:esp32 -> esp32
-    #  - esp32:esp32:esp32s3 -> esp32s3
-    #  - esp32:esp32:nologo_esp32c3_super_mini -> esp32c3
-    local board_seg
-    board_seg=$(echo "$fqbn" | cut -d':' -f3)
-    local chip
-    chip=$(echo "$board_seg" | grep -oE 'esp32[a-z0-9]*' | head -n 1 || true)
-    if [[ -z "$chip" ]]; then
-        chip="esp32"
-    fi
-    echo "$chip"
-}
-
 default_esptool_baud_for_port() {
     local port="$1"
 
@@ -437,6 +419,7 @@ if [[ -n "$PARTITION_SCHEME" ]]; then
 fi
 
 CHIP_TYPE=$(get_chip_type_from_fqbn "$FQBN")
+echo "Chip:  $CHIP_TYPE"
 ESPTOOL_CMD=""
 if [[ "$MODE" == "full" || "$MODE" == "app-only" || "$MODE" == "merged" || "$ERASE_FLASH" == "true" || "$ERASE_NVS" == "true" ]]; then
     ESPTOOL_CMD=$(find_esptool || true)

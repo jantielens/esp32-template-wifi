@@ -50,7 +50,7 @@ PROJECT_DISPLAY_NAME="ESP32 Template"
 #
 # Examples:
 #   ["esp32-nodisplay"]="esp32:esp32:esp32"                                       # Classic ESP32 dev module (no display)
-#   ["esp32c3-waveshare-169-st7789v2"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"  # ESP32-C3 Super Mini + Waveshare 1.69\" ST7789V2
+#   ["esp32c3-waveshare-169-st7789v2"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"  # ESP32-C3 Super Mini + Waveshare 1.69" ST7789V2
 #   ["esp32c3_ota_1_9mb"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb"    # ESP32-C3 w/ custom partitions (example)
 #   ["esp32c6"]="esp32:esp32:dfrobot_firebeetle2_esp32c6:CDCOnBoot=cdc"           # ESP32-C6 (USB CDC)
 #   ["cyd-v2"]="esp32:esp32:esp32"                                                # CYD display v2 (same FQBN as classic ESP32)
@@ -58,7 +58,7 @@ PROJECT_DISPLAY_NAME="ESP32 Template"
 declare -A FQBN_TARGETS=(
     ["esp32-nodisplay"]="esp32:esp32:esp32" # Classic ESP32 dev module (no display)
     ["cyd-v2"]="esp32:esp32:esp32:PartitionScheme=min_spiffs" # CYD v2 display (ESP32 + display; minimal spiffs)
-    ["esp32c3-waveshare-169-st7789v2"]="esp32:esp32:nologo_esp32c3_super_mini:PartitionScheme=ota_1_9mb,CDCOnBoot=default" # ESP32-C3 Super Mini + Waveshare 1.69\" ST7789V2 (240x280; OTA-friendly partitions)
+    ["esp32c3-waveshare-169-st7789v2"]="esp32:esp32:nologo_esp32c3_super_mini:PartitionScheme=ota_1_9mb,CDCOnBoot=default" # ESP32-C3 Super Mini + Waveshare 1.69" ST7789V2 (240x280; OTA-friendly partitions)
     ["jc3248w535"]="esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB,USBMode=hwcdc,CDCOnBoot=cdc" # ESP32-S3 JC3248W535 (16MB + OPI PSRAM)
     ["jc3636w518"]="esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB,USBMode=hwcdc,CDCOnBoot=cdc" # ESP32-S3 JC3636W518 (16MB + OPI PSRAM)
     ["esp32c3"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb"
@@ -165,6 +165,36 @@ find_serial_port() {
     fi
 
     return 1
+}
+
+# Infer ESP32 chip family from FQBN board segment (3rd segment).
+# Prefer explicit esp32* tokens, otherwise fall back to readable heuristics.
+get_chip_type_from_fqbn() {
+    local fqbn="$1"
+
+    local board_seg
+    board_seg=$(echo "$fqbn" | cut -d':' -f3)
+    if [[ -z "$board_seg" ]]; then
+        echo "esp32"
+        return 0
+    fi
+
+    local chip
+    chip=$(echo "$board_seg" | grep -oE 'esp32[a-z0-9]*' | head -n 1 || true)
+    if [[ -n "$chip" ]]; then
+        echo "$chip"
+        return 0
+    fi
+
+    case "$board_seg" in
+        *s3*) echo "esp32s3" ;;
+        *s2*) echo "esp32s2" ;;
+        *c6*) echo "esp32c6" ;;
+        *c3*) echo "esp32c3" ;;
+        *c2*) echo "esp32c2" ;;
+        *h2*) echo "esp32h2" ;;
+        *) echo "esp32" ;;
+    esac
 }
 
 # Get board name (identity function now - board names are the keys)

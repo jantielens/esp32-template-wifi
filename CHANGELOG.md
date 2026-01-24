@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.44] - 2026-01-24
+
+### Changed
+- Scripts: infer chip family from FQBN board id (explicit esp32* token or small heuristic) for upload/erase
+- Scripts: print resolved chip family during upload for debugging
+
+### Documentation
+- Documented chip-family inference behavior in scripts guide
+
 ## [0.0.43] - 2026-01-19
 
 ### Changed
@@ -700,3 +709,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - Security patches
 ```
+
+````
