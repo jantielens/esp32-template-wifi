@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Scripts: print resolved chip family during upload for debugging
 - Bump Arduino_GFX (GFX Library for Arduino) to 1.6.4 to fix ESP32 core 3.3.6 SPI API build failures
 - Pin ESP32 core to 3.3.5 in setup.sh to avoid Arduino_GFX SPI API incompatibility
+- setup.sh now refreshes the library index and fails fast if any library install fails
 
 ### Documentation
 - Documented chip-family inference behavior in scripts guide
