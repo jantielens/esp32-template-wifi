@@ -31,9 +31,14 @@ arduino-cli config add board_manager.additional_urls https://raw.githubuserconte
 echo "Updating board index..."
 arduino-cli core update-index
 
-# Install ESP32 board support
-echo "Installing ESP32 board support..."
-arduino-cli core install esp32:esp32
+# Update library index
+echo "Updating library index..."
+arduino-cli lib update-index
+
+# Install ESP32 board support (pinned for library compatibility)
+ESP32_CORE_VERSION="3.3.5"
+echo "Installing ESP32 board support (esp32:esp32@${ESP32_CORE_VERSION})..."
+arduino-cli core install "esp32:esp32@${ESP32_CORE_VERSION}"
 
 # Install/register template-provided custom partition schemes.
 #
@@ -64,7 +69,10 @@ if [ -f "$LIBRARIES_FILE" ]; then
         
         if [ -n "$library" ]; then
             echo "  - Installing: $library"
-            arduino-cli lib install "$library" || echo "    Warning: Failed to install $library"
+            if ! arduino-cli lib install "$library"; then
+                echo "Error: Failed to install $library" >&2
+                exit 1
+            fi
         fi
     done < "$LIBRARIES_FILE"
     echo "Library installation complete"

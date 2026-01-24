@@ -87,7 +87,7 @@ void Arduino_GFX_Driver::init() {
     LOGI("GFX", "Display initialized via canvas");
     
     // Clear screen
-    canvas->fillScreen(BLACK);
+    canvas->fillScreen(RGB565_BLACK);
     canvas->flush();
     LOGI("GFX", "Screen cleared");
     
