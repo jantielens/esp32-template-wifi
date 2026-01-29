@@ -110,6 +110,49 @@
 // #endif
 
 // ============================================================================
+// Sensors (Optional)
+// ============================================================================
+// Enable BME280 (I2C) environmental sensor adapter.
+#ifndef HAS_SENSOR_BME280
+#define HAS_SENSOR_BME280 false
+#endif
+
+// Enable LD2410 OUT pin presence sensor adapter.
+#ifndef HAS_SENSOR_LD2410_OUT
+#define HAS_SENSOR_LD2410_OUT false
+#endif
+
+// I2C pins for sensors. Use -1 to keep default Wire pins.
+#ifndef SENSOR_I2C_SDA
+#define SENSOR_I2C_SDA -1
+#endif
+
+// I2C SCL pin for sensors.
+#ifndef SENSOR_I2C_SCL
+#define SENSOR_I2C_SCL -1
+#endif
+
+// I2C clock for sensors (Hz).
+#ifndef SENSOR_I2C_FREQUENCY
+#define SENSOR_I2C_FREQUENCY 400000
+#endif
+
+// BME280 I2C address (0x76 or 0x77).
+#ifndef BME280_I2C_ADDR
+#define BME280_I2C_ADDR 0x76
+#endif
+
+// LD2410 OUT pin (presence). Use -1 to disable.
+#ifndef LD2410_OUT_PIN
+#define LD2410_OUT_PIN -1
+#endif
+
+// Debounce for LD2410 OUT edge changes (ms).
+#ifndef LD2410_OUT_DEBOUNCE_MS
+#define LD2410_OUT_DEBOUNCE_MS 50
+#endif
+
+// ============================================================================
 // Web Portal Health Widget
 // ============================================================================
 // How often the web UI polls /api/health.

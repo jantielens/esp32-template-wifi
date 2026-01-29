@@ -2135,6 +2135,33 @@ function renderHealth(health) {
     }
 }
 
+function renderSensorsSection(health) {
+    const section = document.getElementById('sensors-section');
+    const badges = document.getElementById('sensor-badges');
+    if (!section || !badges) return;
+
+    const sensors = health && typeof health === 'object' ? health.sensors : null;
+
+    const keys = sensors ? Object.keys(sensors) : [];
+    if (keys.length === 0) {
+        section.style.display = 'none';
+        return;
+    }
+
+    section.style.display = 'block';
+    badges.innerHTML = '';
+
+    keys.sort();
+    keys.forEach(key => {
+        const value = sensors[key];
+        const display = (value === undefined) ? '—' : JSON.stringify(value);
+        const badge = document.createElement('span');
+        badge.className = 'sensor-badge';
+        badge.textContent = `${key}=${display}`;
+        badges.appendChild(badge);
+    });
+}
+
 async function updateHealth() {
     try {
         const response = await fetch(API_HEALTH);
@@ -2176,6 +2203,7 @@ async function updateHealth() {
         if (largestSparkValue) largestSparkValue.textContent = healthFormatBytes(health.heap_internal_largest);
 
         renderHealth(health);
+        renderSensorsSection(health);
         if (healthExpanded) {
             await updateHealthHistory({ hasPsram });
         }

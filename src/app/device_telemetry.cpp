@@ -4,6 +4,7 @@
 #include "board_config.h"
 #include "fs_health.h"
 #include "rtos_task_utils.h"
+#include "sensors/sensor_manager.h"
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -508,6 +509,10 @@ void device_telemetry_fill_api(JsonDocument &doc) {
     // Example (commented out):
     // doc["temperature"] = 23.4;
     // doc["humidity"] = 55.2;
+
+    // Sensor framework (optional adapters)
+    JsonObject sensors = doc["sensors"].to<JsonObject>();
+    sensor_manager_append_api(sensors);
 }
 
 void device_telemetry_fill_mqtt(JsonDocument &doc) {
@@ -534,6 +539,10 @@ void device_telemetry_fill_mqtt(JsonDocument &doc) {
     // Example (commented out):
     // doc["temperature"] = 23.4;
     // doc["humidity"] = 55.2;
+
+    // Sensor framework (optional adapters)
+    JsonObject root = doc.as<JsonObject>();
+    sensor_manager_append_mqtt(root);
 }
 
 void device_telemetry_init() {

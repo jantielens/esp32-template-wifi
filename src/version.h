@@ -6,7 +6,7 @@
 // Firmware version information
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 0
-#define VERSION_PATCH 45
+#define VERSION_PATCH 46
 
 // Build date (automatically set by compiler)
 #define BUILD_DATE __DATE__

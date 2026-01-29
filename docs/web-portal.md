@@ -453,6 +453,12 @@ Returns real-time device health statistics.
   "display_lv_timer_us": 250,
   "display_present_us": 1200,
 
+  "sensors": {
+    "temperature": 21.7,
+    "humidity": 39.6,
+    "pressure": 995.4
+  },
+
   "heap_internal_free_min_window": 195000,
   "heap_internal_free_max_window": 205000,
   "heap_internal_largest_min_window": 100000,
@@ -475,6 +481,7 @@ Returns real-time device health statistics.
 - `fs_mounted`: `null` when no filesystem partition is present; `false` when present but not mounted
 - `wifi_rssi`, `wifi_channel`, `ip_address`: `null` when not connected
 - `*_min_window` / `*_max_window`: sampled continuously by firmware and returned as a multi-client-safe snapshot (captures short-lived dips/spikes)
+- `sensors`: object containing optional sensor values (empty object when no sensors are available)
 
 #### `GET /api/health/history`
 
