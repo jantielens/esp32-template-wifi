@@ -237,10 +237,19 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/ha_discovery.h
   - src/app/mqtt_manager.cpp
   - src/app/mqtt_manager.h
+  - src/app/sensors/bme280_sensor.cpp
+  - src/app/sensors/bme280_sensor.h
+  - src/app/sensors/ld2410_out_sensor.cpp
+  - src/app/sensors/sensor_manager.cpp
+  - src/app/sensors/sensor_manager.h
 - **HAS_SENSOR_BME280**
   - src/app/board_config.h
+  - src/app/sensors.cpp
+  - src/app/sensors/bme280_sensor.cpp
 - **HAS_SENSOR_LD2410_OUT**
   - src/app/board_config.h
+  - src/app/sensors.cpp
+  - src/app/sensors/ld2410_out_sensor.cpp
 - **HAS_TOUCH**
   - src/app/app.ino
   - src/app/board_config.h
