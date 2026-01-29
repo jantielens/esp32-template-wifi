@@ -21,7 +21,7 @@ This document is a template. Sections marked with `COMPILE_FLAG_REPORT` markers 
 ## Flags (generated)
 
 <!-- BEGIN COMPILE_FLAG_REPORT:FLAGS -->
-Total flags: 93
+Total flags: 101
 
 ### Features (HAS_*)
 
@@ -30,6 +30,8 @@ Total flags: 93
 - **HAS_DISPLAY** default: `false` — Enable display + LVGL UI support.
 - **HAS_IMAGE_API** default: `false` — Enable Image API endpoints (JPEG upload/download/display).
 - **HAS_MQTT** default: `true` — Enable MQTT and Home Assistant integration.
+- **HAS_SENSOR_BME280** default: `false` — Enable BME280 (I2C) environmental sensor adapter.
+- **HAS_SENSOR_LD2410_OUT** default: `false` — Enable LD2410 OUT pin presence sensor adapter.
 - **HAS_TOUCH** default: `false` — Enable touch input support.
 
 ### Selectors (*_DRIVER)
@@ -60,7 +62,10 @@ Total flags: 93
 - **LCD_QSPI_TE** default: `(no default)` — Panel TE pin.
 - **LCD_RST_PIN** default: `(no default)` — LCD reset pin.
 - **LCD_SCK_PIN** default: `(no default)` — LCD SPI SCK pin.
+- **LD2410_OUT_PIN** default: `-1` — LD2410 OUT pin (presence). Use -1 to disable.
 - **LED_PIN** default: `2` — GPIO for the built-in LED (only used when HAS_BUILTIN_LED is true).
+- **SENSOR_I2C_SCL** default: `-1` — I2C SCL pin for sensors.
+- **SENSOR_I2C_SDA** default: `-1` — I2C pins for sensors. Use -1 to keep default Wire pins.
 - **TFT_BL** default: `(no default)` — TFT_eSPI: backlight pin.
 - **TFT_CS** default: `(no default)` — TFT_eSPI: CS pin.
 - **TFT_DC** default: `(no default)` — TFT_eSPI: DC pin.
@@ -100,6 +105,7 @@ Total flags: 93
 - **LVGL_BUFFER_SIZE** default: `(DISPLAY_WIDTH * 10)` — LVGL draw buffer size in pixels (larger = faster, more RAM).
 - **LVGL_TICK_PERIOD_MS** default: `5` — LVGL tick period in milliseconds.
 - **MEMORY_TRIPWIRE_INTERNAL_MIN_BYTES** default: `0` — Default: disabled (0). Enable per-board if you want early warning logs.
+- **SENSOR_I2C_FREQUENCY** default: `400000` — I2C clock for sensors (Hz).
 - **SPI_FREQUENCY** default: `(no default)` — TFT_eSPI: SPI write frequency (Hz).
 - **SPI_READ_FREQUENCY** default: `(no default)` — TFT_eSPI: SPI read frequency (Hz).
 - **SPI_TOUCH_FREQUENCY** default: `(no default)` — TFT_eSPI: SPI touch frequency (Hz).
@@ -112,6 +118,7 @@ Total flags: 93
 
 ### Other
 
+- **BME280_I2C_ADDR** default: `0x76` — BME280 I2C address (0x76 or 0x77).
 - **DISPLAY_COLOR_ORDER_BGR** default: `(no default)` — Panel uses BGR byte order.
 - **DISPLAY_DRIVER_ILI9341_2** default: `(no default)` — Use the ILI9341_2 controller setup in TFT_eSPI.
 - **DISPLAY_INVERSION_ON** default: `(no default)` — Enable display inversion (panel-specific).
@@ -122,6 +129,7 @@ Total flags: 93
 - **HEALTH_HISTORY_SECONDS** default: `300` — How much client-side history (sparklines) to keep.
 - **HEALTH_POLL_INTERVAL_MS** default: `5000` — How often the web UI polls /api/health.
 - **LCD_QSPI_HOST** default: `(no default)` — QSPI host peripheral.
+- **LD2410_OUT_DEBOUNCE_MS** default: `50` — Debounce for LD2410 OUT edge changes (ms).
 - **LED_ACTIVE_HIGH** default: `true` — LED polarity: true if HIGH turns the LED on.
 - **MEMORY_TRIPWIRE_CHECK_INTERVAL_MS** default: `5000` — How often to check tripwires from the main loop.
 - **PROJECT_DISPLAY_NAME** default: `"ESP32 Device"` — Human-friendly project name used in the web UI and device name (can be set by build system).
@@ -140,14 +148,14 @@ Total flags: 93
 Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
 
 <!-- BEGIN COMPILE_FLAG_REPORT:MATRIX_FEATURES -->
-| board-name | HAS_BACKLIGHT | HAS_BUILTIN_LED | HAS_DISPLAY | HAS_IMAGE_API | HAS_MQTT | HAS_TOUCH |
-| --- | --- | --- | --- | --- | --- | --- |
-| esp32-nodisplay |  |  |  |  | ✅ |  |
-| cyd-v2 | ✅ |  | ✅ | ✅ | ✅ | ✅ |
-| esp32c3-waveshare-169-st7789v2 | ✅ | ✅ | ✅ | ✅ | ✅ |  |
-| jc3248w535 | ✅ |  | ✅ | ✅ | ✅ | ✅ |
-| jc3636w518 | ✅ |  | ✅ | ✅ | ✅ | ✅ |
-| esp32c3 |  |  |  |  | ✅ |  |
+| board-name | HAS_BACKLIGHT | HAS_BUILTIN_LED | HAS_DISPLAY | HAS_IMAGE_API | HAS_MQTT | HAS_SENSOR_BME280 | HAS_SENSOR_LD2410_OUT | HAS_TOUCH |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| esp32-nodisplay |  |  |  |  | ✅ |  |  |  |
+| cyd-v2 | ✅ |  | ✅ | ✅ | ✅ |  |  | ✅ |
+| esp32c3-waveshare-169-st7789v2 | ✅ | ✅ | ✅ | ✅ | ✅ |  |  |  |
+| jc3248w535 | ✅ |  | ✅ | ✅ | ✅ |  |  | ✅ |
+| jc3636w518 | ✅ |  | ✅ | ✅ | ✅ |  |  | ✅ |
+| esp32c3-withsensors |  |  |  |  | ✅ | ✅ | ✅ |  |
 <!-- END COMPILE_FLAG_REPORT:MATRIX_FEATURES -->
 
 ## Board Matrix: Selectors (generated)
@@ -160,7 +168,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
 | esp32c3-waveshare-169-st7789v2 | DISPLAY_DRIVER_ST7789V2 | — |
 | jc3248w535 | DISPLAY_DRIVER_ARDUINO_GFX | TOUCH_DRIVER_AXS15231B |
 | jc3636w518 | DISPLAY_DRIVER_ESP_PANEL | TOUCH_DRIVER_CST816S_ESP_PANEL |
-| esp32c3 | — | — |
+| esp32c3-withsensors | — | — |
 <!-- END COMPILE_FLAG_REPORT:MATRIX_SELECTORS -->
 
 ## Usage Map (preprocessor only, generated)
@@ -229,6 +237,10 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/ha_discovery.h
   - src/app/mqtt_manager.cpp
   - src/app/mqtt_manager.h
+- **HAS_SENSOR_BME280**
+  - src/app/board_config.h
+- **HAS_SENSOR_LD2410_OUT**
+  - src/app/board_config.h
 - **HAS_TOUCH**
   - src/app/app.ino
   - src/app/board_config.h
@@ -245,6 +257,8 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/board_config.h
   - src/app/touch_drivers.cpp
   - src/app/touch_manager.cpp
+- **BME280_I2C_ADDR**
+  - src/app/board_config.h
 - **DISPLAY_INVERSION_ON**
   - src/app/drivers/tft_espi_driver.cpp
 - **DISPLAY_NEEDS_GAMMA_FIX**
@@ -281,6 +295,10 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/drivers/arduino_gfx_driver.cpp
 - **LCD_QSPI_CS**
   - src/app/drivers/arduino_gfx_driver.cpp
+- **LD2410_OUT_DEBOUNCE_MS**
+  - src/app/board_config.h
+- **LD2410_OUT_PIN**
+  - src/app/board_config.h
 - **LED_ACTIVE_HIGH**
   - src/app/board_config.h
 - **LED_PIN**
@@ -297,6 +315,12 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/board_config.h
   - src/app/device_telemetry.cpp
 - **PROJECT_DISPLAY_NAME**
+  - src/app/board_config.h
+- **SENSOR_I2C_FREQUENCY**
+  - src/app/board_config.h
+- **SENSOR_I2C_SCL**
+  - src/app/board_config.h
+- **SENSOR_I2C_SDA**
   - src/app/board_config.h
 - **TFT_BACKLIGHT_ON**
   - src/app/drivers/arduino_gfx_driver.cpp

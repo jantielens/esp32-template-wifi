@@ -5,6 +5,7 @@
 #include "log_manager.h"
 #include "mqtt_manager.h"
 #include "device_telemetry.h"
+#include "sensors/sensor_manager.h"
 #if HEALTH_HISTORY_ENABLED
 #include "health_history.h"
 #endif
@@ -205,6 +206,9 @@ void setup()
   // Initialize web portal AFTER WiFi is started
   web_portal_init(&device_config);
 
+  // Initialize sensors (optional adapters)
+  sensor_manager_init();
+
   #if HAS_MQTT
   // Initialize MQTT manager (will only connect/publish when configured)
   char sanitized[CONFIG_DEVICE_NAME_MAX_LEN];
@@ -253,6 +257,10 @@ void loop()
   #if HAS_MQTT
   mqtt_manager.loop();
   #endif
+
+  // Allow sensors to flush ISR-deferred work (e.g., instant MQTT publishes).
+  sensor_manager_loop();
+
 
   // Lightweight telemetry tripwires (runs from main loop only).
   device_telemetry_check_tripwires();

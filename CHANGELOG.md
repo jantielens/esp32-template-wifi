@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.46] - 2026-01-29
+
+### Added
+- Sensor framework with sample BME280 and LD2410 OUT adapters
+- Event-driven MQTT publishing for presence sensors
+- Home Assistant discovery helpers for event topics
+- Sensors section in the web portal UI
+
+### Changed
+- /api/health now includes a `sensors` object for optional readings
+- Added ESP32-C3 sensor sample board configuration
+- Updated sensor developer guide and related docs
+
 ## [0.0.45] - 2026-01-29
 
 ### Fixed
