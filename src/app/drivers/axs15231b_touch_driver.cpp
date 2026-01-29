@@ -29,9 +29,13 @@ void AXS15231B_TouchDriver::init() {
     // Create touch instance with I2C pins and interrupt
     // From sample: AXS15231B_Touch(SCL, SDA, INT, ADDR, rotation)
     uint8_t int_pin = 3;  // Default from sample
+    bool use_polling = false;
     #ifdef TOUCH_INT
     if (TOUCH_INT >= 0) {
         int_pin = TOUCH_INT;
+    } else {
+        int_pin = 0xFF;
+        use_polling = true;
     }
     #endif
     
@@ -51,7 +55,11 @@ void AXS15231B_TouchDriver::init() {
     // Enable offset correction (from sample)
     touch->enOffsetCorrection(true);
     
-    LOGI("AXS15231B", "Touch controller initialized");
+    if (use_polling) {
+        LOGI("AXS15231B", "Touch controller initialized (polling mode)");
+    } else {
+        LOGI("AXS15231B", "Touch controller initialized");
+    }
     #else
     LOGE("AXS15231B", "Touch I2C pins not defined in board_config.h");
     #endif

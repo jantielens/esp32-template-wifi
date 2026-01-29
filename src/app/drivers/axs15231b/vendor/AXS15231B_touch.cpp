@@ -9,8 +9,14 @@ AXS15231B_Touch* AXS15231B_Touch::instance = nullptr;
 bool AXS15231B_Touch::begin() {
     instance = this;
 
-    // Attach interrupt. Interrupt -> display touched
-    attachInterrupt(digitalPinToInterrupt(int_pin), isrTouched, FALLING);
+    // Attach interrupt (if valid). Interrupt -> display touched
+    int irq = digitalPinToInterrupt(int_pin);
+    if (int_pin != 0xFF && irq >= 0) {
+        attachInterrupt(irq, isrTouched, FALLING);
+        use_interrupt = true;
+    } else {
+        use_interrupt = false;
+    }
 
     // Start I2C
     return (Wire.begin(sda, scl));
@@ -63,10 +69,12 @@ void AXS15231B_Touch::correctOffset(uint16_t *x, uint16_t *y) {
 
 bool AXS15231B_Touch::update() {
     // Check if interrupt occured, if there was an interrupt get data from touch controller and clear flag
-    if (!touch_int) {
-        return false;
-    } else {
-        touch_int = false;
+    if (use_interrupt) {
+        if (!touch_int) {
+            return false;
+        } else {
+            touch_int = false;
+        }
     }
 
     uint8_t tmp_buf[8] = {0};
@@ -83,6 +91,11 @@ bool AXS15231B_Touch::update() {
     Wire.requestFrom(addr, sizeof(tmp_buf));
     for(int i = 0; i < sizeof(tmp_buf) && Wire.available(); i++) {
         tmp_buf[i] = Wire.read();
+    }
+
+    // In polling mode, treat no touch as false (touch count in low 4 bits)
+    if (!use_interrupt && ((tmp_buf[2] & 0x0F) == 0)) {
+        return false;
     }
 
     // Extract X and Y coordinates from response
