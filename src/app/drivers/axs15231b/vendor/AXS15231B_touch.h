@@ -8,6 +8,8 @@ class AXS15231B_Touch {
 private:
     uint8_t scl, sda, int_pin, addr, rotation;
 
+    bool use_interrupt = true;
+
     volatile bool touch_int = false;
     static AXS15231B_Touch* instance;
 

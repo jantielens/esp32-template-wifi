@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.45] - 2026-01-29
+
+### Fixed
+- AXS15231B touch: avoid invalid INT pin crashes and add polling fallback when INT is not wired
+
 ## [0.0.44] - 2026-01-24
 
 ### Changed
