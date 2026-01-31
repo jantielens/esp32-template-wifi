@@ -118,31 +118,18 @@ esp32-template-wifi/
 │   ├── esp32-nodisplay/           # ESP32 Dev Module builds (no display)
 │   └── esp32c3-waveshare-169-st7789v2/  # ESP32-C3 + Waveshare 1.69\" ST7789V2 builds
 ├── docs/                          # Documentation
-│   ├── scripts.md                 # Script usage guide
-│   ├── web-portal.md              # Web portal guide
-│   ├── wsl-development.md         # WSL/USB setup
-│   └── library-management.md      # Library management
+│   └── *.md                        # Guides (scripts, web portal, sensors, etc.)
 ├── src/
 │   ├── app/
 │   │   ├── app.ino                # Main sketch file
-│   │   ├── board_config.h         # Default board configuration
-│   │   ├── png_assets.cpp/h        # Generated LVGL PNG assets (auto-generated when assets/png exists)
-│   │   ├── config_manager.cpp/h   # NVS config storage
-│   │   ├── web_portal.cpp/h       # Web server & API
-│   │   ├── web_assets.h           # Embedded HTML/CSS/JS (auto-generated)
-│   │   ├── project_branding.h     # PROJECT_NAME / PROJECT_DISPLAY_NAME (auto-generated)
-│   │   └── web/
-│   │       ├── _header.html       # Shared HTML head template
-│   │       ├── _nav.html          # Shared navigation template
-│   │       ├── _footer.html       # Shared footer template
-│   │       ├── home.html          # Home page
-│   │       ├── network.html       # Network configuration page
-│   │       ├── firmware.html      # Firmware update page
-│   │       ├── portal.css         # Styles
-│   │       └── portal.js          # Client logic
-│   ├── boards/                    # Board-specific overrides (optional)
-│   │   └── esp32c3-waveshare-169-st7789v2/  # ESP32-C3 + Waveshare 1.69\" ST7789V2 config example
-│   │       └── board_overrides.h  # Board-specific defines (LED on GPIO8)
+│   │   ├── *_manager.cpp/h        # Power, WiFi, display, portal, config managers
+│   │   ├── power_*.cpp/h          # Power/transport configuration + logic
+│   │   ├── ble_*.cpp/h            # BLE advertising (compile-time gated)
+│   │   ├── duty_cycle*.cpp/h      # Duty-cycle flow
+│   │   ├── sensors/               # Sensor adapters (BME280, dummy, etc.)
+│   │   ├── web/                   # Portal HTML/CSS/JS assets
+│   │   └── web_portal_*.cpp/h     # Portal routes, auth, API handlers
+│   ├── boards/                    # Board-specific overrides (per-board folders)
 │   └── version.h                  # Firmware version tracking
 ├── partitions/                    # Optional custom partition tables (see docs)
 │   └── partitions_ota_1_9mb.csv    # OTA-friendly layout with larger app partitions
