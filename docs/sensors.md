@@ -9,6 +9,9 @@ Key points:
 - Home Assistant discovery is still supported via the adapter.
 - Only enabled sensors are compiled (guarded in `src/app/sensors.cpp`).
 
+Optional testing helper:
+- A dummy sensor can be enabled to emit a synthetic `dummy_value` for UI/MQTT/BLE testing.
+
 
 ## Step-by-Step: Add Your Own Sensor (BME280 Example)
 This is the full pattern using the BME280 adapter as reference.
@@ -66,6 +69,13 @@ For a simple presence-only LD2410 setup, use its **OUT** pin as a digital input:
 - Publish a **dedicated MQTT event topic** (e.g. `devices/<sanitized>/presence/state`) on changes only.
 - Publish HA discovery as a `binary_sensor` with device_class `presence` and `stat_t` pointing to that event topic.
 
+### Example: Dummy sensor (synthetic values)
+Enable it in your board override:
+```cpp
+#define HAS_SENSOR_DUMMY true
+```
+The dummy adapter publishes `dummy_value` (0.00–99.99) and registers a diagnostic HA sensor.
+
 ### 4) Ensure library dependency
 Add the library to `arduino-libraries.txt`:
 ```
@@ -93,7 +103,7 @@ Sensor values are nested under `sensors`:
   }
 }
 ```
-When a sensor is missing or has invalid readings, values are `null`:
+When a sensor is missing or has invalid readings, adapters may emit sentinel values (some sensors use min-range values instead of `null`).
 ```json
 {
   "sensors": {
@@ -135,7 +145,7 @@ In Home Assistant, register a **binary_sensor** that points to this event topic 
 
 
 ## Troubleshooting
-- **Sensor missing**: `/api/health` shows `null` values under `sensors`.
+- **Sensor missing**: `/api/health` may show `null` or sentinel values under `sensors`.
 - **Wrong I2C address**: Try `0x76` and `0x77` (depending on SDO wiring).
 - **No values in portal**: Ensure sensor is enabled in board overrides and device rebuilt.
 - **Library missing**: add to `arduino-libraries.txt` and run `./setup.sh`.

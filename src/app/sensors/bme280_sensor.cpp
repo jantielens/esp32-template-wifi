@@ -75,10 +75,17 @@ void Bme280Sensor::appendJson(JsonObject &doc) {
 
     const bool valid = available() && hasValidReadings();
 
-    // Write nulls when missing/invalid so clients can detect absence.
-    sensor_manager_set_number(doc, "temperature", temperatureC(), valid);
-    sensor_manager_set_number(doc, "humidity", humidityPct(), valid);
-    sensor_manager_set_number(doc, "pressure", pressureHpa(), valid);
+    if (valid) {
+        sensor_manager_set_number(doc, "temperature", temperatureC(), true);
+        sensor_manager_set_number(doc, "humidity", humidityPct(), true);
+        sensor_manager_set_number(doc, "pressure", pressureHpa(), true);
+        return;
+    }
+
+    // Sensor missing: emit min-range sentinel values that fit BTHome encoding.
+    doc["temperature"] = -327.68f;
+    doc["humidity"] = 0.0f;
+    doc["pressure"] = 0.0f;
 }
 
 #if HAS_MQTT
