@@ -22,6 +22,11 @@ Skip the boilerplate and start building. ESP32 Arduino template with automated b
   - **Duty-Cycle**: Wake → sample sensors → advertise BLE / publish MQTT → sleep
   - **Config/AP Auto-Sleep**: Portal auto-sleeps after inactivity timeout
 
+- **📶 Optional BLE Telemetry (BTHome v2)**
+  - **Compile-Time Gated**: Enable with `HAS_BLE` per board
+  - **BTHome Advertising**: Broadcast sensor telemetry via BLE service data
+  - **Burst Controls**: Configurable advertising burst/gap timing
+
 - **🖥️ Optional Display + Touch Support**
   - **Works With or Without a Display**: Devices without displays build and run normally
   - **Display/Touch HAL**: Unified `DisplayDriver` / `TouchDriver` interfaces with `DisplayManager` / `TouchManager` lifecycle
