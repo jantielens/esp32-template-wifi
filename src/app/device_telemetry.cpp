@@ -515,7 +515,13 @@ void device_telemetry_fill_api(JsonDocument &doc) {
     sensor_manager_append_api(sensors);
 }
 
-void device_telemetry_fill_mqtt(JsonDocument &doc) {
+void device_telemetry_fill_mqtt_scoped(JsonDocument &doc, MqttPublishScope scope) {
+    if (scope == MqttPublishScope::SensorsOnly) {
+        JsonObject root = doc.to<JsonObject>();
+        sensor_manager_append_mqtt(root);
+        return;
+    }
+
     // For MQTT publishing we keep the payload focused on device/system telemetry.
     // MQTT connection/publish status is better represented by availability/LWT,
     // and many consumers can infer publish cadence from broker-side timestamps.
@@ -540,9 +546,14 @@ void device_telemetry_fill_mqtt(JsonDocument &doc) {
     // doc["temperature"] = 23.4;
     // doc["humidity"] = 55.2;
 
-    // Sensor framework (optional adapters)
-    JsonObject root = doc.as<JsonObject>();
-    sensor_manager_append_mqtt(root);
+    if (scope == MqttPublishScope::All) {
+        JsonObject root = doc.as<JsonObject>();
+        sensor_manager_append_mqtt(root);
+    }
+}
+
+void device_telemetry_fill_mqtt(JsonDocument &doc) {
+    device_telemetry_fill_mqtt_scoped(doc, MqttPublishScope::All);
 }
 
 void device_telemetry_init() {

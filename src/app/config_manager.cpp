@@ -9,6 +9,7 @@
 #include "board_config.h"
 #include "web_assets.h"
 #include "log_manager.h"
+#include "power_config.h"
 #include <Preferences.h>
 #include <nvs_flash.h>
 
@@ -29,7 +30,17 @@
 #define KEY_MQTT_PORT      "mqtt_port"
 #define KEY_MQTT_USER      "mqtt_user"
 #define KEY_MQTT_PASS      "mqtt_pass"
-#define KEY_MQTT_INTERVAL  "mqtt_int"
+#define KEY_MQTT_INTERVAL  "mqtt_int" // legacy (pre-cycle interval)
+#define KEY_POWER_MODE     "pwr_mode"
+#define KEY_PUBLISH_TRANSPORT "pub_tr"
+#define KEY_CYCLE_INTERVAL "cycle_s"
+#define KEY_PORTAL_IDLE    "portal_idle"
+#define KEY_WIFI_BACKOFF_MAX "wifi_bomax"
+#define KEY_BLE_ADV_BURST  "ble_burst"
+#define KEY_BLE_ADV_GAP    "ble_gap"
+#define KEY_BLE_ADV_BURSTS "ble_bursts"
+#define KEY_BLE_ADV_INTERVAL "ble_int"
+#define KEY_MQTT_SCOPE     "mqtt_scope"
 #define KEY_BACKLIGHT_BRIGHTNESS "bl_bright"
 
 // Web portal Basic Auth
@@ -131,7 +142,19 @@ bool config_manager_load(DeviceConfig *config) {
         // Initialize defaults for fields that need sensible values even when no config exists
         config->backlight_brightness = 100;  // Default to full brightness
         config->mqtt_port = 0;
-        config->mqtt_interval_seconds = 0;
+
+        strlcpy(config->power_mode, "always_on", CONFIG_POWER_MODE_MAX_LEN);
+        strlcpy(config->publish_transport, "ble", CONFIG_PUBLISH_TRANSPORT_MAX_LEN);
+        config->cycle_interval_seconds = 120;
+        config->portal_idle_timeout_seconds = 120;
+        config->wifi_backoff_max_seconds = 900;
+
+        config->ble_adv_burst_ms = 900;
+        config->ble_adv_gap_ms = 1100;
+        config->ble_adv_bursts = 2;
+        config->ble_adv_interval_ms = 100;
+
+        strlcpy(config->mqtt_publish_scope, "sensors_only", CONFIG_MQTT_SCOPE_MAX_LEN);
 
         // Basic Auth defaults
         config->basic_auth_enabled = false;
@@ -180,7 +203,35 @@ bool config_manager_load(DeviceConfig *config) {
     config->mqtt_port = preferences.getUShort(KEY_MQTT_PORT, 0);
     preferences.getString(KEY_MQTT_USER, config->mqtt_username, CONFIG_MQTT_USERNAME_MAX_LEN);
     preferences.getString(KEY_MQTT_PASS, config->mqtt_password, CONFIG_MQTT_PASSWORD_MAX_LEN);
-    config->mqtt_interval_seconds = preferences.getUShort(KEY_MQTT_INTERVAL, 0);
+    const uint16_t legacy_mqtt_interval_seconds = preferences.getUShort(KEY_MQTT_INTERVAL, 0);
+
+    // Load power/transport settings
+    preferences.getString(KEY_POWER_MODE, config->power_mode, CONFIG_POWER_MODE_MAX_LEN);
+    if (strlen(config->power_mode) == 0) {
+        strlcpy(config->power_mode, "always_on", CONFIG_POWER_MODE_MAX_LEN);
+    }
+
+    preferences.getString(KEY_PUBLISH_TRANSPORT, config->publish_transport, CONFIG_PUBLISH_TRANSPORT_MAX_LEN);
+    if (strlen(config->publish_transport) == 0) {
+        strlcpy(config->publish_transport, "ble", CONFIG_PUBLISH_TRANSPORT_MAX_LEN);
+    }
+
+    config->cycle_interval_seconds = preferences.getUShort(KEY_CYCLE_INTERVAL, 120);
+    if (config->cycle_interval_seconds == 0 && legacy_mqtt_interval_seconds > 0) {
+        config->cycle_interval_seconds = legacy_mqtt_interval_seconds;
+    }
+    config->portal_idle_timeout_seconds = preferences.getUShort(KEY_PORTAL_IDLE, 120);
+    config->wifi_backoff_max_seconds = preferences.getUShort(KEY_WIFI_BACKOFF_MAX, 900);
+
+    config->ble_adv_burst_ms = preferences.getUShort(KEY_BLE_ADV_BURST, 900);
+    config->ble_adv_gap_ms = preferences.getUShort(KEY_BLE_ADV_GAP, 1100);
+    config->ble_adv_bursts = (uint8_t)preferences.getUChar(KEY_BLE_ADV_BURSTS, 2);
+    config->ble_adv_interval_ms = preferences.getUShort(KEY_BLE_ADV_INTERVAL, 100);
+
+    preferences.getString(KEY_MQTT_SCOPE, config->mqtt_publish_scope, CONFIG_MQTT_SCOPE_MAX_LEN);
+    if (strlen(config->mqtt_publish_scope) == 0) {
+        strlcpy(config->mqtt_publish_scope, "sensors_only", CONFIG_MQTT_SCOPE_MAX_LEN);
+    }
     
     // Load display settings
     config->backlight_brightness = preferences.getUChar(KEY_BACKLIGHT_BRIGHTNESS, 100);
@@ -257,7 +308,20 @@ bool config_manager_save(const DeviceConfig *config) {
     preferences.putUShort(KEY_MQTT_PORT, config->mqtt_port);
     preferences.putString(KEY_MQTT_USER, config->mqtt_username);
     preferences.putString(KEY_MQTT_PASS, config->mqtt_password);
-    preferences.putUShort(KEY_MQTT_INTERVAL, config->mqtt_interval_seconds);
+
+    // Save power/transport settings
+    preferences.putString(KEY_POWER_MODE, config->power_mode);
+    preferences.putString(KEY_PUBLISH_TRANSPORT, config->publish_transport);
+    preferences.putUShort(KEY_CYCLE_INTERVAL, config->cycle_interval_seconds);
+    preferences.putUShort(KEY_PORTAL_IDLE, config->portal_idle_timeout_seconds);
+    preferences.putUShort(KEY_WIFI_BACKOFF_MAX, config->wifi_backoff_max_seconds);
+
+    preferences.putUShort(KEY_BLE_ADV_BURST, config->ble_adv_burst_ms);
+    preferences.putUShort(KEY_BLE_ADV_GAP, config->ble_adv_gap_ms);
+    preferences.putUChar(KEY_BLE_ADV_BURSTS, config->ble_adv_bursts);
+    preferences.putUShort(KEY_BLE_ADV_INTERVAL, config->ble_adv_interval_ms);
+
+    preferences.putString(KEY_MQTT_SCOPE, config->mqtt_publish_scope);
     
     // Save display settings
     LOGI("Config", "Saving brightness: %d%%", config->backlight_brightness);
@@ -308,8 +372,14 @@ bool config_manager_reset() {
 bool config_manager_is_valid(const DeviceConfig *config) {
     if (!config) return false;
     if (config->magic != CONFIG_MAGIC) return false;
-    if (strlen(config->wifi_ssid) == 0) return false;
     if (strlen(config->device_name) == 0) return false;
+
+    const PowerMode mode = power_config_parse_power_mode(config);
+    const PublishTransport transport = power_config_parse_publish_transport(config);
+    const bool ble_only_always_on = (mode == PowerMode::AlwaysOn) && (transport == PublishTransport::Ble);
+    const bool needs_wifi = !ble_only_always_on && ((mode != PowerMode::DutyCycle) || power_config_transport_includes_mqtt(transport));
+
+    if (needs_wifi && strlen(config->wifi_ssid) == 0) return false;
 
     if (config->basic_auth_enabled) {
         if (strlen(config->basic_auth_username) == 0) return false;
@@ -341,11 +411,28 @@ void config_manager_print(const DeviceConfig *config) {
         LOGI("Config", "IP: DHCP");
     }
 
+    LOGI("Config", "Power: mode=%s transport=%s interval=%us idle=%us backoff_max=%us",
+        config->power_mode,
+        config->publish_transport,
+        (unsigned)config->cycle_interval_seconds,
+        (unsigned)config->portal_idle_timeout_seconds,
+        (unsigned)config->wifi_backoff_max_seconds
+    );
+
+    LOGI("Config", "BLE: burst=%ums gap=%ums bursts=%u interval=%ums",
+        (unsigned)config->ble_adv_burst_ms,
+        (unsigned)config->ble_adv_gap_ms,
+        (unsigned)config->ble_adv_bursts,
+        (unsigned)config->ble_adv_interval_ms
+    );
+
+    LOGI("Config", "MQTT scope: %s", config->mqtt_publish_scope);
+
 #if HAS_MQTT
     if (strlen(config->mqtt_host) > 0) {
         uint16_t port = config->mqtt_port > 0 ? config->mqtt_port : 1883;
-        if (config->mqtt_interval_seconds > 0) {
-            LOGI("Config", "MQTT: %s:%d (%ds)", config->mqtt_host, port, config->mqtt_interval_seconds);
+        if (config->cycle_interval_seconds > 0) {
+            LOGI("Config", "MQTT: %s:%d (interval %us)", config->mqtt_host, port, (unsigned)config->cycle_interval_seconds);
         } else {
             LOGI("Config", "MQTT: %s:%d (publish disabled)", config->mqtt_host, port);
         }

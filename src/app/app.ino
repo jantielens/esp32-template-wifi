@@ -6,12 +6,16 @@
 #include "mqtt_manager.h"
 #include "device_telemetry.h"
 #include "sensors/sensor_manager.h"
+#include "ble_advertiser.h"
+#include "power_config.h"
+#include "power_manager.h"
+#include "portal_idle.h"
+#include "wifi_manager.h"
+#include "duty_cycle.h"
 #if HEALTH_HISTORY_ENABLED
 #include "health_history.h"
 #endif
 #include <WiFi.h>
-#include <ESPmDNS.h>
-#include <lwip/netif.h>
 
 #if HAS_DISPLAY
 #include "display_manager.h"
@@ -30,9 +34,6 @@ bool config_loaded = false;
 MqttManager mqtt_manager;
 #endif
 
-// WiFi retry settings
-const unsigned long WIFI_BACKOFF_BASE = 3000; // 3 seconds base (DHCP typically needs 2-3s)
-
 // Heartbeat interval
 const unsigned long HEARTBEAT_INTERVAL = 60000; // 60 seconds
 unsigned long lastHeartbeat = 0;
@@ -40,6 +41,9 @@ unsigned long lastHeartbeat = 0;
 // WiFi watchdog for connection monitoring
 const unsigned long WIFI_CHECK_INTERVAL = 10000; // 10 seconds
 unsigned long lastWiFiCheck = 0;
+
+// BLE advertising cadence (always-on modes)
+unsigned long lastBleAdvertise = 0;
 
 // WiFi event handlers for connection lifecycle monitoring
 void onWiFiConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
@@ -60,6 +64,24 @@ void onWiFiDisconnected(WiFiEvent_t event, WiFiEventInfo_t info) {
   // 201 = NO_AP_FOUND, 202 = AUTH_FAIL, 205 = HANDSHAKE_TIMEOUT
 }
 
+static bool check_config_mode_button() {
+  #if HAS_BUTTON
+  pinMode(BUTTON_PIN, BUTTON_ACTIVE_LOW ? INPUT_PULLUP : INPUT_PULLDOWN);
+
+  const unsigned long start = millis();
+  while (millis() - start < 1500) {
+    const bool pressed = (digitalRead(BUTTON_PIN) == (BUTTON_ACTIVE_LOW ? LOW : HIGH));
+    if (!pressed) return false;
+    delay(10);
+  }
+
+  LOGI("Power", "Config button held - entering Config Mode");
+  return true;
+  #else
+  return false;
+  #endif
+}
+
 
 void setup()
 {
@@ -69,9 +91,15 @@ void setup()
   health_history_start();
   #endif
 
+  power_manager_boot_init();
+
   // Initialize logger (wraps Serial for web streaming)
   log_init(115200);
-  delay(1000);
+  if (power_manager_is_deep_sleep_wake()) {
+    delay(10);
+  } else {
+    delay(1000);
+  }
 
   // Register WiFi event handlers for connection lifecycle
   WiFi.onEvent(onWiFiConnected, ARDUINO_EVENT_WIFI_STA_CONNECTED);
@@ -100,7 +128,6 @@ void setup()
   memset(&device_config, 0, sizeof(DeviceConfig));
   device_config.backlight_brightness = 100;  // Default to full brightness
   device_config.mqtt_port = 0;
-  device_config.mqtt_interval_seconds = 0;
 
   #if HAS_DISPLAY
   // Screen saver defaults (v1)
@@ -160,6 +187,33 @@ void setup()
     device_config.magic = CONFIG_MAGIC;
   }
 
+  const bool force_config_mode_burst = power_manager_should_force_config_mode();
+  if (force_config_mode_burst) {
+    LOGI("Power", "Reset burst detected - entering Config Mode");
+  }
+
+  const bool force_config_mode_button = check_config_mode_button();
+  const bool force_config_mode = force_config_mode_burst || force_config_mode_button;
+  power_manager_configure(&device_config, config_loaded, force_config_mode);
+  PowerMode boot_mode = power_manager_get_boot_mode();
+  power_manager_set_current_mode(boot_mode);
+  power_manager_led_set_mode(boot_mode);
+
+  if (boot_mode == PowerMode::DutyCycle) {
+    // Initialize sensors (optional adapters)
+    sensor_manager_init();
+
+    #if HAS_MQTT
+    // Initialize MQTT manager (will only connect/publish when configured)
+    char sanitized[CONFIG_DEVICE_NAME_MAX_LEN];
+    config_manager_sanitize_device_name(device_config.device_name, sanitized, sizeof(sanitized));
+    mqtt_manager.begin(&device_config, device_config.device_name, sanitized);
+    #endif
+
+    duty_cycle_run(&device_config);
+    return;
+  }
+
   // Re-apply brightness from loaded config (display was initialized before config load)
   #if HAS_DISPLAY && HAS_BACKLIGHT
   LOGI("Main", "Applying loaded brightness: %d%%", device_config.backlight_brightness);
@@ -171,40 +225,45 @@ void setup()
   screen_saver_manager_init(&device_config);
   #endif
 
+  const PublishTransport transport = power_config_parse_publish_transport(&device_config);
+  const bool ble_only_always_on = (boot_mode == PowerMode::AlwaysOn) && (transport == PublishTransport::Ble) && (strlen(device_config.wifi_ssid) == 0);
+
   // Start WiFi BEFORE initializing web server (critical for ESP32-C3)
   #if HAS_DISPLAY
   display_manager_set_splash_status("Connecting WiFi...");
   #endif
 
-  if (!config_loaded) {
-    LOGI("Main", "No config - starting AP mode");
-    web_portal_start_ap();
+  if (ble_only_always_on) {
+    LOGW("Main", "BLE-only mode active (no WiFi SSID); portal unavailable unless forced into Config Mode");
   } else {
-    LOGI("Main", "Config loaded - connecting to WiFi");
-    if (connect_wifi()) {
-      start_mdns();
+    if (boot_mode == PowerMode::Ap) {
+      LOGI("Main", "AP mode selected - starting AP mode");
+      web_portal_start_ap();
+    } else if (!config_loaded) {
+      LOGI("Main", "No config - starting AP mode");
+      power_manager_set_current_mode(PowerMode::Ap);
+      power_manager_led_set_mode(PowerMode::Ap);
+      web_portal_start_ap();
     } else {
-      // Hard reset retry - WiFi hardware may be in bad state
-      LOGW("Main", "WiFi failed - attempting hard reset");
-      LOGI("WiFi", "Hard reset start");
-      WiFi.mode(WIFI_OFF);
-      delay(1000);  // Longer delay to fully reset hardware
-      WiFi.mode(WIFI_STA);
-      delay(500);
-      LOGI("WiFi", "Hard reset complete");
-
-      // One more attempt after hard reset
-      if (connect_wifi()) {
-        start_mdns();
+      LOGI("Main", "Config loaded - connecting to WiFi");
+      if (wifi_manager_connect(&device_config, false)) {
+        power_manager_note_wifi_success();
+        wifi_manager_start_mdns(&device_config);
       } else {
-        LOGW("Main", "WiFi failed after reset - fallback to AP");
+        LOGW("Main", "WiFi failed - fallback to AP");
+        power_manager_set_current_mode(PowerMode::Ap);
+        power_manager_led_set_mode(PowerMode::Ap);
         web_portal_start_ap();
       }
     }
-  }
 
-  // Initialize web portal AFTER WiFi is started
-  web_portal_init(&device_config);
+    // Initialize web portal AFTER WiFi is started
+    web_portal_init(&device_config);
+
+    portal_idle_init();
+    portal_idle_set_timeout_seconds(device_config.portal_idle_timeout_seconds);
+    portal_idle_set_mode(power_manager_get_current_mode());
+  }
 
   // Initialize sensors (optional adapters)
   sensor_manager_init();
@@ -238,6 +297,9 @@ void setup()
 
 void loop()
 {
+  power_manager_led_loop();
+  power_manager_loop();
+
   #if HAS_DISPLAY
   screen_saver_manager_loop();
   #endif
@@ -261,6 +323,31 @@ void loop()
   // Allow sensors to flush ISR-deferred work (e.g., instant MQTT publishes).
   sensor_manager_loop();
 
+  #if HAS_BLE
+  if (config_loaded && power_manager_get_current_mode() != PowerMode::DutyCycle) {
+    const PublishTransport transport = power_config_parse_publish_transport(&device_config);
+    if (power_config_transport_includes_ble(transport)) {
+      const uint32_t interval_seconds = device_config.cycle_interval_seconds;
+      if (interval_seconds > 0) {
+        const unsigned long interval_ms = interval_seconds * 1000UL;
+        const unsigned long now = millis();
+
+        if (lastBleAdvertise == 0 || (now - lastBleAdvertise) >= interval_ms) {
+          StaticJsonDocument<512> sensors_doc;
+          JsonObject root = sensors_doc.to<JsonObject>();
+          sensor_manager_append_mqtt(root);
+
+          if (!ble_advertiser_advertise_bthome(&device_config, root, false)) {
+            LOGE("BLE", "Advertise failed");
+          }
+
+          lastBleAdvertise = now;
+        }
+      }
+    }
+  }
+  #endif
+
 
   // Lightweight telemetry tripwires (runs from main loop only).
   device_telemetry_check_tripwires();
@@ -272,8 +359,9 @@ void loop()
   if (config_loaded && !web_portal_is_ap_mode() && currentMillis - lastWiFiCheck >= WIFI_CHECK_INTERVAL) {
     if (WiFi.status() != WL_CONNECTED && strlen(device_config.wifi_ssid) > 0) {
       LOGW("WIFI", "Watchdog: connection lost - attempting reconnect");
-      if (connect_wifi()) {
-        start_mdns();
+      if (wifi_manager_connect(&device_config, false)) {
+        power_manager_note_wifi_success();
+        wifi_manager_start_mdns(&device_config);
       }
     }
     lastWiFiCheck = currentMillis;
@@ -306,269 +394,4 @@ void loop()
   }
 
   delay(10);
-}
-
-// Connect to WiFi with exponential backoff
-bool connect_wifi() {
-  LOGI("WiFi", "Connection start");
-  LOGI("WiFi", "SSID: %s", device_config.wifi_ssid);
-
-  // Helper: format BSSID as string
-  auto format_bssid = [](const uint8_t *bssid, char *out, size_t out_len) {
-    if (!out || out_len < 18) return;
-    if (!bssid) {
-      snprintf(out, out_len, "--:--:--:--:--:--");
-      return;
-    }
-    snprintf(out, out_len, "%02X:%02X:%02X:%02X:%02X:%02X",
-      bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]);
-  };
-
-  // Best-effort: when multiple APs share the same SSID, explicitly connect to the strongest one.
-  auto select_strongest_ap = [&](const char *target_ssid, uint8_t out_bssid[6], int *out_channel, int *out_rssi) -> bool {
-    if (!target_ssid || strlen(target_ssid) == 0) return false;
-
-    // Clear prior results to avoid stale entries and reduce memory usage.
-    WiFi.scanDelete();
-
-    LOGI("WiFi", "Scan start");
-    const int16_t n = WiFi.scanNetworks();
-    if (n < 0) {
-      LOGW("WiFi", "Scan failed");
-      return false;
-    }
-
-    int best_index = -1;
-    int best_rssi = -1000;
-    int matches = 0;
-
-    for (int i = 0; i < n; i++) {
-      if (WiFi.SSID(i) == target_ssid) {
-        matches++;
-        const int rssi = WiFi.RSSI(i);
-        if (best_index < 0 || rssi > best_rssi) {
-          best_index = i;
-          best_rssi = rssi;
-        }
-      }
-    }
-
-    LOGI("WiFi", "Found %d networks (%d matching SSID)", (int)n, matches);
-
-    if (best_index < 0) {
-      LOGW("WiFi", "No matching SSID");
-      WiFi.scanDelete();
-      return false;
-    }
-
-    const uint8_t *best_bssid_ptr = WiFi.BSSID(best_index);
-    const int best_channel = WiFi.channel(best_index);
-
-    if (!best_bssid_ptr || best_channel <= 0) {
-      LOGW("WiFi", "Missing BSSID/channel");
-      WiFi.scanDelete();
-      return false;
-    }
-
-    memcpy(out_bssid, best_bssid_ptr, 6);
-    if (out_channel) *out_channel = best_channel;
-    if (out_rssi) *out_rssi = best_rssi;
-
-    char bssid_str[18];
-    format_bssid(out_bssid, bssid_str, sizeof(bssid_str));
-    LOGI("WiFi", "Selected AP: %s | Ch %d | RSSI %d dBm", bssid_str, best_channel, best_rssi);
-
-    // Free scan results to save memory.
-    WiFi.scanDelete();
-    return true;
-  };
-
-  // === WiFi Hardware Reset Sequence ===
-  // Disable persistent WiFi config (we manage our own via NVS)
-  WiFi.persistent(false);
-
-  // Full WiFi reset to clear stale state and prevent hardware corruption
-  WiFi.disconnect(true);  // Disconnect + erase stored credentials
-  delay(100);
-  WiFi.mode(WIFI_OFF);    // Turn off WiFi hardware
-  delay(500);             // Wait for hardware to settle
-  WiFi.mode(WIFI_STA);    // Back to station mode
-  delay(100);
-
-  // Disable WiFi sleep (power-save). Improves latency and often stability,
-  // at the cost of higher power consumption.
-  WiFi.setSleep(false);
-
-  // Enable auto-reconnect at WiFi stack level
-  WiFi.setAutoReconnect(true);
-
-  // Prepare sanitized hostname
-  char sanitized[CONFIG_DEVICE_NAME_MAX_LEN];
-  config_manager_sanitize_device_name(device_config.device_name, sanitized, CONFIG_DEVICE_NAME_MAX_LEN);
-
-  // Set WiFi hostname for mDNS and internal use
-  // NOTE: ESP32's lwIP stack has limited DHCP Option 12 (hostname) support
-  // The hostname may not always appear in router DHCP tables due to ESP-IDF/lwIP limitations
-  // Use mDNS (.local) or NetBIOS for reliable device discovery instead
-  if (strlen(sanitized) > 0) {
-    // Set via WiFi library
-    WiFi.setHostname(sanitized);
-    LOGI("WiFi", "Hostname: %s", sanitized);
-
-    // Also set via esp_netif API (for compatibility)
-    esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
-    if (netif != NULL) {
-      esp_netif_set_hostname(netif, sanitized);
-    }
-  }
-
-  // Configure fixed IP if provided
-  if (strlen(device_config.fixed_ip) > 0) {
-    LOGI("WiFi", "Fixed IP config start");
-
-    IPAddress local_ip, gateway, subnet, dns1, dns2;
-
-    if (!local_ip.fromString(device_config.fixed_ip)) {
-      LOGE("WiFi", "Invalid IP address");
-      LOGE("WiFi", "Connection failed");
-      return false;
-    }
-
-    if (!subnet.fromString(device_config.subnet_mask)) {
-      LOGE("WiFi", "Invalid subnet mask");
-      LOGE("WiFi", "Connection failed");
-      return false;
-    }
-
-    if (!gateway.fromString(device_config.gateway)) {
-      LOGE("WiFi", "Invalid gateway");
-      LOGE("WiFi", "Connection failed");
-      return false;
-    }
-
-    // DNS1: use provided, or default to gateway
-    if (strlen(device_config.dns1) > 0) {
-      dns1.fromString(device_config.dns1);
-    } else {
-      dns1 = gateway;
-    }
-
-    // DNS2: optional
-    if (strlen(device_config.dns2) > 0) {
-      dns2.fromString(device_config.dns2);
-    } else {
-      dns2 = IPAddress(0, 0, 0, 0);
-    }
-
-    if (!WiFi.config(local_ip, gateway, subnet, dns1, dns2)) {
-      LOGE("WiFi", "Configuration failed");
-      LOGE("WiFi", "Connection failed");
-      return false;
-    }
-
-    LOGI("WiFi", "IP: %s", device_config.fixed_ip);
-  }
-
-  // Prefer the strongest AP when multiple BSSIDs exist for the same SSID.
-  uint8_t best_bssid[6];
-  int best_channel = 0;
-  int best_rssi = 0;
-  const bool has_best_ap = select_strongest_ap(device_config.wifi_ssid, best_bssid, &best_channel, &best_rssi);
-  if (has_best_ap) {
-    WiFi.begin(device_config.wifi_ssid, device_config.wifi_password, best_channel, best_bssid);
-  } else {
-    WiFi.begin(device_config.wifi_ssid, device_config.wifi_password);
-  }
-
-  // Try to connect with exponential backoff
-  for (int attempt = 0; attempt < WIFI_MAX_ATTEMPTS; attempt++) {
-    unsigned long backoff = WIFI_BACKOFF_BASE * (attempt + 1);
-    unsigned long start = millis();
-
-    LOGI("WiFi", "Attempt %d/%d (timeout %ds)", attempt + 1, WIFI_MAX_ATTEMPTS, backoff / 1000);
-
-    while (millis() - start < backoff) {
-      wl_status_t status = WiFi.status();
-      if (status == WL_CONNECTED) {
-        LOGI("WiFi", "IP: %s", WiFi.localIP().toString().c_str());
-        LOGI("WiFi", "Hostname: %s", WiFi.getHostname());
-        LOGI("WiFi", "MAC: %s", WiFi.macAddress().c_str());
-        LOGI("WiFi", "Signal: %d dBm", WiFi.RSSI());
-        LOGI("WiFi", "Access: http://%s", WiFi.localIP().toString().c_str());
-        LOGI("WiFi", "Access: http://%s.local", WiFi.getHostname());
-        LOGI("WiFi", "Connected");
-
-        return true;
-      }
-      delay(100);
-    }
-
-    // Log detailed failure reason for diagnostics
-    wl_status_t status = WiFi.status();
-    if (status != WL_CONNECTED) {
-      const char* reason =
-        (status == WL_NO_SSID_AVAIL) ? "SSID not found" :
-        (status == WL_CONNECT_FAILED) ? "Connect failed (wrong password?)" :
-        (status == WL_CONNECTION_LOST) ? "Connection lost" :
-        (status == WL_DISCONNECTED) ? "Disconnected" :
-        "Unknown";
-      LOGW("WiFi", "Status: %s (%d)", reason, status);
-    }
-  }
-
-  LOGE("WiFi", "All attempts failed");
-  return false;
-}
-
-// Start mDNS service with enhanced TXT records
-void start_mdns() {
-  LOGI("mDNS", "Start");
-
-  char sanitized[CONFIG_DEVICE_NAME_MAX_LEN];
-  config_manager_sanitize_device_name(device_config.device_name, sanitized, CONFIG_DEVICE_NAME_MAX_LEN);
-
-  if (strlen(sanitized) == 0) {
-    LOGE("mDNS", "Empty hostname");
-    return;
-  }
-
-  if (MDNS.begin(sanitized)) {
-    LOGI("mDNS", "Name: %s.local", sanitized);
-
-    // Add HTTP service
-    MDNS.addService("http", "tcp", 80);
-
-    // Add TXT records with device metadata (per RFC 6763)
-    // Keep keys ≤9 chars, total TXT record <400 bytes
-
-    // Core device identification
-    MDNS.addServiceTxt("http", "tcp", "version", FIRMWARE_VERSION);
-    MDNS.addServiceTxt("http", "tcp", "model", ESP.getChipModel());
-
-    // MAC address (last 4 hex digits for identification)
-    String mac = WiFi.macAddress();
-    mac.replace(":", "");
-    String mac_short = mac.substring(mac.length() - 4);
-    MDNS.addServiceTxt("http", "tcp", "mac", mac_short.c_str());
-
-    // Device type and manufacturer
-    MDNS.addServiceTxt("http", "tcp", "ty", "iot-device");
-    MDNS.addServiceTxt("http", "tcp", "mf", "ESP32-Tmpl");
-
-    // Capabilities
-    MDNS.addServiceTxt("http", "tcp", "features", "wifi,http,api");
-
-    // User-friendly description
-    MDNS.addServiceTxt("http", "tcp", "note", "WiFi Portal Device");
-
-    // Configuration URL
-    String config_url = "http://";
-    config_url += sanitized;
-    config_url += ".local";
-    MDNS.addServiceTxt("http", "tcp", "url", config_url.c_str());
-
-    LOGI("mDNS", "TXT records: version, model, mac, ty, features");
-  } else {
-    LOGE("mDNS", "Failed to start");
-  }
 }
