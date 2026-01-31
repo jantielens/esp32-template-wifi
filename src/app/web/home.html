@@ -30,6 +30,113 @@
             </section>
             </div>
 
+            <!-- Operating Mode & Cadence -->
+            <section class="section" id="power-settings-section">
+                <h2>⚡ Operating Mode & Cadence</h2>
+                <small>Controls how the device runs and how often it publishes.</small>
+
+                <div class="grid-2col">
+                    <section class="section" style="padding: 0; background: transparent; box-shadow: none;">
+                        <div class="form-group">
+                            <label for="power_mode">Operating Mode</label>
+                            <select id="power_mode" name="power_mode">
+                                <option value="always_on">Always-On</option>
+                                <option value="duty_cycle">Duty-Cycle</option>
+                            </select>
+                            <small>Always-On keeps services running. Duty-Cycle wakes, publishes, then sleeps.</small>
+                        </div>
+                    </section>
+
+                    <section class="section" style="padding: 0; background: transparent; box-shadow: none;">
+                        <div class="form-group">
+                            <label for="publish_transport">Transport Mode</label>
+                            <select id="publish_transport" name="publish_transport">
+                                <option value="ble">BLE</option>
+                                <option value="mqtt">MQTT</option>
+                                <option value="ble_mqtt">BLE + MQTT</option>
+                            </select>
+                            <small>Select which transports publish telemetry.</small>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="grid-2col">
+                    <section class="section" style="padding: 0; background: transparent; box-shadow: none;">
+                        <div class="form-group">
+                            <label for="cycle_interval_seconds">Cycle Interval (seconds)</label>
+                            <input type="number" id="cycle_interval_seconds" name="cycle_interval_seconds" min="1" max="65535" placeholder="120">
+                            <small>Duty-Cycle sleep interval and BLE/MQTT publish cadence.</small>
+                        </div>
+                    </section>
+
+                    <section class="section" style="padding: 0; background: transparent; box-shadow: none;">
+                        <div class="form-group">
+                            <label for="portal_idle_timeout_seconds">Portal Idle Timeout (seconds)</label>
+                            <input type="number" id="portal_idle_timeout_seconds" name="portal_idle_timeout_seconds" min="0" max="65535" placeholder="120">
+                            <small>Auto-sleep after inactivity in Config/AP modes only.</small>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="form-group">
+                    <label for="wifi_backoff_max_seconds">WiFi Backoff Max (seconds)</label>
+                    <input type="number" id="wifi_backoff_max_seconds" name="wifi_backoff_max_seconds" min="1" max="65535" placeholder="900">
+                    <small>Exponential backoff cap on repeated Wi-Fi failures.</small>
+                </div>
+
+                <section class="section" id="mqtt-transport-section" style="margin-top: 12px;">
+                    <h3 style="margin: 0 0 12px 0; font-size: 16px; color: #1d1d1f;">MQTT Transport</h3>
+
+                    <div class="form-group">
+                        <label for="mqtt_publish_scope">MQTT Payload Scope</label>
+                        <select id="mqtt_publish_scope" name="mqtt_publish_scope">
+                            <option value="sensors_only">Sensors only</option>
+                            <option value="diagnostics_only">Diagnostics only</option>
+                            <option value="all">All (sensors + diagnostics)</option>
+                        </select>
+                        <small>Controls which fields are included in the MQTT state payload.</small>
+                    </div>
+
+                    <small>MQTT publish cadence follows the Cycle Interval.</small>
+                </section>
+
+                <section class="section" id="ble-settings-section" style="margin-top: 12px;">
+                    <h3 style="margin: 0 0 12px 0; font-size: 16px; color: #1d1d1f;">BLE Transport</h3>
+
+                    <div class="grid-2col">
+                        <section class="section" style="padding: 0; background: transparent; box-shadow: none;">
+                            <div class="form-group">
+                                <label for="ble_adv_burst_ms">Burst Duration (ms)</label>
+                                <input type="number" id="ble_adv_burst_ms" name="ble_adv_burst_ms" min="100" max="60000" placeholder="900">
+                            </div>
+                        </section>
+                        <section class="section" style="padding: 0; background: transparent; box-shadow: none;">
+                            <div class="form-group">
+                                <label for="ble_adv_gap_ms">Gap Duration (ms)</label>
+                                <input type="number" id="ble_adv_gap_ms" name="ble_adv_gap_ms" min="100" max="60000" placeholder="1100">
+                            </div>
+                        </section>
+                    </div>
+
+                    <div class="grid-2col">
+                        <section class="section" style="padding: 0; background: transparent; box-shadow: none;">
+                            <div class="form-group">
+                                <label for="ble_adv_bursts">Bursts</label>
+                                <input type="number" id="ble_adv_bursts" name="ble_adv_bursts" min="1" max="10" placeholder="2">
+                            </div>
+                        </section>
+                        <section class="section" style="padding: 0; background: transparent; box-shadow: none;">
+                            <div class="form-group">
+                                <label for="ble_adv_interval_ms">Adv Interval (ms)</label>
+                                <input type="number" id="ble_adv_interval_ms" name="ble_adv_interval_ms" min="20" max="10000" placeholder="100">
+                            </div>
+                        </section>
+                    </div>
+
+                    <small>Applies when BLE transport is enabled.</small>
+                </section>
+            </section>
+
             <!-- Sensors Section (hidden if no sensor data) -->
             <section class="section" id="sensors-section" style="display:none;">
                 <h2>🧪 Sensor data</h2>
