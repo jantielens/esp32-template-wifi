@@ -722,7 +722,7 @@ function validateConfig(config) {
     if (config.wifi_ssid !== undefined && (!config.wifi_ssid || config.wifi_ssid.trim() === '')) {
         const mode = (config.power_mode || (window.deviceConfig && window.deviceConfig.power_mode) || '').toLowerCase();
         const transport = (config.publish_transport || (window.deviceConfig && window.deviceConfig.publish_transport) || '').toLowerCase();
-        const bleOnly = (mode === 'duty_cycle' && (transport === 'ble'));
+        const bleOnly = (transport === 'ble') && (mode === 'duty_cycle' || mode === 'always_on');
         if (!bleOnly) {
             return { valid: false, message: 'WiFi SSID is required' };
         }

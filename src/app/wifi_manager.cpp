@@ -15,6 +15,7 @@ static constexpr unsigned long WIFI_BACKOFF_BASE = 3000; // 3 seconds base
 RTC_DATA_ATTR static uint8_t g_cached_bssid[6] = {0};
 RTC_DATA_ATTR static uint8_t g_cached_channel = 0;
 RTC_DATA_ATTR static bool g_cached_valid = false;
+RTC_DATA_ATTR static char g_cached_ssid[CONFIG_SSID_MAX_LEN] = {0};
 
 static void format_bssid(const uint8_t *bssid, char *out, size_t out_len) {
     if (!out || out_len < 18) return;
@@ -174,6 +175,12 @@ bool wifi_manager_connect(const DeviceConfig *config, bool allow_cached_bssid) {
     }
 
     if (allow_cached_bssid && g_cached_valid && g_cached_channel > 0) {
+        if (strncmp(g_cached_ssid, config->wifi_ssid, sizeof(g_cached_ssid)) != 0) {
+            g_cached_valid = false;
+        }
+    }
+
+    if (allow_cached_bssid && g_cached_valid && g_cached_channel > 0) {
         char bssid_str[18];
         format_bssid(g_cached_bssid, bssid_str, sizeof(bssid_str));
         LOGI("WiFi", "Using cached AP: %s | Ch %u", bssid_str, (unsigned)g_cached_channel);
@@ -217,6 +224,7 @@ bool wifi_manager_connect(const DeviceConfig *config, bool allow_cached_bssid) {
                     memcpy(g_cached_bssid, best_bssid, sizeof(g_cached_bssid));
                     g_cached_channel = (uint8_t)best_channel;
                     g_cached_valid = true;
+                    strlcpy(g_cached_ssid, config->wifi_ssid, sizeof(g_cached_ssid));
                 }
 
                 return true;

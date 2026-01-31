@@ -29,7 +29,7 @@ XPT2046_Touchscreen@1.4.0
 PubSubClient@2.8
 
 # BLE (optional; compile-time gated)
-NimBLE-Arduino
+NimBLE-Arduino@1.4.2
 
 # Sensors
 Adafruit BME280 Library
