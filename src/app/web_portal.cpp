@@ -24,6 +24,7 @@
 #include "web_portal_config.h"
 #include "web_portal_cors.h"
 #include "web_portal_state.h"
+#include "portal_idle.h"
 #include "web_portal_firmware.h"
 #include "web_portal_ap.h"
 
@@ -220,6 +221,8 @@ void web_portal_handle() {
     web_portal_ap_handle();
 
     web_portal_config_loop();
+
+    portal_idle_loop();
 }
 
 // Check if OTA update is in progress

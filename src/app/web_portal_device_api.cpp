@@ -118,6 +118,8 @@ void handleGetVersion(AsyncWebServerRequest *request) {
 
     response->print(",\"has_mqtt\":");
     response->print(HAS_MQTT ? "true" : "false");
+    response->print(",\"has_ble\":");
+    response->print(HAS_BLE ? "true" : "false");
     response->print(",\"has_backlight\":");
     response->print(HAS_BACKLIGHT ? "true" : "false");
 

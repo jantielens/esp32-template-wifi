@@ -15,22 +15,26 @@ This document is a template. Sections marked with `COMPILE_FLAG_REPORT` markers 
 - The build script propagates a small allowlist of board override defines into global compiler flags so libraries are compiled with the same values.
   - Currently allowlisted:
     - `CONFIG_ASYNC_TCP_STACK_SIZE`
+    - NimBLE tuning (roles + limits + log levels)
     - TFT_eSPI essentials for clean/CI builds (pins + SPI frequencies + controller/bus flags)
   - For TFT_eSPI specifically, `build.sh` also supports a per-board `src/boards/<board>/User_Setup.h` which is force-included for that board (so the build does not depend on a locally modified Arduino library install).
 
 ## Flags (generated)
 
 <!-- BEGIN COMPILE_FLAG_REPORT:FLAGS -->
-Total flags: 101
+Total flags: 117
 
 ### Features (HAS_*)
 
 - **HAS_BACKLIGHT** default: `false` — Enable backlight control (typically via PWM).
+- **HAS_BLE** default: `false` — Enable BLE (NimBLE) advertising support.
 - **HAS_BUILTIN_LED** default: `false` — Enable built-in status LED support.
+- **HAS_BUTTON** default: `false` — User Button (optional)
 - **HAS_DISPLAY** default: `false` — Enable display + LVGL UI support.
 - **HAS_IMAGE_API** default: `false` — Enable Image API endpoints (JPEG upload/download/display).
 - **HAS_MQTT** default: `true` — Enable MQTT and Home Assistant integration.
 - **HAS_SENSOR_BME280** default: `false` — Enable BME280 (I2C) environmental sensor adapter.
+- **HAS_SENSOR_DUMMY** default: `false` — Enable dummy sensor adapter (synthetic values for testing).
 - **HAS_SENSOR_LD2410_OUT** default: `false` — Enable LD2410 OUT pin presence sensor adapter.
 - **HAS_TOUCH** default: `false` — Enable touch input support.
 
@@ -48,6 +52,7 @@ Total flags: 101
 
 ### Hardware (Pins)
 
+- **BUTTON_PIN** default: `0` — GPIO pin for the optional user button (active level defined below).
 - **LCD_BL_PIN** default: `(no default)` — LCD backlight pin.
 - **LCD_CS_PIN** default: `(no default)` — LCD SPI CS pin.
 - **LCD_DC_PIN** default: `(no default)` — LCD SPI DC pin.
@@ -95,6 +100,9 @@ Total flags: 101
 
 ### Limits & Tuning
 
+- **CONFIG_BT_NIMBLE_MAX_BONDS** default: `(no default)` — NimBLE max bonded devices (tuning for small footprint)
+- **CONFIG_BT_NIMBLE_MAX_CCCDS** default: `(no default)` — NimBLE max CCCDs
+- **CONFIG_BT_NIMBLE_MAX_CONNECTIONS** default: `(no default)` — NimBLE max connections
 - **HEALTH_HISTORY_PERIOD_MS** default: `5000` — Sampling cadence for the device-side history (ms). Default aligns with UI poll.
 - **IMAGE_API_DECODE_HEADROOM_BYTES** default: `(50 * 1024)` — Extra free RAM required for decoding (bytes).
 - **IMAGE_API_DEFAULT_TIMEOUT_MS** default: `10000` — Default image display timeout in milliseconds.
@@ -119,6 +127,14 @@ Total flags: 101
 ### Other
 
 - **BME280_I2C_ADDR** default: `0x76` — BME280 I2C address (0x76 or 0x77).
+- **BUTTON_ACTIVE_LOW** default: `true` — Button polarity: true when pressed = LOW.
+- **CONFIG_BT_NIMBLE_LOG_LEVEL** default: `(no default)` — NimBLE host log level
+- **CONFIG_BT_NIMBLE_MSYS1_BLOCK_COUNT** default: `(no default)` — NimBLE msys1 block count
+- **CONFIG_BT_NIMBLE_ROLE_BROADCASTER** default: `(no default)` — NimBLE role: broadcaster
+- **CONFIG_BT_NIMBLE_ROLE_CENTRAL** default: `(no default)` — NimBLE role: central
+- **CONFIG_BT_NIMBLE_ROLE_OBSERVER** default: `(no default)` — NimBLE role: observer
+- **CONFIG_BT_NIMBLE_ROLE_PERIPHERAL** default: `(no default)` — NimBLE role: peripheral (required)
+- **CONFIG_NIMBLE_CPP_LOG_LEVEL** default: `(no default)` — NimBLE C++ wrapper log level
 - **DISPLAY_COLOR_ORDER_BGR** default: `(no default)` — Panel uses BGR byte order.
 - **DISPLAY_DRIVER_ILI9341_2** default: `(no default)` — Use the ILI9341_2 controller setup in TFT_eSPI.
 - **DISPLAY_INVERSION_ON** default: `(no default)` — Enable display inversion (panel-specific).
@@ -132,6 +148,7 @@ Total flags: 101
 - **LD2410_OUT_DEBOUNCE_MS** default: `50` — Debounce for LD2410 OUT edge changes (ms).
 - **LED_ACTIVE_HIGH** default: `true` — LED polarity: true if HIGH turns the LED on.
 - **MEMORY_TRIPWIRE_CHECK_INTERVAL_MS** default: `5000` — How often to check tripwires from the main loop.
+- **POWERON_CONFIG_BURST_ENABLED** default: `false` — Intended for boards WITHOUT a reliable user button.
 - **PROJECT_DISPLAY_NAME** default: `"ESP32 Device"` — Human-friendly project name used in the web UI and device name (can be set by build system).
 - **TFT_BACKLIGHT_ON** default: `(no default)` — Backlight "on" level.
 - **TFT_BACKLIGHT_PWM_CHANNEL** default: `0` — LEDC channel used for backlight PWM.
@@ -148,14 +165,14 @@ Total flags: 101
 Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
 
 <!-- BEGIN COMPILE_FLAG_REPORT:MATRIX_FEATURES -->
-| board-name | HAS_BACKLIGHT | HAS_BUILTIN_LED | HAS_DISPLAY | HAS_IMAGE_API | HAS_MQTT | HAS_SENSOR_BME280 | HAS_SENSOR_LD2410_OUT | HAS_TOUCH |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| esp32-nodisplay |  |  |  |  | ✅ |  |  |  |
-| cyd-v2 | ✅ |  | ✅ | ✅ | ✅ |  |  | ✅ |
-| esp32c3-waveshare-169-st7789v2 | ✅ | ✅ | ✅ | ✅ | ✅ |  |  |  |
-| jc3248w535 | ✅ |  | ✅ | ✅ | ✅ |  |  | ✅ |
-| jc3636w518 | ✅ |  | ✅ | ✅ | ✅ |  |  | ✅ |
-| esp32c3-withsensors |  |  |  |  | ✅ | ✅ | ✅ |  |
+| board-name | HAS_BACKLIGHT | HAS_BLE | HAS_BUILTIN_LED | HAS_BUTTON | HAS_DISPLAY | HAS_IMAGE_API | HAS_MQTT | HAS_SENSOR_BME280 | HAS_SENSOR_DUMMY | HAS_SENSOR_LD2410_OUT | HAS_TOUCH |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| esp32-nodisplay |  |  |  |  |  |  | ✅ |  |  |  |  |
+| cyd-v2 | ✅ |  |  |  | ✅ | ✅ | ✅ |  |  |  | ✅ |
+| esp32c3-waveshare-169-st7789v2 | ✅ |  | ✅ |  | ✅ | ✅ | ✅ |  |  |  |  |
+| jc3248w535 | ✅ |  |  |  | ✅ | ✅ | ✅ |  |  |  | ✅ |
+| jc3636w518 | ✅ |  |  |  | ✅ | ✅ | ✅ |  |  |  | ✅ |
+| esp32c3-withsensors |  | ✅ |  | ✅ |  |  | ✅ |  | ✅ |  |  |
 <!-- END COMPILE_FLAG_REPORT:MATRIX_FEATURES -->
 
 ## Board Matrix: Selectors (generated)
@@ -180,7 +197,17 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/display_manager.cpp
   - src/app/drivers/arduino_gfx_driver.cpp
   - src/app/drivers/tft_espi_driver.cpp
+- **HAS_BLE**
+  - src/app/app.ino
+  - src/app/ble_advertiser.cpp
+  - src/app/ble_advertiser.h
+  - src/app/board_config.h
+  - src/app/duty_cycle.cpp
 - **HAS_BUILTIN_LED**
+  - src/app/app.ino
+  - src/app/board_config.h
+  - src/app/power_manager.cpp
+- **HAS_BUTTON**
   - src/app/app.ino
   - src/app/board_config.h
 - **HAS_DISPLAY**
@@ -233,12 +260,15 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/board_config.h
   - src/app/config_manager.cpp
   - src/app/device_telemetry.cpp
+  - src/app/duty_cycle.cpp
   - src/app/ha_discovery.cpp
   - src/app/ha_discovery.h
   - src/app/mqtt_manager.cpp
   - src/app/mqtt_manager.h
   - src/app/sensors/bme280_sensor.cpp
   - src/app/sensors/bme280_sensor.h
+  - src/app/sensors/dummy_sensor.cpp
+  - src/app/sensors/dummy_sensor.h
   - src/app/sensors/ld2410_out_sensor.cpp
   - src/app/sensors/sensor_manager.cpp
   - src/app/sensors/sensor_manager.h
@@ -246,6 +276,11 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/board_config.h
   - src/app/sensors.cpp
   - src/app/sensors/bme280_sensor.cpp
+- **HAS_SENSOR_DUMMY**
+  - src/app/board_config.h
+  - src/app/sensors.cpp
+  - src/app/sensors/dummy_sensor.cpp
+  - src/app/sensors/dummy_sensor.h
 - **HAS_SENSOR_LD2410_OUT**
   - src/app/board_config.h
   - src/app/sensors.cpp
@@ -267,6 +302,10 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/touch_drivers.cpp
   - src/app/touch_manager.cpp
 - **BME280_I2C_ADDR**
+  - src/app/board_config.h
+- **BUTTON_ACTIVE_LOW**
+  - src/app/board_config.h
+- **BUTTON_PIN**
   - src/app/board_config.h
 - **DISPLAY_INVERSION_ON**
   - src/app/drivers/tft_espi_driver.cpp
@@ -323,6 +362,9 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
 - **MEMORY_TRIPWIRE_INTERNAL_MIN_BYTES**
   - src/app/board_config.h
   - src/app/device_telemetry.cpp
+- **POWERON_CONFIG_BURST_ENABLED**
+  - src/app/board_config.h
+  - src/app/power_manager.cpp
 - **PROJECT_DISPLAY_NAME**
   - src/app/board_config.h
 - **SENSOR_I2C_FREQUENCY**

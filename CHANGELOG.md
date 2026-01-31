@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.47] - 2026-01-31
+
+### Added
+- Power manager, duty-cycle flow, and Wi-Fi manager for power-optimized operation
+- BLE BTHome advertising with configurable burst timing and optional transport selection
+- Portal idle timeout handling for Config/AP modes
+- Dummy sensor adapter for synthetic telemetry testing
+
+### Changed
+- Consolidated publish cadence under Cycle Interval (seconds) across BLE/MQTT
+- MQTT publishing supports scoped payloads (sensors-only/diagnostics/all)
+- Always-On BLE-only configs can run without Wi-Fi SSID (portal access via button/burst)
+- Updated portal UI to expose power/transport settings
+
+### Documentation
+- Updated web portal, MQTT, and sensors docs for new power/transport behavior
+
 ## [0.0.46] - 2026-01-29
 
 ### Added

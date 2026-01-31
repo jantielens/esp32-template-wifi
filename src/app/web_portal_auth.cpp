@@ -1,6 +1,7 @@
 #include "web_portal_auth.h"
 
 #include "web_portal_state.h"
+#include "portal_idle.h"
 #include "config_manager.h"
 #include "project_branding.h"
 
@@ -14,6 +15,8 @@ static bool portal_auth_required() {
 }
 
 bool portal_auth_gate(AsyncWebServerRequest *request) {
+    portal_idle_notify_activity();
+
     if (!portal_auth_required()) return true;
 
     DeviceConfig *config = web_portal_get_current_config();

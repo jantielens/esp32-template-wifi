@@ -6,6 +6,8 @@
 
 #include "ha_discovery.h"
 #include "device_telemetry.h"
+#include "power_manager.h"
+#include "power_config.h"
 #include "log_manager.h"
 
 MqttManager::MqttManager() : _client(_net) {}
@@ -56,7 +58,7 @@ bool MqttManager::publishEnabled() const {
     // Publishing health periodically is optional.
     if (!_config) return false;
     if (!connectEnabled()) return false;
-    return _config->mqtt_interval_seconds > 0;
+    return _config->cycle_interval_seconds > 0;
 }
 
 bool MqttManager::connected() {
@@ -106,7 +108,8 @@ void MqttManager::publishHealthNow() {
     if (!_client.connected()) return;
 
     StaticJsonDocument<768> doc;
-    device_telemetry_fill_mqtt(doc);
+    const MqttPublishScope scope = power_config_parse_mqtt_publish_scope(_config);
+    device_telemetry_fill_mqtt_scoped(doc, scope);
 
     if (doc.overflowed()) {
         LOGE("MQTT", "Health JSON overflow (StaticJsonDocument too small)");
@@ -119,7 +122,9 @@ void MqttManager::publishHealthNow() {
         LOGE("MQTT", "Health JSON payload too large for MQTT_MAX_PACKET_SIZE (%u)", (unsigned)sizeof(payload));
         return;
     }
-    _client.publish(_health_state_topic, (const uint8_t*)payload, (unsigned)n, true);
+    if (_client.publish(_health_state_topic, (const uint8_t*)payload, (unsigned)n, true)) {
+        LOGI("MQTT", "Published health (retained)");
+    }
 }
 
 void MqttManager::publishHealthIfDue() {
@@ -127,11 +132,12 @@ void MqttManager::publishHealthIfDue() {
     if (!publishEnabled()) return;
 
     unsigned long now = millis();
-    unsigned long interval_ms = (unsigned long)_config->mqtt_interval_seconds * 1000UL;
+    unsigned long interval_ms = (unsigned long)_config->cycle_interval_seconds * 1000UL;
 
     if (_last_health_publish_ms == 0 || (now - _last_health_publish_ms) >= interval_ms) {
         StaticJsonDocument<768> doc;
-        device_telemetry_fill_mqtt(doc);
+        const MqttPublishScope scope = power_config_parse_mqtt_publish_scope(_config);
+        device_telemetry_fill_mqtt_scoped(doc, scope);
 
         if (doc.overflowed()) {
             LOGE("MQTT", "Health JSON overflow (StaticJsonDocument too small)");
@@ -149,6 +155,7 @@ void MqttManager::publishHealthIfDue() {
 
         if (ok) {
             _last_health_publish_ms = now;
+            LOGI("MQTT", "Published health (retained)");
         }
     }
 }
@@ -176,32 +183,46 @@ void MqttManager::ensureConnected() {
 
     LOGI("MQTT", "Connecting to %s:%d", _config->mqtt_host, resolvedPort());
 
+    const bool duty_cycle = (power_manager_get_current_mode() == PowerMode::DutyCycle);
     bool connected = false;
     if (has_user) {
         const char *pass = has_pass ? _config->mqtt_password : "";
-        connected = _client.connect(
-            client_id,
-            _config->mqtt_username,
-            pass,
-            _availability_topic,
-            0,
-            true,
-            "offline"
-        );
+        if (duty_cycle) {
+            connected = _client.connect(client_id, _config->mqtt_username, pass);
+        } else {
+            connected = _client.connect(
+                client_id,
+                _config->mqtt_username,
+                pass,
+                _availability_topic,
+                0,
+                true,
+                "offline"
+            );
+        }
     } else {
-        connected = _client.connect(
-            client_id,
-            _availability_topic,
-            0,
-            true,
-            "offline"
-        );
+        if (duty_cycle) {
+            connected = _client.connect(client_id);
+        } else {
+            connected = _client.connect(
+                client_id,
+                _availability_topic,
+                0,
+                true,
+                "offline"
+            );
+        }
     }
 
     if (connected) {
         LOGI("MQTT", "Connected");
-        publishAvailability(true);
-        publishDiscoveryOncePerBoot();
+        if (!duty_cycle) {
+            publishAvailability(true);
+        }
+
+        if (power_manager_should_publish_mqtt_discovery()) {
+            publishDiscoveryOncePerBoot();
+        }
 
         // Publish a single retained state after connect so HA entities have values,
         // even when periodic publishing is disabled (interval = 0).
@@ -222,6 +243,12 @@ void MqttManager::loop() {
     if (_client.connected()) {
         _client.loop();
         publishHealthIfDue();
+    }
+}
+
+void MqttManager::disconnect() {
+    if (_client.connected()) {
+        _client.disconnect();
     }
 }
 

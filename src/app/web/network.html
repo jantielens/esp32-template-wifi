@@ -82,7 +82,7 @@
 
             <!-- MQTT Settings Section (full-width) -->
             <section class="section" id="mqtt-settings-section">
-                <h2>🏠 MQTT (Home Assistant) (Optional)</h2>
+                <h2>🏠 MQTT Transport (Optional)</h2>
                 <div class="form-group">
                     <label for="mqtt_host">MQTT Host</label>
                     <input type="text" id="mqtt_host" name="mqtt_host" maxlength="63" placeholder="e.g. homeassistant.local">
@@ -104,10 +104,9 @@
                     <small>Leave empty to keep existing password</small>
                 </div>
                 <div class="form-group">
-                    <label for="mqtt_interval_seconds">Publish Interval (seconds)</label>
-                    <input type="number" id="mqtt_interval_seconds" name="mqtt_interval_seconds" min="0" max="65535" placeholder="0">
                     <small>
-                        Modes: leave MQTT Host empty = don't connect. Set MQTT Host + interval 0 = connect (HA discovery + availability) but no periodic health publish. Set MQTT Host + interval &gt; 0 = connect and publish.
+                        Modes: leave MQTT Host empty = don't connect. Set MQTT Host and use the Cycle Interval (Operating Mode & Cadence) to control periodic health publishes.
+                        MQTT payload scope is configured on the Home page.
                     </small>
                 </div>
             </section>

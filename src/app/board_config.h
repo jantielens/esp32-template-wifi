@@ -45,6 +45,11 @@
 #define HAS_BUILTIN_LED false
 #endif
 
+// Enable BLE (NimBLE) advertising support.
+#ifndef HAS_BLE
+#define HAS_BLE false
+#endif
+
 // Enable MQTT and Home Assistant integration.
 #ifndef HAS_MQTT
 #define HAS_MQTT true
@@ -110,6 +115,29 @@
 // #endif
 
 // ============================================================================
+// User Button (optional)
+// ============================================================================
+#ifndef HAS_BUTTON
+#define HAS_BUTTON false
+#endif
+
+// GPIO pin for the optional user button (active level defined below).
+#ifndef BUTTON_PIN
+#define BUTTON_PIN 0
+#endif
+
+// Button polarity: true when pressed = LOW.
+#ifndef BUTTON_ACTIVE_LOW
+#define BUTTON_ACTIVE_LOW true
+#endif
+
+// Enable power-on burst detection to force Config Mode (NVS-backed, disabled by default).
+// Intended for boards WITHOUT a reliable user button.
+#ifndef POWERON_CONFIG_BURST_ENABLED
+#define POWERON_CONFIG_BURST_ENABLED false
+#endif
+
+// ============================================================================
 // Sensors (Optional)
 // ============================================================================
 // Enable BME280 (I2C) environmental sensor adapter.
@@ -120,6 +148,11 @@
 // Enable LD2410 OUT pin presence sensor adapter.
 #ifndef HAS_SENSOR_LD2410_OUT
 #define HAS_SENSOR_LD2410_OUT false
+#endif
+
+// Enable dummy sensor adapter (synthetic values for testing).
+#ifndef HAS_SENSOR_DUMMY
+#define HAS_SENSOR_DUMMY false
 #endif
 
 // I2C pins for sensors. Use -1 to keep default Wire pins.

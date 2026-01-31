@@ -452,6 +452,19 @@ async function loadVersion() {
                 });
             }
         }
+
+        // Hide/disable BLE settings if firmware was built without BLE support
+        const bleSection = document.getElementById('ble-settings-section');
+        if (bleSection) {
+            if (version.has_ble === true) {
+                bleSection.style.display = 'block';
+            } else {
+                bleSection.style.display = 'none';
+                bleSection.querySelectorAll('input, select, textarea').forEach(el => {
+                    el.disabled = true;
+                });
+            }
+        }
         
         // Populate screen selection dropdown if device has display
         const screenSelect = document.getElementById('screen_selection');
@@ -599,7 +612,22 @@ async function loadConfig() {
         setValueIfExists('mqtt_host', config.mqtt_host);
         setValueIfExists('mqtt_port', config.mqtt_port);
         setValueIfExists('mqtt_username', config.mqtt_username);
-        setValueIfExists('mqtt_interval_seconds', config.mqtt_interval_seconds);
+
+        // Power / transport settings
+        setValueIfExists('power_mode', config.power_mode);
+        setValueIfExists('publish_transport', config.publish_transport);
+        setValueIfExists('cycle_interval_seconds', config.cycle_interval_seconds);
+        setValueIfExists('portal_idle_timeout_seconds', config.portal_idle_timeout_seconds);
+        setValueIfExists('wifi_backoff_max_seconds', config.wifi_backoff_max_seconds);
+
+        // BLE timing
+        setValueIfExists('ble_adv_burst_ms', config.ble_adv_burst_ms);
+        setValueIfExists('ble_adv_gap_ms', config.ble_adv_gap_ms);
+        setValueIfExists('ble_adv_bursts', config.ble_adv_bursts);
+        setValueIfExists('ble_adv_interval_ms', config.ble_adv_interval_ms);
+
+        // MQTT scope
+        setValueIfExists('mqtt_publish_scope', config.mqtt_publish_scope);
 
         const mqttPwdField = document.getElementById('mqtt_password');
         if (mqttPwdField) {
@@ -667,7 +695,10 @@ function extractFormFields(formData) {
     const config = {};
     const fields = ['wifi_ssid', 'wifi_password', 'device_name', 'fixed_ip', 
                     'subnet_mask', 'gateway', 'dns1', 'dns2', 'dummy_setting',
-                    'mqtt_host', 'mqtt_port', 'mqtt_username', 'mqtt_password', 'mqtt_interval_seconds',
+                    'mqtt_host', 'mqtt_port', 'mqtt_username', 'mqtt_password',
+                    'power_mode', 'publish_transport', 'cycle_interval_seconds', 'portal_idle_timeout_seconds', 'wifi_backoff_max_seconds',
+                    'ble_adv_burst_ms', 'ble_adv_gap_ms', 'ble_adv_bursts', 'ble_adv_interval_ms',
+                    'mqtt_publish_scope',
                     'basic_auth_enabled', 'basic_auth_username', 'basic_auth_password',
                     'backlight_brightness',
                     'screen_saver_enabled', 'screen_saver_timeout_seconds', 'screen_saver_fade_out_ms', 'screen_saver_fade_in_ms', 'screen_saver_wake_on_touch'];
@@ -689,7 +720,12 @@ function extractFormFields(formData) {
 function validateConfig(config) {
     // Validate required fields only if they exist on this page
     if (config.wifi_ssid !== undefined && (!config.wifi_ssid || config.wifi_ssid.trim() === '')) {
-        return { valid: false, message: 'WiFi SSID is required' };
+        const mode = (config.power_mode || (window.deviceConfig && window.deviceConfig.power_mode) || '').toLowerCase();
+        const transport = (config.publish_transport || (window.deviceConfig && window.deviceConfig.publish_transport) || '').toLowerCase();
+        const bleOnly = (transport === 'ble') && (mode === 'duty_cycle' || mode === 'always_on');
+        if (!bleOnly) {
+            return { valid: false, message: 'WiFi SSID is required' };
+        }
     }
     
     if (config.device_name !== undefined && (!config.device_name || config.device_name.trim() === '')) {

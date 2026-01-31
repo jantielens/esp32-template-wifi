@@ -2,6 +2,7 @@
 
 #include "web_portal_auth.h"
 #include "web_portal_state.h"
+#include "portal_idle.h"
 
 #include "board_config.h"
 #include "config_manager.h"
@@ -42,6 +43,7 @@ static void config_post_reset() {
     g_config_post.total = 0;
     g_config_post.received = 0;
     g_config_post.started_ms = 0;
+    portal_idle_set_config_upload_in_progress(false);
 }
 
 void web_portal_config_loop() {
@@ -95,7 +97,22 @@ void handleGetConfig(AsyncWebServerRequest *request) {
         (*doc)["mqtt_port"] = current_config->mqtt_port;
         (*doc)["mqtt_username"] = current_config->mqtt_username;
         (*doc)["mqtt_password"] = "";
-        (*doc)["mqtt_interval_seconds"] = current_config->mqtt_interval_seconds;
+
+        // Power / transport settings
+        (*doc)["power_mode"] = current_config->power_mode;
+        (*doc)["publish_transport"] = current_config->publish_transport;
+        (*doc)["cycle_interval_seconds"] = current_config->cycle_interval_seconds;
+        (*doc)["portal_idle_timeout_seconds"] = current_config->portal_idle_timeout_seconds;
+        (*doc)["wifi_backoff_max_seconds"] = current_config->wifi_backoff_max_seconds;
+
+        // BLE timing
+        (*doc)["ble_adv_burst_ms"] = current_config->ble_adv_burst_ms;
+        (*doc)["ble_adv_gap_ms"] = current_config->ble_adv_gap_ms;
+        (*doc)["ble_adv_bursts"] = current_config->ble_adv_bursts;
+        (*doc)["ble_adv_interval_ms"] = current_config->ble_adv_interval_ms;
+
+        // MQTT scope
+        (*doc)["mqtt_publish_scope"] = current_config->mqtt_publish_scope;
 
         // Web portal Basic Auth (password not returned)
         (*doc)["basic_auth_enabled"] = current_config->basic_auth_enabled;
@@ -157,6 +174,7 @@ void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len,
         g_config_post.total = total;
         g_config_post.received = 0;
         g_config_post.buf = nullptr;
+        portal_idle_set_config_upload_in_progress(true);
         portEXIT_CRITICAL(&g_config_post_mux);
 
         if (total == 0 || total > WEB_PORTAL_CONFIG_MAX_JSON_BYTES) {
@@ -328,14 +346,90 @@ void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len,
         }
     }
 
-    // MQTT interval seconds
-    if (doc.containsKey("mqtt_interval_seconds")) {
-        if (doc["mqtt_interval_seconds"].is<const char*>()) {
-            const char* int_str = doc["mqtt_interval_seconds"];
-            current_config->mqtt_interval_seconds = (uint16_t)atoi(int_str ? int_str : "0");
+
+    // Power mode
+    if (doc.containsKey("power_mode")) {
+        strlcpy(current_config->power_mode, doc["power_mode"] | "always_on", CONFIG_POWER_MODE_MAX_LEN);
+    }
+
+    // Publish transport
+    if (doc.containsKey("publish_transport")) {
+        strlcpy(current_config->publish_transport, doc["publish_transport"] | "ble", CONFIG_PUBLISH_TRANSPORT_MAX_LEN);
+    }
+
+    // Cycle interval (legacy mqtt_interval_seconds supported as alias)
+    const bool has_cycle_interval = doc.containsKey("cycle_interval_seconds");
+    const bool has_mqtt_interval = doc.containsKey("mqtt_interval_seconds");
+    if (has_cycle_interval || has_mqtt_interval) {
+        const JsonVariant value = has_cycle_interval ? doc["cycle_interval_seconds"] : doc["mqtt_interval_seconds"];
+        if (value.is<const char*>()) {
+            const char* v = value;
+            current_config->cycle_interval_seconds = (uint16_t)atoi(v ? v : "0");
         } else {
-            current_config->mqtt_interval_seconds = (uint16_t)(doc["mqtt_interval_seconds"] | 0);
+            current_config->cycle_interval_seconds = (uint16_t)(value | 0);
         }
+    }
+
+    // Portal idle timeout
+    if (doc.containsKey("portal_idle_timeout_seconds")) {
+        if (doc["portal_idle_timeout_seconds"].is<const char*>()) {
+            const char* v = doc["portal_idle_timeout_seconds"];
+            current_config->portal_idle_timeout_seconds = (uint16_t)atoi(v ? v : "0");
+        } else {
+            current_config->portal_idle_timeout_seconds = (uint16_t)(doc["portal_idle_timeout_seconds"] | 0);
+        }
+    }
+
+    // WiFi backoff max
+    if (doc.containsKey("wifi_backoff_max_seconds")) {
+        if (doc["wifi_backoff_max_seconds"].is<const char*>()) {
+            const char* v = doc["wifi_backoff_max_seconds"];
+            current_config->wifi_backoff_max_seconds = (uint16_t)atoi(v ? v : "0");
+        } else {
+            current_config->wifi_backoff_max_seconds = (uint16_t)(doc["wifi_backoff_max_seconds"] | 0);
+        }
+    }
+
+    // BLE timing settings
+    if (doc.containsKey("ble_adv_burst_ms")) {
+        if (doc["ble_adv_burst_ms"].is<const char*>()) {
+            const char* v = doc["ble_adv_burst_ms"];
+            current_config->ble_adv_burst_ms = (uint16_t)atoi(v ? v : "0");
+        } else {
+            current_config->ble_adv_burst_ms = (uint16_t)(doc["ble_adv_burst_ms"] | 0);
+        }
+    }
+
+    if (doc.containsKey("ble_adv_gap_ms")) {
+        if (doc["ble_adv_gap_ms"].is<const char*>()) {
+            const char* v = doc["ble_adv_gap_ms"];
+            current_config->ble_adv_gap_ms = (uint16_t)atoi(v ? v : "0");
+        } else {
+            current_config->ble_adv_gap_ms = (uint16_t)(doc["ble_adv_gap_ms"] | 0);
+        }
+    }
+
+    if (doc.containsKey("ble_adv_bursts")) {
+        if (doc["ble_adv_bursts"].is<const char*>()) {
+            const char* v = doc["ble_adv_bursts"];
+            current_config->ble_adv_bursts = (uint8_t)atoi(v ? v : "0");
+        } else {
+            current_config->ble_adv_bursts = (uint8_t)(doc["ble_adv_bursts"] | 0);
+        }
+    }
+
+    if (doc.containsKey("ble_adv_interval_ms")) {
+        if (doc["ble_adv_interval_ms"].is<const char*>()) {
+            const char* v = doc["ble_adv_interval_ms"];
+            current_config->ble_adv_interval_ms = (uint16_t)atoi(v ? v : "0");
+        } else {
+            current_config->ble_adv_interval_ms = (uint16_t)(doc["ble_adv_interval_ms"] | 0);
+        }
+    }
+
+    // MQTT publish scope
+    if (doc.containsKey("mqtt_publish_scope")) {
+        strlcpy(current_config->mqtt_publish_scope, doc["mqtt_publish_scope"] | "sensors_only", CONFIG_MQTT_SCOPE_MAX_LEN);
     }
 
     // Basic Auth enabled

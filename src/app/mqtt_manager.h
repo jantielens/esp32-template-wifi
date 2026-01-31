@@ -28,6 +28,8 @@ public:
     bool publishEnabled() const;
     bool connected();
 
+    void disconnect();
+
     unsigned long lastHealthPublishMs() const { return _last_health_publish_ms; }
 
     // Publish helpers

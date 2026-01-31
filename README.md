@@ -17,6 +17,11 @@ Skip the boilerplate and start building. ESP32 Arduino template with automated b
   - **REST API**: Full `/api/*` endpoints for device control and monitoring
   - **OTA Updates**: Upload new firmware over WiFi without USB cable
 
+- **⚡ Power Modes (Optional)**
+  - **Always-On (default)**: Legacy always-connected WiFi behavior
+  - **Duty-Cycle**: Wake → sample sensors → advertise BLE / publish MQTT → sleep
+  - **Config/AP Auto-Sleep**: Portal auto-sleeps after inactivity timeout
+
 - **🖥️ Optional Display + Touch Support**
   - **Works With or Without a Display**: Devices without displays build and run normally
   - **Display/Touch HAL**: Unified `DisplayDriver` / `TouchDriver` interfaces with `DisplayManager` / `TouchManager` lifecycle

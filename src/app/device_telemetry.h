@@ -2,6 +2,7 @@
 #define DEVICE_TELEMETRY_H
 
 #include <ArduinoJson.h>
+#include "power_config.h"
 
 struct DeviceMemorySnapshot {
 	size_t heap_free_bytes;
@@ -41,6 +42,9 @@ void device_telemetry_fill_api(JsonDocument &doc);
 // Fill a JsonDocument with device telemetry optimized for MQTT publishing.
 // Intentionally excludes volatile/low-value fields like IP address.
 void device_telemetry_fill_mqtt(JsonDocument &doc);
+
+// Fill MQTT telemetry with scoped content (sensors-only, diagnostics-only, or all).
+void device_telemetry_fill_mqtt_scoped(JsonDocument &doc, MqttPublishScope scope);
 
 // Get current CPU usage percentage (0-100).
 // Returns -1 when runtime stats are unavailable (treated as unknown).
