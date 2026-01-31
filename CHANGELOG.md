@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.48] - 2026-01-31
+
+### Changed
+- Moved BLE advertise cadence and Wi-Fi watchdog logic into their managers
+- Standardized Arduino/C++ indentation to tabs with 4-space width via .editorconfig
+- Clarified time-unit naming for heartbeat and Wi-Fi watchdog helpers
+
 ## [0.0.47] - 2026-01-31
 
 ### Added

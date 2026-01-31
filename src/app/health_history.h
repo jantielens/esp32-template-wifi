@@ -7,27 +7,27 @@
 // Enabled via HEALTH_HISTORY_ENABLED.
 
 struct HealthHistoryParams {
-    uint32_t period_ms;
-    uint32_t seconds;
-    uint32_t samples;
+		uint32_t period_ms;
+		uint32_t seconds;
+		uint32_t samples;
 };
 
 struct HealthHistorySample {
-    uint32_t uptime_ms;
+		uint32_t uptime_ms;
 
-    int16_t cpu_usage; // -1 => unknown
+		int16_t cpu_usage; // -1 => unknown
 
-    uint32_t heap_internal_free;
-    uint32_t heap_internal_free_min_window;
-    uint32_t heap_internal_free_max_window;
+		uint32_t heap_internal_free;
+		uint32_t heap_internal_free_min_window;
+		uint32_t heap_internal_free_max_window;
 
-    uint32_t psram_free;
-    uint32_t psram_free_min_window;
-    uint32_t psram_free_max_window;
+		uint32_t psram_free;
+		uint32_t psram_free_min_window;
+		uint32_t psram_free_max_window;
 
-    uint32_t heap_internal_largest;
-    uint32_t heap_internal_largest_min_window;
-    uint32_t heap_internal_largest_max_window;
+		uint32_t heap_internal_largest;
+		uint32_t heap_internal_largest_min_window;
+		uint32_t heap_internal_largest_max_window;
 };
 
 // Starts background sampling if enabled. Safe to call multiple times.

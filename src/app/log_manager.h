@@ -11,10 +11,10 @@
 #include <Arduino.h>
 
 enum LogLevel : uint8_t {
-    LOG_LEVEL_ERROR = 1,
-    LOG_LEVEL_WARN = 2,
-    LOG_LEVEL_INFO = 3,
-    LOG_LEVEL_DEBUG = 4,
+		LOG_LEVEL_ERROR = 1,
+		LOG_LEVEL_WARN = 2,
+		LOG_LEVEL_INFO = 3,
+		LOG_LEVEL_DEBUG = 4,
 };
 
 #ifndef LOG_LEVEL
@@ -29,8 +29,8 @@ void log_write(LogLevel level, const char* module, const char* format, ...);
 
 // Convenience duration helper.
 inline void log_duration(const char* module, const char* label, unsigned long start_ms) {
-    const unsigned long elapsed = millis() - start_ms;
-    log_write(LOG_LEVEL_INFO, module, "%s dur=%lums", label, elapsed);
+		const unsigned long elapsed = millis() - start_ms;
+		log_write(LOG_LEVEL_INFO, module, "%s dur=%lums", label, elapsed);
 }
 
 #if LOG_LEVEL >= LOG_LEVEL_ERROR

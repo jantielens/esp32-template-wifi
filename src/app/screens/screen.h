@@ -16,23 +16,23 @@
 
 class Screen {
 public:
-    virtual ~Screen() {}
-    
-    // Build LVGL widgets for this screen
-    virtual void create() = 0;
-    
-    // Clean up LVGL widgets
-    virtual void destroy() = 0;
-    
-    // Make this screen visible
-    virtual void show() = 0;
-    
-    // Hide this screen (called before navigating away)
-    virtual void hide() = 0;
-    
-    // Update screen data (called every loop while active)
-    // Read from stored pointers (thread-safe: main loop only)
-    virtual void update() = 0;
+		virtual ~Screen() {}
+		
+		// Build LVGL widgets for this screen
+		virtual void create() = 0;
+		
+		// Clean up LVGL widgets
+		virtual void destroy() = 0;
+		
+		// Make this screen visible
+		virtual void show() = 0;
+		
+		// Hide this screen (called before navigating away)
+		virtual void hide() = 0;
+		
+		// Update screen data (called every loop while active)
+		// Read from stored pointers (thread-safe: main loop only)
+		virtual void update() = 0;
 };
 
 #endif // SCREEN_H

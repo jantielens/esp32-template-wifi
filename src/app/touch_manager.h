@@ -18,29 +18,29 @@
 
 class TouchManager {
 private:
-    TouchDriver* driver;
-    lv_indev_drv_t indev_drv;
-    lv_indev_t* indev;
+		TouchDriver* driver;
+		lv_indev_drv_t indev_drv;
+		lv_indev_t* indev;
 
-    bool lvglRegisterPending;
-    bool tryRegisterWithLVGL();
-    
-    // LVGL read callback (static, accesses instance via user_data)
-    static void readCallback(lv_indev_drv_t* drv, lv_indev_data_t* data);
-    
+		bool lvglRegisterPending;
+		bool tryRegisterWithLVGL();
+		
+		// LVGL read callback (static, accesses instance via user_data)
+		static void readCallback(lv_indev_drv_t* drv, lv_indev_data_t* data);
+		
 public:
-    TouchManager();
-    ~TouchManager();
-    
-    // Initialize touch hardware and register with LVGL
-    void init();
+		TouchManager();
+		~TouchManager();
+		
+		// Initialize touch hardware and register with LVGL
+		void init();
 
-    // Retry deferred LVGL registration (non-blocking)
-    void loop();
-    
-    // Get touch state (for debugging)
-    bool isTouched();
-    bool getTouch(uint16_t* x, uint16_t* y);
+		// Retry deferred LVGL registration (non-blocking)
+		void loop();
+		
+		// Get touch state (for debugging)
+		bool isTouched();
+		bool getTouch(uint16_t* x, uint16_t* y);
 };
 
 // C-style interface for app.ino

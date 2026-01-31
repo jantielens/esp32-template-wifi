@@ -17,14 +17,14 @@
 // - Returns false with a short error string on failure.
 // - output_bgr565 is not supported here; output is always RGB565.
 bool lvgl_jpeg_decode_to_rgb565(
-    const uint8_t* jpeg,
-    size_t jpeg_size,
-    uint16_t** out_pixels,
-    int* out_w,
-    int* out_h,
-    int* out_scale_used,
-    char* err,
-    size_t err_len
+		const uint8_t* jpeg,
+		size_t jpeg_size,
+		uint16_t** out_pixels,
+		int* out_w,
+		int* out_h,
+		int* out_scale_used,
+		char* err,
+		size_t err_len
 );
 
 #endif // LV_USE_IMG
