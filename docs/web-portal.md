@@ -203,8 +203,10 @@ Real-time device health monitoring integrated as a header badge with expandable 
 **Sections:**
 - **👋 Hello World**: Welcome message with customization tip
 - **⚙️ Sample Settings**: Example configuration field (dummy_setting)
+- **⚡ Operating Mode & Cadence**: Mode selection, transport, cycle interval, portal idle timeout, WiFi backoff cap, and MQTT payload scope
+- **BLE Advertising**: Burst timing controls (only shown when firmware enables BLE)
 
-**Layout:** Two sections side-by-side on desktop (≥768px), stacked on mobile
+**Layout:** Sections use 2-column grids on desktop (≥768px), stacked on mobile
 
 **Purpose:** Demonstrates how to add custom application-specific settings
 
@@ -230,7 +232,8 @@ Real-time device health monitoring integrated as a header badge with expandable 
   - Enable, set username, and set/update password
 - **📡 MQTT Settings (Optional)**: MQTT broker settings
   - Only shown when MQTT support is enabled in firmware (`HAS_MQTT`)
-  - Host, port, username/password, publish interval
+  - Host, port, username/password
+  - Periodic publish cadence follows `cycle_interval_seconds` in Power Settings
 
 **Layout:** 
 - WiFi + Device Settings side-by-side on desktop
@@ -530,6 +533,17 @@ Returns current device configuration (passwords excluded).
   "dns2": "",
   "dummy_setting": "",
 
+  "power_mode": "always_on",
+  "publish_transport": "ble",
+  "cycle_interval_seconds": 120,
+  "portal_idle_timeout_seconds": 120,
+  "wifi_backoff_max_seconds": 900,
+  "ble_adv_burst_ms": 900,
+  "ble_adv_gap_ms": 1100,
+  "ble_adv_bursts": 2,
+  "ble_adv_interval_ms": 100,
+  "mqtt_publish_scope": "sensors_only",
+
   "basic_auth_enabled": false,
   "basic_auth_username": "",
   "basic_auth_password_set": false,
@@ -547,6 +561,7 @@ Returns current device configuration (passwords excluded).
 **Notes:**
 - Some fields are build-time gated.
   - Display-related fields (backlight + screen saver) are present when `HAS_DISPLAY` is enabled.
+  - BLE advertising fields are only used when `HAS_BLE` is enabled.
   - Other feature-specific fields may be present depending on firmware configuration.
 
 #### `POST /api/config`
@@ -565,6 +580,17 @@ Save new configuration. Device reboots after successful save.
   "dns1": "8.8.8.8",
   "dns2": "8.8.4.4",
   "dummy_setting": "value",
+
+  "power_mode": "duty_cycle",
+  "publish_transport": "ble_mqtt",
+  "cycle_interval_seconds": 120,
+  "portal_idle_timeout_seconds": 120,
+  "wifi_backoff_max_seconds": 900,
+  "ble_adv_burst_ms": 900,
+  "ble_adv_gap_ms": 1100,
+  "ble_adv_bursts": 2,
+  "ble_adv_interval_ms": 100,
+  "mqtt_publish_scope": "sensors_only",
 
   "basic_auth_enabled": true,
   "basic_auth_username": "admin",
@@ -1205,6 +1231,16 @@ If WiFi fails to connect after firmware update or reboot:
 - Windows: Install Bonjour service
 - Linux: Install `avahi-daemon`
 - Some networks block mDNS (use IP instead)
+
+### Entering Config Mode Without a Button
+
+If `POWERON_CONFIG_BURST_ENABLED` is enabled at compile time, you can force Config Mode by power-cycling the device twice within ~10 seconds. This uses a small NVS counter and only triggers on `ESP_RST_POWERON`.
+This is intended for boards **without a reliable user button**.
+
+Behavior details:
+- Counter increments only on `ESP_RST_POWERON`.
+- Counter is cleared after ~10 seconds of uptime.
+- Deep sleep and other reset reasons do not affect the counter.
 
 ## Security Considerations
 
