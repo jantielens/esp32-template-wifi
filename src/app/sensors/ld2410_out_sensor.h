@@ -7,22 +7,22 @@
 
 class Ld2410OutSensor {
 public:
-    bool begin();
-    void loop();
-    void appendJson(JsonObject &doc);
-    void handleChangeFromISR();
+		bool begin();
+		void loop();
+		void appendJson(JsonObject &doc);
+		void handleChangeFromISR();
 
 private:
-    bool _initialized = false;
-    bool _available = false;
-    volatile bool _presence = false;
-    volatile bool _changed = false;
-    volatile unsigned long _last_isr_ms = 0;
+		bool _initialized = false;
+		bool _available = false;
+		volatile bool _presence = false;
+		volatile bool _changed = false;
+		volatile unsigned long _last_isr_ms = 0;
 
-    bool _pending_publish = false;
-    bool _pending_presence = false;
+		bool _pending_publish = false;
+		bool _pending_presence = false;
 
-    void consumeChangeLog(bool presence);
+		void consumeChangeLog(bool presence);
 };
 
 class SensorRegistry;

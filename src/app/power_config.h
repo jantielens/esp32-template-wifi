@@ -4,22 +4,22 @@
 #include "config_manager.h"
 
 enum class PowerMode {
-    AlwaysOn,
-    DutyCycle,
-    Config,
-    Ap
+		AlwaysOn,
+		DutyCycle,
+		Config,
+		Ap
 };
 
 enum class PublishTransport {
-    Ble,
-    Mqtt,
-    BleMqtt
+		Ble,
+		Mqtt,
+		BleMqtt
 };
 
 enum class MqttPublishScope {
-    SensorsOnly,
-    DiagnosticsOnly,
-    All
+		SensorsOnly,
+		DiagnosticsOnly,
+		All
 };
 
 PowerMode power_config_parse_power_mode(const DeviceConfig *config);

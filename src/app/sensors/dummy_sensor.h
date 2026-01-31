@@ -12,18 +12,18 @@
 
 class DummySensor {
 public:
-    bool begin();
-    void appendJson(JsonObject &doc);
+		bool begin();
+		void appendJson(JsonObject &doc);
 #if HAS_MQTT
-    void publishHaDiscovery(MqttManager &mqtt);
+		void publishHaDiscovery(MqttManager &mqtt);
 #endif
 
 private:
-    void update();
+		void update();
 
-    bool _initialized = false;
-    bool _available = false;
-    float _value = 0.0f;
+		bool _initialized = false;
+		bool _available = false;
+		float _value = 0.0f;
 };
 
 void register_dummy_sensor(SensorRegistry &registry);

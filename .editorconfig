@@ -13,29 +13,31 @@ trim_trailing_whitespace = true
 # Shell scripts
 [*.sh]
 indent_style = space
-indent_size = 2
+indent_size = 4
 
 # C/C++ files (Arduino sketches)
 [*.{c,cpp,h,hpp,ino}]
-indent_style = space
-indent_size = 2
+indent_style = tab
+indent_size = 4
+tab_width = 4
 
 # Markdown files
 [*.md]
 trim_trailing_whitespace = false
 indent_style = space
-indent_size = 2
+indent_size = 4
 
 # JSON files
 [*.json]
 indent_style = space
-indent_size = 2
+indent_size = 4
 
 # YAML files
 [*.{yml,yaml}]
 indent_style = space
-indent_size = 2
+indent_size = 4
 
 # Makefiles
 [Makefile]
 indent_style = tab
+tab_width = 4
