@@ -24,6 +24,13 @@ ESP32 Arduino development template using `arduino-cli` for headless builds. Desi
   - `drivers/` - Driver implementations (TFT_eSPI, ST7789V2, Arduino_GFX, XPT2046, AXS15231B)
   - `screens/` - Screen base class and implementations (splash, info, test)
   - Conditional compilation: Only selected drivers are compiled via `display_drivers.cpp` / `touch_drivers.cpp` (Arduino doesn’t auto-compile subdir `.cpp`)
+- **Power + Transport Subsystem**: Power modes, BLE/MQTT transport selection, and duty-cycle runtime
+  - `power_config.cpp/h` - Power mode and transport parsing helpers
+  - `power_manager.cpp/h` - Boot mode selection, backoff tracking, LED modes, sleep helpers
+  - `duty_cycle.cpp/h` - Duty-cycle execution path (BLE/MQTT publish then sleep)
+  - `ble_advertiser.cpp/h` - BTHome v2 BLE advertising (compile-time gated)
+  - `wifi_manager.cpp/h` - WiFi connect, cached BSSID, and mDNS startup
+  - `portal_idle.cpp/h` - Portal idle timeout and sleep (Config/AP only)
 - **Web Portal**: Multi-page async web server with captive portal support
   - `web_portal.cpp/h` - Server and REST API implementation
   - `web_assets.h` - Embedded HTML/CSS/JS (from `src/app/web/`) (auto-generated)
@@ -170,6 +177,12 @@ See `docs/wsl-development.md` for complete USB/IP setup guide.
 - `src/app/web_assets.h` - Embedded HTML/CSS/JS from `src/app/web/` (auto-generated)
 - `src/app/project_branding.h` - Project branding defines (`PROJECT_NAME`, `PROJECT_DISPLAY_NAME`) (auto-generated)
 - `src/app/config_manager.cpp/h` - NVS-based configuration storage
+- `src/app/power_manager.cpp/h` - Power mode selection, backoff, and sleep helpers
+- `src/app/power_config.cpp/h` - Power mode and transport parsing
+- `src/app/duty_cycle.cpp/h` - Duty-cycle runner
+- `src/app/ble_advertiser.cpp/h` - BLE BTHome advertiser (compile-time gated by `HAS_BLE`)
+- `src/app/wifi_manager.cpp/h` - WiFi connect + mDNS (replaces inline connect logic)
+- `src/app/portal_idle.cpp/h` - Portal idle timeout in Config/AP modes
 - `src/app/display_driver.h` - Display HAL interface with configureLVGL() hook
 - `src/app/display_manager.cpp/h` - Display lifecycle, LVGL init, FreeRTOS rendering task
 - `src/app/touch_driver.h` - Touch HAL interface
