@@ -199,10 +199,14 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/drivers/tft_espi_driver.cpp
 - **HAS_BLE**
   - src/app/app.ino
+  - src/app/ble_advertiser.cpp
+  - src/app/ble_advertiser.h
   - src/app/board_config.h
+  - src/app/duty_cycle.cpp
 - **HAS_BUILTIN_LED**
   - src/app/app.ino
   - src/app/board_config.h
+  - src/app/power_manager.cpp
 - **HAS_BUTTON**
   - src/app/app.ino
   - src/app/board_config.h
@@ -256,12 +260,15 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/board_config.h
   - src/app/config_manager.cpp
   - src/app/device_telemetry.cpp
+  - src/app/duty_cycle.cpp
   - src/app/ha_discovery.cpp
   - src/app/ha_discovery.h
   - src/app/mqtt_manager.cpp
   - src/app/mqtt_manager.h
   - src/app/sensors/bme280_sensor.cpp
   - src/app/sensors/bme280_sensor.h
+  - src/app/sensors/dummy_sensor.cpp
+  - src/app/sensors/dummy_sensor.h
   - src/app/sensors/ld2410_out_sensor.cpp
   - src/app/sensors/sensor_manager.cpp
   - src/app/sensors/sensor_manager.h
@@ -272,6 +279,8 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
 - **HAS_SENSOR_DUMMY**
   - src/app/board_config.h
   - src/app/sensors.cpp
+  - src/app/sensors/dummy_sensor.cpp
+  - src/app/sensors/dummy_sensor.h
 - **HAS_SENSOR_LD2410_OUT**
   - src/app/board_config.h
   - src/app/sensors.cpp
@@ -355,6 +364,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/device_telemetry.cpp
 - **POWERON_CONFIG_BURST_ENABLED**
   - src/app/board_config.h
+  - src/app/power_manager.cpp
 - **PROJECT_DISPLAY_NAME**
   - src/app/board_config.h
 - **SENSOR_I2C_FREQUENCY**
