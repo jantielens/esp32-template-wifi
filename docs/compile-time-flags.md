@@ -15,6 +15,7 @@ This document is a template. Sections marked with `COMPILE_FLAG_REPORT` markers 
 - The build script propagates a small allowlist of board override defines into global compiler flags so libraries are compiled with the same values.
   - Currently allowlisted:
     - `CONFIG_ASYNC_TCP_STACK_SIZE`
+    - NimBLE tuning (roles + limits + log levels)
     - TFT_eSPI essentials for clean/CI builds (pins + SPI frequencies + controller/bus flags)
   - For TFT_eSPI specifically, `build.sh` also supports a per-board `src/boards/<board>/User_Setup.h` which is force-included for that board (so the build does not depend on a locally modified Arduino library install).
 
