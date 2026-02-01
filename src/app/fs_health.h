@@ -17,10 +17,10 @@ extern "C" {
 //   and provided totals via fs_health_set_ffat_usage().
 
 typedef struct FSHealthStats {
-    bool ffat_partition_present;
-    bool ffat_mounted;
-    uint32_t ffat_used_bytes;
-    uint32_t ffat_total_bytes;
+		bool ffat_partition_present;
+		bool ffat_mounted;
+		uint32_t ffat_used_bytes;
+		uint32_t ffat_total_bytes;
 } FSHealthStats;
 
 void fs_health_init();

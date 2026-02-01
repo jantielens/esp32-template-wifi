@@ -13,18 +13,18 @@
 #include <Arduino.h>
 
 enum class ScreenSaverState : uint8_t {
-    Awake = 0,
-    FadingOut = 1,
-    Asleep = 2,
-    FadingIn = 3,
+		Awake = 0,
+		FadingOut = 1,
+		Asleep = 2,
+		FadingIn = 3,
 };
 
 struct ScreenSaverStatus {
-    bool enabled;
-    ScreenSaverState state;
-    uint8_t current_brightness;
-    uint8_t target_brightness;
-    uint32_t seconds_until_sleep;
+		bool enabled;
+		ScreenSaverState state;
+		uint8_t current_brightness;
+		uint8_t target_brightness;
+		uint32_t seconds_until_sleep;
 };
 
 // Initialize with the current config (must remain valid for lifetime)
@@ -48,18 +48,18 @@ ScreenSaverStatus screen_saver_manager_get_status();
 // No display: provide no-op stubs to keep app.ino clean.
 
 enum class ScreenSaverState : uint8_t {
-    Awake = 0,
-    FadingOut = 1,
-    Asleep = 2,
-    FadingIn = 3,
+		Awake = 0,
+		FadingOut = 1,
+		Asleep = 2,
+		FadingIn = 3,
 };
 
 struct ScreenSaverStatus {
-    bool enabled;
-    ScreenSaverState state;
-    uint8_t current_brightness;
-    uint8_t target_brightness;
-    uint32_t seconds_until_sleep;
+		bool enabled;
+		ScreenSaverState state;
+		uint8_t current_brightness;
+		uint8_t target_brightness;
+		uint32_t seconds_until_sleep;
 };
 
 inline void screen_saver_manager_init(DeviceConfig*) {}

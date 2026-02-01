@@ -17,26 +17,26 @@
 
 class XPT2046_Driver : public TouchDriver {
 private:
-    XPT2046_Touchscreen ts;  // Standalone touch controller
-    SPIClass* touchSPI;      // Persistent SPI instance for touch controller
-    uint8_t cs_pin;
-    uint8_t irq_pin;
-    
-    // Calibration data
-    uint16_t cal_x_min, cal_x_max;
-    uint16_t cal_y_min, cal_y_max;
-    uint8_t rotation;
-    
+		XPT2046_Touchscreen ts;  // Standalone touch controller
+		SPIClass* touchSPI;      // Persistent SPI instance for touch controller
+		uint8_t cs_pin;
+		uint8_t irq_pin;
+		
+		// Calibration data
+		uint16_t cal_x_min, cal_x_max;
+		uint16_t cal_y_min, cal_y_max;
+		uint8_t rotation;
+		
 public:
-    // Constructor initializes standalone XPT2046 controller
-    XPT2046_Driver(uint8_t cs, uint8_t irq = 255);
-    ~XPT2046_Driver() override;
-    
-    void init() override;
-    bool isTouched() override;
-    bool getTouch(uint16_t* x, uint16_t* y, uint16_t* pressure = nullptr) override;
-    void setCalibration(uint16_t x_min, uint16_t x_max, uint16_t y_min, uint16_t y_max) override;
-    void setRotation(uint8_t rotation) override;
+		// Constructor initializes standalone XPT2046 controller
+		XPT2046_Driver(uint8_t cs, uint8_t irq = 255);
+		~XPT2046_Driver() override;
+		
+		void init() override;
+		bool isTouched() override;
+		bool getTouch(uint16_t* x, uint16_t* y, uint16_t* pressure = nullptr) override;
+		void setCalibration(uint16_t x_min, uint16_t x_max, uint16_t y_min, uint16_t y_max) override;
+		void setRotation(uint8_t rotation) override;
 };
 
 #endif // XPT2046_DRIVER_H

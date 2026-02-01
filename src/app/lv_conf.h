@@ -18,7 +18,7 @@
 #include "board_config.h"
 
 /*====================
-   COLOR SETTINGS
+	 COLOR SETTINGS
  *====================*/
 
 /* Color depth: 1 (1 byte per pixel), 8 (RGB332), 16 (RGB565), 32 (ARGB8888) */
@@ -34,22 +34,22 @@
 #define LV_COLOR_MIX_ROUND_OFS 0
 
 /*=========================
-   MEMORY SETTINGS
+	 MEMORY SETTINGS
  *=========================*/
 
 /* 1: use custom malloc/free, 0: use the built-in `lv_mem_alloc()` and `lv_mem_free()` */
 #define LV_MEM_CUSTOM 1
 #if LV_MEM_CUSTOM == 0
-  /* Size of the memory available for `lv_mem_alloc()` in bytes (>= 2kB)*/
-  #define LV_MEM_SIZE (48U * 1024U)          /*[bytes]*/
+	/* Size of the memory available for `lv_mem_alloc()` in bytes (>= 2kB)*/
+	#define LV_MEM_SIZE (48U * 1024U)          /*[bytes]*/
 
-  /* Set an address for the memory pool instead of allocating it as a normal array. */
-  #define LV_MEM_ADR 0     /*0: unused*/
+	/* Set an address for the memory pool instead of allocating it as a normal array. */
+	#define LV_MEM_ADR 0     /*0: unused*/
 #else       /*LV_MEM_CUSTOM*/
-  #define LV_MEM_CUSTOM_INCLUDE "lvgl_heap.h"   /*Header for the dynamic memory function*/
-  #define LV_MEM_CUSTOM_ALLOC   lvgl_heap_malloc
-  #define LV_MEM_CUSTOM_FREE    lvgl_heap_free
-  #define LV_MEM_CUSTOM_REALLOC lvgl_heap_realloc
+	#define LV_MEM_CUSTOM_INCLUDE "lvgl_heap.h"   /*Header for the dynamic memory function*/
+	#define LV_MEM_CUSTOM_ALLOC   lvgl_heap_malloc
+	#define LV_MEM_CUSTOM_FREE    lvgl_heap_free
+	#define LV_MEM_CUSTOM_REALLOC lvgl_heap_realloc
 #endif     /*LV_MEM_CUSTOM*/
 
 /* Number of the intermediate memory buffer used during rendering */
@@ -59,14 +59,14 @@
 #define LV_INDEV_DEF_READ_PERIOD 30     /*[ms]*/
 
 /*=================
-   HAL SETTINGS
+	 HAL SETTINGS
  *=================*/
 
 /* Use a custom tick source that tells the elapsed time in milliseconds */
 #define LV_TICK_CUSTOM 1
 #if LV_TICK_CUSTOM
-  #define LV_TICK_CUSTOM_INCLUDE "Arduino.h"         /*Header for the system time function*/
-  #define LV_TICK_CUSTOM_SYS_TIME_EXPR (millis())    /*Expression evaluating to current system time in ms*/
+	#define LV_TICK_CUSTOM_INCLUDE "Arduino.h"         /*Header for the system time function*/
+	#define LV_TICK_CUSTOM_SYS_TIME_EXPR (millis())    /*Expression evaluating to current system time in ms*/
 #endif   /*LV_TICK_CUSTOM*/
 
 /*================
@@ -145,13 +145,13 @@
 // Image widget support is only needed for the Image API's optional LVGL image screen.
 // Keep it disabled by default to reduce flash size in template builds.
 #if HAS_IMAGE_API
-  #ifndef LV_USE_IMG
-    #define LV_USE_IMG        1
-  #endif
+	#ifndef LV_USE_IMG
+		#define LV_USE_IMG        1
+	#endif
 #else
-  #ifndef LV_USE_IMG
-    #define LV_USE_IMG        0
-  #endif
+	#ifndef LV_USE_IMG
+		#define LV_USE_IMG        0
+	#endif
 #endif
 
 #define LV_USE_LABEL      1
@@ -167,11 +167,11 @@
 
 /* Enable scaling/rotation of images (needed for lv_img_set_zoom). */
 #ifndef LV_USE_IMG_TRANSFORM
-  #if LV_USE_IMG
-    #define LV_USE_IMG_TRANSFORM 1
-  #else
-    #define LV_USE_IMG_TRANSFORM 0
-  #endif
+	#if LV_USE_IMG
+		#define LV_USE_IMG_TRANSFORM 1
+	#else
+		#define LV_USE_IMG_TRANSFORM 0
+	#endif
 #endif
 
 /* Disable LVGL extra widgets we don't use (prevents dependency pulls).
@@ -201,14 +201,14 @@
 /* A simple, impressive and very complete theme */
 #define LV_USE_THEME_DEFAULT 1
 #if LV_USE_THEME_DEFAULT
-  /* 0: Light mode; 1: Dark mode */
-  #define LV_THEME_DEFAULT_DARK 1
+	/* 0: Light mode; 1: Dark mode */
+	#define LV_THEME_DEFAULT_DARK 1
 
-  /* 1: Enable grow on press */
-  #define LV_THEME_DEFAULT_GROW 1
+	/* 1: Enable grow on press */
+	#define LV_THEME_DEFAULT_GROW 1
 
-  /* Default transition time in [ms] */
-  #define LV_THEME_DEFAULT_TRANSITION_TIME 80
+	/* Default transition time in [ms] */
+	#define LV_THEME_DEFAULT_TRANSITION_TIME 80
 #endif
 
 /* A very simple theme that is a good starting point for a custom theme */
@@ -249,9 +249,9 @@
 #define LV_USE_PERF_MONITOR 0
 
 #if LV_USE_PERF_MONITOR
-  #ifndef LV_USE_PERF_MONITOR_POS
-    #define LV_USE_PERF_MONITOR_POS LV_ALIGN_BOTTOM_RIGHT
-  #endif
+	#ifndef LV_USE_PERF_MONITOR_POS
+		#define LV_USE_PERF_MONITOR_POS LV_ALIGN_BOTTOM_RIGHT
+	#endif
 #endif
 
 /* Enable asserts */

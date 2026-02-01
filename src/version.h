@@ -6,7 +6,7 @@
 // Firmware version information
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 0
-#define VERSION_PATCH 47
+#define VERSION_PATCH 48
 
 // Build date (automatically set by compiler)
 #define BUILD_DATE __DATE__
@@ -20,10 +20,10 @@
 
 // Function to print version information
 inline void printVersionInfo() {
-  LOGI("SYS", "Firmware Version");
-  LOGI("SYS", "Version: %s", VERSION_STRING);
-  LOGI("SYS", "Build Date: %s", BUILD_DATE);
-  LOGI("SYS", "Build Time: %s", BUILD_TIME);
+	LOGI("SYS", "Firmware Version");
+	LOGI("SYS", "Version: %s", VERSION_STRING);
+	LOGI("SYS", "Build Date: %s", BUILD_DATE);
+	LOGI("SYS", "Build Time: %s", BUILD_TIME);
 }
 
 #endif // VERSION_H
