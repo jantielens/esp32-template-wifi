@@ -22,7 +22,7 @@ This document is a template. Sections marked with `COMPILE_FLAG_REPORT` markers 
 ## Flags (generated)
 
 <!-- BEGIN COMPILE_FLAG_REPORT:FLAGS -->
-Total flags: 117
+Total flags: 149
 
 ### Features (HAS_*)
 
@@ -40,7 +40,7 @@ Total flags: 117
 
 ### Selectors (*_DRIVER)
 
-- **DISPLAY_DRIVER** default: `DISPLAY_DRIVER_TFT_ESPI` (values: DISPLAY_DRIVER_ARDUINO_GFX, DISPLAY_DRIVER_ESP_PANEL, DISPLAY_DRIVER_ST7789V2, DISPLAY_DRIVER_TFT_ESPI) — Select the display HAL backend (one of the DISPLAY_DRIVER_* constants).
+- **DISPLAY_DRIVER** default: `DISPLAY_DRIVER_TFT_ESPI` (values: DISPLAY_DRIVER_ARDUINO_GFX, DISPLAY_DRIVER_ESP_PANEL, DISPLAY_DRIVER_ST7701_RGB, DISPLAY_DRIVER_ST7789V2, DISPLAY_DRIVER_TFT_ESPI) — Select the display HAL backend (one of the DISPLAY_DRIVER_* constants).
 - **ILI9341_2_DRIVER** default: `(no default)` — These macros are consumed by the TFT_eSPI library itself.
 - **TOUCH_DRIVER** default: `TOUCH_DRIVER_XPT2046` (values: TOUCH_DRIVER_AXS15231B, TOUCH_DRIVER_CST816S_ESP_PANEL, TOUCH_DRIVER_XPT2046) — Select the touch HAL backend (one of the TOUCH_DRIVER_* constants).
 
@@ -53,10 +53,24 @@ Total flags: 117
 ### Hardware (Pins)
 
 - **BUTTON_PIN** default: `0` — GPIO pin for the optional user button (active level defined below).
+- **LCD_B0_PIN** default: `(no default)` — RGB Blue 0 pin.
+- **LCD_B1_PIN** default: `(no default)` — RGB Blue 1 pin.
+- **LCD_B2_PIN** default: `(no default)` — RGB Blue 2 pin.
+- **LCD_B3_PIN** default: `(no default)` — RGB Blue 3 pin.
+- **LCD_B4_PIN** default: `(no default)` — RGB Blue 4 pin.
 - **LCD_BL_PIN** default: `(no default)` — LCD backlight pin.
 - **LCD_CS_PIN** default: `(no default)` — LCD SPI CS pin.
 - **LCD_DC_PIN** default: `(no default)` — LCD SPI DC pin.
+- **LCD_DE_PIN** default: `(no default)` — RGB DE pin.
+- **LCD_G0_PIN** default: `(no default)` — RGB Green 0 pin.
+- **LCD_G1_PIN** default: `(no default)` — RGB Green 1 pin.
+- **LCD_G2_PIN** default: `(no default)` — RGB Green 2 pin.
+- **LCD_G3_PIN** default: `(no default)` — RGB Green 3 pin.
+- **LCD_G4_PIN** default: `(no default)` — RGB Green 4 pin.
+- **LCD_G5_PIN** default: `(no default)` — RGB Green 5 pin.
+- **LCD_HSYNC_PIN** default: `(no default)` — RGB HSYNC pin.
 - **LCD_MOSI_PIN** default: `(no default)` — LCD SPI MOSI pin.
+- **LCD_PCLK_PIN** default: `(no default)` — RGB PCLK pin.
 - **LCD_QSPI_CS** default: `(no default)` — QSPI chip select pin.
 - **LCD_QSPI_D0** default: `(no default)` — QSPI data line 0 pin.
 - **LCD_QSPI_D1** default: `(no default)` — QSPI data line 1 pin.
@@ -65,8 +79,14 @@ Total flags: 117
 - **LCD_QSPI_PCLK** default: `(no default)` — QSPI pixel clock pin.
 - **LCD_QSPI_RST** default: `(no default)` — QSPI reset pin (-1 = none).
 - **LCD_QSPI_TE** default: `(no default)` — Panel TE pin.
+- **LCD_R0_PIN** default: `(no default)` — RGB Red 0 pin.
+- **LCD_R1_PIN** default: `(no default)` — RGB Red 1 pin.
+- **LCD_R2_PIN** default: `(no default)` — RGB Red 2 pin.
+- **LCD_R3_PIN** default: `(no default)` — RGB Red 3 pin.
+- **LCD_R4_PIN** default: `(no default)` — RGB Red 4 pin.
 - **LCD_RST_PIN** default: `(no default)` — LCD reset pin.
 - **LCD_SCK_PIN** default: `(no default)` — LCD SPI SCK pin.
+- **LCD_VSYNC_PIN** default: `(no default)` — RGB VSYNC pin.
 - **LD2410_OUT_PIN** default: `-1` — LD2410 OUT pin (presence). Use -1 to disable.
 - **LED_PIN** default: `2` — GPIO for the built-in LED (only used when HAS_BUILTIN_LED is true).
 - **SENSOR_I2C_SCL** default: `-1` — I2C SCL pin for sensors.
@@ -84,13 +104,13 @@ Total flags: 117
 - **TFT_SDA2** default: `(no default)` — QSPI data line 2 pin.
 - **TFT_SDA3** default: `(no default)` — QSPI data line 3 pin.
 - **TOUCH_CS** default: `(no default)` — TFT_eSPI touch: CS pin.
-- **TOUCH_I2C_SCL** default: `(no default)` — I2C SCL pin.
-- **TOUCH_I2C_SDA** default: `(no default)` — I2C SDA pin.
-- **TOUCH_INT** default: `(no default)` — Touch interrupt pin.
+- **TOUCH_I2C_SCL** default: `(no default)` — Touch I2C SCL pin.
+- **TOUCH_I2C_SDA** default: `(no default)` — Touch I2C SDA pin.
+- **TOUCH_INT** default: `(no default)` — Touch interrupt pin (-1 = not connected).
 - **TOUCH_IRQ** default: `(no default)` — TFT_eSPI touch: IRQ pin (optional).
 - **TOUCH_MISO** default: `(no default)` — TFT_eSPI touch: MISO pin.
 - **TOUCH_MOSI** default: `(no default)` — TFT_eSPI touch: MOSI pin.
-- **TOUCH_RST** default: `(no default)` — Touch reset pin.
+- **TOUCH_RST** default: `(no default)` — Touch reset pin (-1 = not connected).
 - **TOUCH_SCLK** default: `(no default)` — TFT_eSPI touch: SCLK pin.
 - **XPT2046_CLK** default: `(no default)` — XPT2046 CLK pin.
 - **XPT2046_CS** default: `(no default)` — XPT2046 CS pin.
@@ -109,6 +129,7 @@ Total flags: 117
 - **IMAGE_API_MAX_SIZE_BYTES** default: `(100 * 1024)` — Max bytes accepted for full image uploads (JPEG).
 - **IMAGE_API_MAX_TIMEOUT_MS** default: `(86400UL * 1000UL)` — Maximum image display timeout in milliseconds.
 - **IMAGE_STRIP_BATCH_MAX_ROWS** default: `16` — Max rows batched per LCD transaction when decoding JPEG strips.
+- **LCD_PCLK_FREQUENCY** default: `(no default)` — Pixel clock in kHz.
 - **LVGL_BUFFER_PREFER_INTERNAL** default: `false` — Prefer internal RAM over PSRAM for LVGL draw buffer allocation.
 - **LVGL_BUFFER_SIZE** default: `(DISPLAY_WIDTH * 10)` — LVGL draw buffer size in pixels (larger = faster, more RAM).
 - **LVGL_TICK_PERIOD_MS** default: `5` — LVGL tick period in milliseconds.
@@ -144,9 +165,18 @@ Total flags: 117
 - **HEALTH_HISTORY_SAMPLES** default: `((HEALTH_HISTORY_SECONDS * 1000) / HEALTH_HISTORY_PERIOD_MS)` — Derived number of samples.
 - **HEALTH_HISTORY_SECONDS** default: `300` — How much client-side history (sparklines) to keep.
 - **HEALTH_POLL_INTERVAL_MS** default: `5000` — How often the web UI polls /api/health.
+- **LCD_HSYNC_BACK_PORCH** default: `(no default)` — HSYNC back porch.
+- **LCD_HSYNC_FRONT_PORCH** default: `(no default)` — HSYNC front porch.
+- **LCD_HSYNC_POLARITY** default: `(no default)` — HSYNC polarity (1 = active high).
+- **LCD_HSYNC_PULSE_WIDTH** default: `(no default)` — HSYNC pulse width.
 - **LCD_QSPI_HOST** default: `(no default)` — QSPI host peripheral.
+- **LCD_VSYNC_BACK_PORCH** default: `(no default)` — VSYNC back porch.
+- **LCD_VSYNC_FRONT_PORCH** default: `(no default)` — VSYNC front porch.
+- **LCD_VSYNC_POLARITY** default: `(no default)` — VSYNC polarity (1 = active high).
+- **LCD_VSYNC_PULSE_WIDTH** default: `(no default)` — VSYNC pulse width.
 - **LD2410_OUT_DEBOUNCE_MS** default: `50` — Debounce for LD2410 OUT edge changes (ms).
 - **LED_ACTIVE_HIGH** default: `true` — LED polarity: true if HIGH turns the LED on.
+- **LVGL_TASK_CORE** default: `0` — Core to pin the LVGL render task to on dual-core chips (0 or 1).
 - **MEMORY_TRIPWIRE_CHECK_INTERVAL_MS** default: `5000` — How often to check tripwires from the main loop.
 - **POWERON_CONFIG_BURST_ENABLED** default: `false` — Intended for boards WITHOUT a reliable user button.
 - **PROJECT_DISPLAY_NAME** default: `"ESP32 Device"` — Human-friendly project name used in the web UI and device name (can be set by build system).
@@ -156,6 +186,8 @@ Total flags: 117
 - **TOUCH_CAL_X_MIN** default: `(no default)` — Touch calibration: X minimum.
 - **TOUCH_CAL_Y_MAX** default: `(no default)` — Touch calibration: Y maximum.
 - **TOUCH_CAL_Y_MIN** default: `(no default)` — Touch calibration: Y minimum.
+- **TOUCH_I2C_ADDR** default: `(no default)` — Touch I2C address.
+- **TOUCH_I2C_ADDR_ALT** default: `(no default)` — Optional alternate address (GT911 can be 0x5D or 0x14 depending on INT strap).
 - **TOUCH_I2C_PORT** default: `(no default)` — I2C controller index.
 - **USE_HSPI_PORT** default: `(no default)` — CYD uses HSPI for the display.
 <!-- END COMPILE_FLAG_REPORT:FLAGS -->
@@ -170,6 +202,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
 | esp32-nodisplay |  |  |  |  |  |  | ✅ |  |  |  |  |
 | cyd-v2 | ✅ |  |  |  | ✅ | ✅ | ✅ |  |  |  | ✅ |
 | esp32c3-waveshare-169-st7789v2 | ✅ |  | ✅ |  | ✅ | ✅ | ✅ |  |  |  |  |
+| esp32-4848S040 |  |  |  |  | ✅ | ✅ | ✅ |  |  |  |  |
 | jc3248w535 | ✅ |  |  |  | ✅ | ✅ | ✅ |  |  |  | ✅ |
 | jc3636w518 | ✅ |  |  |  | ✅ | ✅ | ✅ |  |  |  | ✅ |
 | esp32c3-withsensors |  | ✅ |  | ✅ |  |  | ✅ |  | ✅ |  |  |
@@ -183,6 +216,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
 | esp32-nodisplay | — | — |
 | cyd-v2 | DISPLAY_DRIVER_TFT_ESPI | TOUCH_DRIVER_XPT2046 |
 | esp32c3-waveshare-169-st7789v2 | DISPLAY_DRIVER_ST7789V2 | — |
+| esp32-4848S040 | DISPLAY_DRIVER_ST7701_RGB | — |
 | jc3248w535 | DISPLAY_DRIVER_ARDUINO_GFX | TOUCH_DRIVER_AXS15231B |
 | jc3636w518 | DISPLAY_DRIVER_ESP_PANEL | TOUCH_DRIVER_CST816S_ESP_PANEL |
 | esp32c3-withsensors | — | — |
@@ -355,6 +389,8 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/board_config.h
 - **LVGL_BUFFER_SIZE**
   - src/app/board_config.h
+- **LVGL_TASK_CORE**
+  - src/app/board_config.h
 - **LVGL_TICK_PERIOD_MS**
   - src/app/board_config.h
 - **MEMORY_TRIPWIRE_CHECK_INTERVAL_MS**
@@ -390,6 +426,8 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/touch_manager.cpp
 - **TOUCH_CAL_Y_MIN**
   - src/app/touch_manager.cpp
+- **TOUCH_I2C_ADDR**
+  - src/app/drivers/axs15231b_touch_driver.cpp
 - **TOUCH_I2C_SCL**
   - src/app/drivers/axs15231b_touch_driver.cpp
 - **TOUCH_INT**

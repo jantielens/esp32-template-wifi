@@ -251,11 +251,13 @@
 //   DISPLAY_DRIVER_ST7789V2 (2) - Native ST7789V2 driver (1.69" IPS LCD 240x280)
 //   DISPLAY_DRIVER_LOVYANGFX (3) - LovyanGFX (future support)
 //   DISPLAY_DRIVER_ARDUINO_GFX (4) - Arduino_GFX (QSPI displays like AXS15231B)
+//   DISPLAY_DRIVER_ST7701_RGB (6) - Arduino_GFX ST7701 RGB panel (ESP32-4848S040)
 #define DISPLAY_DRIVER_TFT_ESPI 1
 #define DISPLAY_DRIVER_ST7789V2 2
 #define DISPLAY_DRIVER_LOVYANGFX 3
 #define DISPLAY_DRIVER_ARDUINO_GFX 4
 #define DISPLAY_DRIVER_ESP_PANEL 5
+#define DISPLAY_DRIVER_ST7701_RGB 6
 
 // Select the display HAL backend (one of the DISPLAY_DRIVER_* constants).
 #ifndef DISPLAY_DRIVER
@@ -273,6 +275,11 @@
 // LVGL tick period in milliseconds.
 #ifndef LVGL_TICK_PERIOD_MS
 #define LVGL_TICK_PERIOD_MS 5
+#endif
+
+// Core to pin the LVGL render task to on dual-core chips (0 or 1).
+#ifndef LVGL_TASK_CORE
+#define LVGL_TASK_CORE 0
 #endif
 
 // ============================================================================

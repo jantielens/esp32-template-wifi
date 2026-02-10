@@ -26,6 +26,8 @@
 #include "touch_manager.h"
 #endif
 
+#include <esp_task_wdt.h>
+
 // Configuration
 DeviceConfig device_config;
 bool config_loaded = false;
@@ -79,6 +81,25 @@ static bool check_config_mode_button() {
 
 void setup()
 {
+	// Configure task watchdog with extended timeout for RGB LCD displays
+	// (first LVGL render can take several seconds with large framebuffers,
+	// and WiFi scanning can take 5-10 seconds)
+	esp_task_wdt_config_t wdt_config = {
+		.timeout_ms = 120000,  // 120 seconds
+		.idle_core_mask = 0,   // Don't watch IDLE tasks
+		.trigger_panic = true  // Panic and restart on timeout
+	};
+	esp_task_wdt_deinit();       // First deinit any existing watchdog
+	esp_task_wdt_init(&wdt_config);
+	esp_task_wdt_add(NULL);      // Add current (setup) task to watchdog
+	
+	// Add the Arduino loop task to the extended watchdog as well
+	// (it runs in parallel during setup and needs extended timeout for WiFi operations)
+	extern TaskHandle_t loopTaskHandle;
+	if (loopTaskHandle != NULL) {
+		esp_task_wdt_add(loopTaskHandle);
+	}
+	
 	// Optional device-side history for sparklines (/api/health/history)
 	// Start as early as possible after a device boot.
 	#if HEALTH_HISTORY_ENABLED
@@ -291,6 +312,9 @@ void setup()
 
 void loop()
 {
+	// Reset watchdog at start of each loop iteration
+	esp_task_wdt_reset();
+	
 	power_manager_led_loop();
 	power_manager_loop();
 
