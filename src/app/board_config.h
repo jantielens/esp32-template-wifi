@@ -295,6 +295,27 @@
 #define TFT_BACKLIGHT_PWM_CHANNEL 0  // LEDC channel for PWM control
 #endif
 
+// LEDC PWM frequency in Hz for backlight dimming.
+// Optimal value depends on the board's MOSFET circuit.
+// Lower frequencies give wider dimming range but may cause audible coil whine.
+#ifndef TFT_BACKLIGHT_PWM_FREQ
+#define TFT_BACKLIGHT_PWM_FREQ 1000  // 1 kHz default (wide range, may whine on some boards)
+#endif
+
+// LEDC duty range for backlight dimming (8-bit: 0-255).
+// Maps the visible dimming range to 1-99% brightness.
+// Below DUTY_MIN the backlight is off; above DUTY_MAX it's fully saturated.
+// 100% always uses duty 255 (constant DC, max brightness).
+
+// Duty cycle where backlight first turns on.
+#ifndef TFT_BACKLIGHT_DUTY_MIN
+#define TFT_BACKLIGHT_DUTY_MIN 0
+#endif
+// Duty cycle at full saturation (before constant DC).
+#ifndef TFT_BACKLIGHT_DUTY_MAX
+#define TFT_BACKLIGHT_DUTY_MAX 255
+#endif
+
 // ============================================================================
 // Touch Configuration
 // ============================================================================

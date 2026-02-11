@@ -30,10 +30,10 @@ void Arduino_GFX_Driver::init() {
 		#if HAS_BACKLIGHT
 		// Configure PWM for smooth brightness control
 		#if ESP_ARDUINO_VERSION_MAJOR >= 3
-		double actualFreq = ledcAttach(LCD_BL_PIN, 5000, 8);  // pin, freq (5kHz), resolution (8-bit)
+		double actualFreq = ledcAttach(LCD_BL_PIN, TFT_BACKLIGHT_PWM_FREQ, 8);  // pin, freq, resolution (8-bit)
 		LOGI("GFX", "PWM attached on GPIO%d, actual freq: %.1f Hz", LCD_BL_PIN, actualFreq);
 		#else
-		ledcSetup(TFT_BACKLIGHT_PWM_CHANNEL, 5000, 8);
+		ledcSetup(TFT_BACKLIGHT_PWM_CHANNEL, TFT_BACKLIGHT_PWM_FREQ, 8);
 		ledcAttachPin(LCD_BL_PIN, TFT_BACKLIGHT_PWM_CHANNEL);
 		LOGI("GFX", "PWM setup complete on GPIO%d (channel %d)", LCD_BL_PIN, TFT_BACKLIGHT_PWM_CHANNEL);
 		#endif
@@ -135,7 +135,12 @@ void Arduino_GFX_Driver::setBacklightBrightness(uint8_t brightness) {
 		currentBrightness = brightness;
 
 		#if HAS_BACKLIGHT
-		uint32_t duty = (brightness * 255) / 100;
+		uint32_t duty = 0;
+		if (brightness >= 100) {
+			duty = 255;
+		} else if (brightness > 0) {
+			duty = TFT_BACKLIGHT_DUTY_MIN + ((uint32_t)(brightness - 1) * (TFT_BACKLIGHT_DUTY_MAX - TFT_BACKLIGHT_DUTY_MIN)) / 98;
+		}
 
 		// Handle active low vs active high backlight
 		#ifdef TFT_BACKLIGHT_ON

@@ -12,7 +12,7 @@
 // ============================================================================
 #define HAS_DISPLAY true
 #define HAS_TOUCH true
-#define HAS_BACKLIGHT false  // Use simple ON/OFF, not PWM (RGB LCD conflicts with LEDC on GPIO38)
+#define HAS_BACKLIGHT true   // PWM brightness control (LEDC attached before LCD init to avoid glitch)
 #define HAS_IMAGE_API true
 
 // Pin LVGL render task to Core 1 (reduces PSRAM bus contention with WiFi on Core 0)
@@ -45,8 +45,17 @@
 #define LCD_BL_PIN 38
 // Backlight active level.
 #define TFT_BACKLIGHT_ON HIGH
-// LEDC channel for backlight PWM (ESP32 Arduino < 3.x).
-#define TFT_BACKLIGHT_PWM_CHANNEL 0
+// LEDC channel for backlight PWM.  Use a high channel (7) to avoid
+// collision with timers the ESP-IDF RGB LCD peripheral may claim.
+#define TFT_BACKLIGHT_PWM_CHANNEL 7
+// PWM frequency tuned for this board's MOSFET backlight circuit.
+// 3.5 kHz: no audible whine, smooth dimming from ~30% to 99% duty.
+#define TFT_BACKLIGHT_PWM_FREQ 3500
+// Usable duty range at 3.5 kHz: MOSFET turns on at duty 77, saturates ~252.
+// Duty cycle where backlight first turns on.
+#define TFT_BACKLIGHT_DUTY_MIN 77
+// Duty cycle at full saturation (before constant DC).
+#define TFT_BACKLIGHT_DUTY_MAX 252
 
 // ============================================================================
 // 9-bit SPI bus (ST7701 command/config)

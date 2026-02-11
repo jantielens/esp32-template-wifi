@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Touch test screen (red dots + white connecting lines on LVGL canvas)
 - Board-overridable `ST7701_PCLK_HZ` (default 6 MHz) and `ST7701_BOUNCE_BUFFER_LINES` defines
 - `LV_USE_CANVAS` now board-overridable via `#ifndef` guard in lv_conf.h
+- PWM backlight brightness control with board-configurable frequency and duty range
+  - New defines: `TFT_BACKLIGHT_PWM_FREQ`, `TFT_BACKLIGHT_DUTY_MIN`, `TFT_BACKLIGHT_DUTY_MAX`
+  - LEDC PWM attached before LCD panel init to prevent GPIO reconfiguration glitch
+  - ESP32-4848S040 tuned to 3.5 kHz (no coil whine, smooth dimming, duty 77–252)
 
 ### Fixed
 - Critical single-core bug: `rtos_create_task_psram_stack` passed string literal instead of task function pointer

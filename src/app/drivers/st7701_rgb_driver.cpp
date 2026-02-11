@@ -192,15 +192,49 @@ ST7701_RGB_Driver::~ST7701_RGB_Driver() {
 }
 
 void ST7701_RGB_Driver::init() {
-	// Initialize backlight pin first (off during init)
+	// ----------------------------------------------------------------
+	// Attach backlight PWM BEFORE the LCD panel starts.
+	// Why: ledcAttach reconfigures the GPIO matrix.  If done while the
+	// RGB LCD DMA is already scanning, the momentary pin glitch causes
+	// the panel's timing controller to lose sync (visible as a brief
+	// horizontal/vertical shift).  Configuring PWM first means the pin
+	// is already in its final state when the LCD peripheral starts.
+	//
+	// PWM parameters are board-configurable via board_overrides.h:
+	//   - TFT_BACKLIGHT_PWM_FREQ: frequency in Hz (trade-off between
+	//     coil whine at low freq vs narrow dimming range at high freq)
+	//   - TFT_BACKLIGHT_PWM_CHANNEL: LEDC channel (use a high channel
+	//     to avoid collision with LCD-internal timers)
+	//   - TFT_BACKLIGHT_DUTY_MIN/MAX: usable duty range for dimming
+	//   - Duty starts at 0 (backlight OFF during LCD init)
+	//   - At runtime only ledcWrite() is called (single register write,
+	//     no GPIO matrix reconfiguration)
+	// ----------------------------------------------------------------
 	#ifdef LCD_BL_PIN
+	#if HAS_BACKLIGHT
+	// PWM brightness control
+	#if ESP_ARDUINO_VERSION_MAJOR >= 3
+	ledcAttachChannel(LCD_BL_PIN, TFT_BACKLIGHT_PWM_FREQ, 8, TFT_BACKLIGHT_PWM_CHANNEL);
+	ledcWrite(LCD_BL_PIN, 0);  // Start OFF
+	LOGI("ST7701", "Backlight PWM: GPIO%d, %dHz, 8-bit, ch%d (OFF)",
+			LCD_BL_PIN, TFT_BACKLIGHT_PWM_FREQ, TFT_BACKLIGHT_PWM_CHANNEL);
+	#else
+	ledcSetup(TFT_BACKLIGHT_PWM_CHANNEL, TFT_BACKLIGHT_PWM_FREQ, 8);
+	ledcAttachPin(LCD_BL_PIN, TFT_BACKLIGHT_PWM_CHANNEL);
+	ledcWrite(TFT_BACKLIGHT_PWM_CHANNEL, 0);  // Start OFF
+	LOGI("ST7701", "Backlight PWM: GPIO%d, %dHz, 8-bit, ch%d (OFF)",
+			LCD_BL_PIN, TFT_BACKLIGHT_PWM_FREQ, TFT_BACKLIGHT_PWM_CHANNEL);
+	#endif
+	#else
+	// Simple on/off — no PWM
 	pinMode(LCD_BL_PIN, OUTPUT);
 	#ifdef TFT_BACKLIGHT_ON
 	digitalWrite(LCD_BL_PIN, !TFT_BACKLIGHT_ON);  // Start OFF
 	#else
 	digitalWrite(LCD_BL_PIN, LOW);  // Start OFF
 	#endif
-	LOGI("ST7701", "Backlight pin GPIO%d initialized (OFF)", LCD_BL_PIN);
+	LOGI("ST7701", "Backlight digital: GPIO%d (OFF)", LCD_BL_PIN);
+	#endif
 	#endif
 	
 	// ----------------------------------------------------------------
@@ -270,7 +304,6 @@ void ST7701_RGB_Driver::init() {
 			displayWidth, displayHeight, (long)ST7701_PCLK_HZ, ST7701_BOUNCE_BUFFER_LINES);
 	
 	delay(50);  // Brief delay before enabling backlight
-	setBacklight(true);
 	setBacklightBrightness(currentBrightness);
 	
 	LOGI("ST7701", "Display ready: %dx%d @ rotation %d", 
@@ -296,21 +329,44 @@ int ST7701_RGB_Driver::height() {
 }
 
 void ST7701_RGB_Driver::setBacklight(bool on) {
-		#ifdef LCD_BL_PIN
-		#ifdef TFT_BACKLIGHT_ON
-		digitalWrite(LCD_BL_PIN, on ? TFT_BACKLIGHT_ON : !TFT_BACKLIGHT_ON);
-		#else
-		digitalWrite(LCD_BL_PIN, on ? HIGH : LOW);
-		#endif
-		backlightOn = on;
-		LOGI("ST7701", "Backlight %s", on ? "ON" : "OFF");
-		#endif
+		setBacklightBrightness(on ? 100 : 0);
 }
 
 void ST7701_RGB_Driver::setBacklightBrightness(uint8_t brightness) {
-		// Simple on/off control only (HAS_BACKLIGHT=false for this board)
+		if (brightness > 100) brightness = 100;
 		currentBrightness = brightness;
-		setBacklight(brightness > 0);
+		backlightOn = (brightness > 0);
+
+		#ifdef LCD_BL_PIN
+		#if HAS_BACKLIGHT
+		// Remap brightness to usable hardware duty range.
+		// MOSFET dimming range varies by board/frequency — configured via
+		// TFT_BACKLIGHT_DUTY_MIN/MAX in board_overrides.h.
+		// Map: 0% → 0 (off), 1-99% → DUTY_MIN..DUTY_MAX (visible dimming),
+		//       100% → 255 (constant DC, maximum brightness)
+		uint32_t duty = 0;
+		if (brightness >= 100) {
+			duty = 255;
+		} else if (brightness > 0) {
+			duty = TFT_BACKLIGHT_DUTY_MIN + ((uint32_t)(brightness - 1) * (TFT_BACKLIGHT_DUTY_MAX - TFT_BACKLIGHT_DUTY_MIN)) / 98;  // DUTY_MIN..DUTY_MAX
+		}
+		#ifdef TFT_BACKLIGHT_ON
+		if (!TFT_BACKLIGHT_ON) duty = 255 - duty;  // Invert for active-low
+		#endif
+		#if ESP_ARDUINO_VERSION_MAJOR >= 3
+		ledcWrite(LCD_BL_PIN, duty);
+		#else
+		ledcWrite(TFT_BACKLIGHT_PWM_CHANNEL, duty);
+		#endif
+		#else
+		// Digital on/off fallback
+		#ifdef TFT_BACKLIGHT_ON
+		digitalWrite(LCD_BL_PIN, backlightOn ? TFT_BACKLIGHT_ON : !TFT_BACKLIGHT_ON);
+		#else
+		digitalWrite(LCD_BL_PIN, backlightOn ? HIGH : LOW);
+		#endif
+		#endif
+		#endif
 }
 
 uint8_t ST7701_RGB_Driver::getBacklightBrightness() {

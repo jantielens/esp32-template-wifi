@@ -16,11 +16,11 @@ void TFT_eSPI_Driver::init() {
 		
 		// ESP32 Arduino Core 3.x uses new LEDC API
 		#if ESP_ARDUINO_VERSION_MAJOR >= 3
-		double actualFreq = ledcAttach(TFT_BL, 5000, 8);  // pin, freq (5kHz), resolution (8-bit)
+		double actualFreq = ledcAttach(TFT_BL, TFT_BACKLIGHT_PWM_FREQ, 8);  // pin, freq, resolution (8-bit)
 		LOGI("TFT_eSPI", "PWM attached, actual freq: %.1f Hz", actualFreq);
 		#else
 		// ESP32 Arduino Core 2.x uses old LEDC API
-		ledcSetup(TFT_BACKLIGHT_PWM_CHANNEL, 5000, 8);  // channel, freq, resolution
+		ledcSetup(TFT_BACKLIGHT_PWM_CHANNEL, TFT_BACKLIGHT_PWM_FREQ, 8);  // channel, freq, resolution
 		ledcAttachPin(TFT_BL, TFT_BACKLIGHT_PWM_CHANNEL);
 		LOGI("TFT_eSPI", "PWM setup complete (channel %d)", TFT_BACKLIGHT_PWM_CHANNEL);
 		#endif
@@ -59,8 +59,13 @@ void TFT_eSPI_Driver::setBacklightBrightness(uint8_t brightness) {
 		if (brightness > 100) brightness = 100;
 		currentBrightness = brightness;
 		
-		// Map 0-100% to 0-255 PWM duty cycle
-		uint32_t dutyCycle = (brightness * 255) / 100;
+		// Map 0-100% to usable duty range (board-configurable)
+		uint32_t dutyCycle = 0;
+		if (brightness >= 100) {
+			dutyCycle = 255;
+		} else if (brightness > 0) {
+			dutyCycle = TFT_BACKLIGHT_DUTY_MIN + ((uint32_t)(brightness - 1) * (TFT_BACKLIGHT_DUTY_MAX - TFT_BACKLIGHT_DUTY_MIN)) / 98;
+		}
 		
 		// Handle active low vs active high backlight
 		#ifdef TFT_BACKLIGHT_ON

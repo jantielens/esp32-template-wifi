@@ -22,7 +22,7 @@ This document is a template. Sections marked with `COMPILE_FLAG_REPORT` markers 
 ## Flags (generated)
 
 <!-- BEGIN COMPILE_FLAG_REPORT:FLAGS -->
-Total flags: 148
+Total flags: 151
 
 ### Features (HAS_*)
 
@@ -137,6 +137,7 @@ Total flags: 148
 - **SPI_FREQUENCY** default: `(no default)` — TFT_eSPI: SPI write frequency (Hz).
 - **SPI_READ_FREQUENCY** default: `(no default)` — TFT_eSPI: SPI read frequency (Hz).
 - **SPI_TOUCH_FREQUENCY** default: `(no default)` — TFT_eSPI: SPI touch frequency (Hz).
+- **TFT_BACKLIGHT_PWM_FREQ** default: `1000` — Lower frequencies give wider dimming range but may cause audible coil whine.
 - **TFT_SPI_FREQUENCY** default: `(no default)` — TFT SPI clock frequency.
 - **TFT_SPI_FREQ_HZ** default: `(no default)` — QSPI clock frequency (Hz).
 - **TOUCH_I2C_FREQ_HZ** default: `(no default)` — I2C frequency (Hz).
@@ -179,6 +180,8 @@ Total flags: 148
 - **MEMORY_TRIPWIRE_CHECK_INTERVAL_MS** default: `5000` — How often to check tripwires from the main loop.
 - **POWERON_CONFIG_BURST_ENABLED** default: `false` — Intended for boards WITHOUT a reliable user button.
 - **PROJECT_DISPLAY_NAME** default: `"ESP32 Device"` — Human-friendly project name used in the web UI and device name (can be set by build system).
+- **TFT_BACKLIGHT_DUTY_MAX** default: `255` — Duty cycle at full saturation (before constant DC).
+- **TFT_BACKLIGHT_DUTY_MIN** default: `0` — Duty cycle where backlight first turns on.
 - **TFT_BACKLIGHT_ON** default: `(no default)` — Backlight "on" level.
 - **TFT_BACKLIGHT_PWM_CHANNEL** default: `0` — LEDC channel used for backlight PWM.
 - **TOUCH_CAL_X_MAX** default: `(no default)` — Touch calibration: X maximum.
@@ -201,7 +204,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
 | esp32-nodisplay |  |  |  |  |  |  | ✅ |  |  |  |  |
 | cyd-v2 | ✅ |  |  |  | ✅ | ✅ | ✅ |  |  |  | ✅ |
 | esp32c3-waveshare-169-st7789v2 | ✅ |  | ✅ |  | ✅ | ✅ | ✅ |  |  |  |  |
-| esp32-4848S040 |  |  |  |  | ✅ | ✅ | ✅ |  |  |  | ✅ |
+| esp32-4848S040 | ✅ |  |  |  | ✅ | ✅ | ✅ |  |  |  | ✅ |
 | jc3248w535 | ✅ |  |  |  | ✅ | ✅ | ✅ |  |  |  | ✅ |
 | jc3636w518 | ✅ |  |  |  | ✅ | ✅ | ✅ |  |  |  | ✅ |
 | esp32c3-withsensors |  | ✅ |  | ✅ |  |  | ✅ |  | ✅ |  |  |
@@ -229,6 +232,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/board_config.h
   - src/app/display_manager.cpp
   - src/app/drivers/arduino_gfx_driver.cpp
+  - src/app/drivers/st7701_rgb_driver.cpp
   - src/app/drivers/tft_espi_driver.cpp
 - **HAS_BLE**
   - src/app/app.ino
@@ -421,11 +425,17 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/board_config.h
 - **SENSOR_I2C_SDA**
   - src/app/board_config.h
+- **TFT_BACKLIGHT_DUTY_MAX**
+  - src/app/board_config.h
+- **TFT_BACKLIGHT_DUTY_MIN**
+  - src/app/board_config.h
 - **TFT_BACKLIGHT_ON**
   - src/app/drivers/arduino_gfx_driver.cpp
   - src/app/drivers/st7701_rgb_driver.cpp
   - src/app/drivers/tft_espi_driver.cpp
 - **TFT_BACKLIGHT_PWM_CHANNEL**
+  - src/app/board_config.h
+- **TFT_BACKLIGHT_PWM_FREQ**
   - src/app/board_config.h
 - **TFT_BL**
   - src/app/drivers/tft_espi_driver.cpp
