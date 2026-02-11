@@ -312,6 +312,7 @@
 #define TOUCH_DRIVER_FT6236 2
 #define TOUCH_DRIVER_AXS15231B 3
 #define TOUCH_DRIVER_CST816S_ESP_PANEL 4
+#define TOUCH_DRIVER_GT911 5
 
 // Prefer allocating LVGL draw buffer in internal RAM before PSRAM.
 // Default: false (keeps historical PSRAM-first behavior; boards can override).

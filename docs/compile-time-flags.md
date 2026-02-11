@@ -42,7 +42,7 @@ Total flags: 149
 
 - **DISPLAY_DRIVER** default: `DISPLAY_DRIVER_TFT_ESPI` (values: DISPLAY_DRIVER_ARDUINO_GFX, DISPLAY_DRIVER_ESP_PANEL, DISPLAY_DRIVER_ST7701_RGB, DISPLAY_DRIVER_ST7789V2, DISPLAY_DRIVER_TFT_ESPI) — Select the display HAL backend (one of the DISPLAY_DRIVER_* constants).
 - **ILI9341_2_DRIVER** default: `(no default)` — These macros are consumed by the TFT_eSPI library itself.
-- **TOUCH_DRIVER** default: `TOUCH_DRIVER_XPT2046` (values: TOUCH_DRIVER_AXS15231B, TOUCH_DRIVER_CST816S_ESP_PANEL, TOUCH_DRIVER_XPT2046) — Select the touch HAL backend (one of the TOUCH_DRIVER_* constants).
+- **TOUCH_DRIVER** default: `TOUCH_DRIVER_XPT2046` (values: TOUCH_DRIVER_AXS15231B, TOUCH_DRIVER_CST816S_ESP_PANEL, TOUCH_DRIVER_GT911, TOUCH_DRIVER_XPT2046) — Select the touch HAL backend (one of the TOUCH_DRIVER_* constants).
 
 ### Hardware (Geometry)
 
@@ -202,7 +202,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
 | esp32-nodisplay |  |  |  |  |  |  | ✅ |  |  |  |  |
 | cyd-v2 | ✅ |  |  |  | ✅ | ✅ | ✅ |  |  |  | ✅ |
 | esp32c3-waveshare-169-st7789v2 | ✅ |  | ✅ |  | ✅ | ✅ | ✅ |  |  |  |  |
-| esp32-4848S040 |  |  |  |  | ✅ | ✅ | ✅ |  |  |  |  |
+| esp32-4848S040 |  |  |  |  | ✅ | ✅ | ✅ |  |  |  | ✅ |
 | jc3248w535 | ✅ |  |  |  | ✅ | ✅ | ✅ |  |  |  | ✅ |
 | jc3636w518 | ✅ |  |  |  | ✅ | ✅ | ✅ |  |  |  | ✅ |
 | esp32c3-withsensors |  | ✅ |  | ✅ |  |  | ✅ |  | ✅ |  |  |
@@ -216,7 +216,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
 | esp32-nodisplay | — | — |
 | cyd-v2 | DISPLAY_DRIVER_TFT_ESPI | TOUCH_DRIVER_XPT2046 |
 | esp32c3-waveshare-169-st7789v2 | DISPLAY_DRIVER_ST7789V2 | — |
-| esp32-4848S040 | DISPLAY_DRIVER_ST7701_RGB | — |
+| esp32-4848S040 | DISPLAY_DRIVER_ST7701_RGB | TOUCH_DRIVER_GT911 |
 | jc3248w535 | DISPLAY_DRIVER_ARDUINO_GFX | TOUCH_DRIVER_AXS15231B |
 | jc3636w518 | DISPLAY_DRIVER_ESP_PANEL | TOUCH_DRIVER_CST816S_ESP_PANEL |
 | esp32c3-withsensors | — | — |
@@ -323,7 +323,11 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/app.ino
   - src/app/board_config.h
   - src/app/config_manager.cpp
+  - src/app/display_manager.cpp
+  - src/app/display_manager.h
+  - src/app/lv_conf.h
   - src/app/screen_saver_manager.cpp
+  - src/app/screens.cpp
   - src/app/touch_drivers.cpp
   - src/app/touch_manager.cpp
   - src/app/touch_manager.h
@@ -375,8 +379,15 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/board_config.h
 - **LCD_BL_PIN**
   - src/app/drivers/arduino_gfx_driver.cpp
+  - src/app/drivers/st7701_rgb_driver.cpp
+- **LCD_CS_PIN**
+  - src/app/drivers/st7701_rgb_driver.cpp
+- **LCD_MOSI_PIN**
+  - src/app/drivers/st7701_rgb_driver.cpp
 - **LCD_QSPI_CS**
   - src/app/drivers/arduino_gfx_driver.cpp
+- **LCD_SCK_PIN**
+  - src/app/drivers/st7701_rgb_driver.cpp
 - **LD2410_OUT_DEBOUNCE_MS**
   - src/app/board_config.h
 - **LD2410_OUT_PIN**
@@ -411,6 +422,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/board_config.h
 - **TFT_BACKLIGHT_ON**
   - src/app/drivers/arduino_gfx_driver.cpp
+  - src/app/drivers/st7701_rgb_driver.cpp
   - src/app/drivers/tft_espi_driver.cpp
 - **TFT_BACKLIGHT_PWM_CHANNEL**
   - src/app/board_config.h

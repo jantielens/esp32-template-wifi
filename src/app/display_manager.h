@@ -9,6 +9,10 @@
 #include "screens/info_screen.h"
 #include "screens/test_screen.h"
 
+#if HAS_TOUCH
+#include "screens/touch_test_screen.h"
+#endif
+
 #if HAS_IMAGE_API
 #include "screens/direct_image_screen.h"
 #include "screens/lvgl_image_screen.h"
@@ -82,6 +86,10 @@ private:
 		SplashScreen splashScreen;
 		InfoScreen infoScreen;
 		TestScreen testScreen;
+		
+		#if HAS_TOUCH
+		TouchTestScreen touchTestScreen;
+		#endif
 		
 		#if HAS_IMAGE_API
 		DirectImageScreen directImageScreen;

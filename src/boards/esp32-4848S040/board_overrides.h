@@ -11,7 +11,7 @@
 // Capabilities
 // ============================================================================
 #define HAS_DISPLAY true
-#define HAS_TOUCH false  // TODO: Enable in Phase 2 after display is working
+#define HAS_TOUCH true
 #define HAS_BACKLIGHT false  // Use simple ON/OFF, not PWM (RGB LCD conflicts with LEDC on GPIO38)
 #define HAS_IMAGE_API true
 

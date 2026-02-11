@@ -63,19 +63,15 @@ DisplayManager::DisplayManager(DeviceConfig* cfg)
 		
 		// Initialize screen registry (exclude splash - it's boot-specific)
 		availableScreens[0] = {"info", "Info Screen", &infoScreen};
-		availableScreens[1] = {"test", "Test Screen", &testScreen};
-		#if HAS_IMAGE_API
-		// Optional LVGL image screen (JPEG -> RGB565 -> lv_img).
-		// Included under HAS_IMAGE_API for simplicity. To reduce firmware size,
-		// disable LVGL image support via LV_USE_IMG=0 / LV_USE_IMG_TRANSFORM=0 in src/app/lv_conf.h.
-		#if LV_USE_IMG
-		availableScreens[2] = {"lvgl_image", "LVGL Image", &lvglImageScreen};
-		screenCount = 3;
-		#else
+		availableScreens[1] = {"test", "Display Test", &testScreen};
 		screenCount = 2;
+		#if HAS_TOUCH
+		availableScreens[screenCount++] = {"touch_test", "Touch Test", &touchTestScreen};
 		#endif
-		#else
-		screenCount = 2;
+		#if HAS_IMAGE_API
+		#if LV_USE_IMG
+		availableScreens[screenCount++] = {"lvgl_image", "LVGL Image", &lvglImageScreen};
+		#endif
 		#endif
 		
 		#if HAS_IMAGE_API
@@ -98,6 +94,9 @@ DisplayManager::~DisplayManager() {
 		splashScreen.destroy();
 		infoScreen.destroy();
 		testScreen.destroy();
+		#if HAS_TOUCH
+		touchTestScreen.destroy();
+		#endif
 		
 		#if HAS_IMAGE_API
 		directImageScreen.destroy();
@@ -492,6 +491,9 @@ void DisplayManager::init() {
 		splashScreen.create();
 		infoScreen.create();
 		testScreen.create();
+		#if HAS_TOUCH
+		touchTestScreen.create();
+		#endif
 		#if HAS_IMAGE_API
 		#if LV_USE_IMG
 		lvglImageScreen.create();

@@ -13,6 +13,8 @@
 #include "drivers/axs15231b/vendor/AXS15231B_touch.cpp"
 #elif TOUCH_DRIVER == TOUCH_DRIVER_CST816S_ESP_PANEL
 #include "drivers/esp_panel_cst816s_touch_driver.cpp"
+#elif TOUCH_DRIVER == TOUCH_DRIVER_GT911
+#include "drivers/gt911_touch_driver.cpp"
 #else
 #error "No touch driver selected or unknown driver type"
 #endif

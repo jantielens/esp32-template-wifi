@@ -138,7 +138,13 @@
 #define LV_USE_BAR        0
 #define LV_USE_BTN        0
 #define LV_USE_BTNMATRIX  0
-#define LV_USE_CANVAS     0
+// Canvas widget is needed for the TouchTestScreen finger-painting surface.
+// Only enable when touch is available (implies display + touch hardware).
+#if HAS_TOUCH
+	#define LV_USE_CANVAS     1
+#else
+	#define LV_USE_CANVAS     0
+#endif
 #define LV_USE_CHECKBOX   0
 #define LV_USE_DROPDOWN   0
 
