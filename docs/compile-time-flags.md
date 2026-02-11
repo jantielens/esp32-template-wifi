@@ -22,7 +22,7 @@ This document is a template. Sections marked with `COMPILE_FLAG_REPORT` markers 
 ## Flags (generated)
 
 <!-- BEGIN COMPILE_FLAG_REPORT:FLAGS -->
-Total flags: 149
+Total flags: 148
 
 ### Features (HAS_*)
 
@@ -129,7 +129,6 @@ Total flags: 149
 - **IMAGE_API_MAX_SIZE_BYTES** default: `(100 * 1024)` — Max bytes accepted for full image uploads (JPEG).
 - **IMAGE_API_MAX_TIMEOUT_MS** default: `(86400UL * 1000UL)` — Maximum image display timeout in milliseconds.
 - **IMAGE_STRIP_BATCH_MAX_ROWS** default: `16` — Max rows batched per LCD transaction when decoding JPEG strips.
-- **LCD_PCLK_FREQUENCY** default: `(no default)` — Pixel clock in kHz.
 - **LVGL_BUFFER_PREFER_INTERNAL** default: `false` — Prefer internal RAM over PSRAM for LVGL draw buffer allocation.
 - **LVGL_BUFFER_SIZE** default: `(DISPLAY_WIDTH * 10)` — LVGL draw buffer size in pixels (larger = faster, more RAM).
 - **LVGL_TICK_PERIOD_MS** default: `5` — LVGL tick period in milliseconds.
@@ -328,6 +327,8 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/lv_conf.h
   - src/app/screen_saver_manager.cpp
   - src/app/screens.cpp
+  - src/app/screens/touch_test_screen.cpp
+  - src/app/screens/touch_test_screen.h
   - src/app/touch_drivers.cpp
   - src/app/touch_manager.cpp
   - src/app/touch_manager.h
@@ -440,6 +441,8 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/touch_manager.cpp
 - **TOUCH_I2C_ADDR**
   - src/app/drivers/axs15231b_touch_driver.cpp
+- **TOUCH_I2C_ADDR_ALT**
+  - src/app/drivers/gt911_touch_driver.cpp
 - **TOUCH_I2C_SCL**
   - src/app/drivers/axs15231b_touch_driver.cpp
 - **TOUCH_INT**

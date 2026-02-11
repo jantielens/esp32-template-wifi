@@ -90,30 +90,8 @@ public:
 		virtual void present() {
 				// Override in buffered drivers (e.g., Arduino_GFX canvas)
 		}
-		
-		// Get framebuffer pointer for buffered drivers (returns nullptr for direct drivers)
-		// For RGB panels with DMA framebuffers, LVGL should draw directly into this buffer
-		virtual uint16_t* getFramebuffer() {
-				return nullptr;  // Direct drivers don't have a framebuffer
-		}
-		
-		// For RGB panels with DMA framebuffers: return panel-owned buffers for LVGL direct mode.
-		// LVGL can render directly into these, eliminating intermediate copies.
-		// Returns true if direct buffers are available; sets fb1, fb2, buf_size_px.
-		virtual bool getLVGLDirectBuffers(lv_color_t** fb1, lv_color_t** fb2, uint32_t* buf_size_px) {
-				if (fb1) *fb1 = nullptr;
-				if (fb2) *fb2 = nullptr;
-				if (buf_size_px) *buf_size_px = 0;
-				return false;
-		}
-		
-		// Swap the active framebuffer for direct-mode RGB panels.
-		// buf points to the framebuffer that should become visible.
-		virtual void swapBuffers(const lv_color_t* buf) {
-				// Default: no-op for non-direct-mode drivers
-		}
-		
-		// LVGL configuration hook (override to customize LVGL driver settings)
+
+		// LVGL configuration hook(override to customize LVGL driver settings)
 		// Called during LVGL initialization to allow driver-specific configuration
 		// such as software rotation, full refresh mode, etc.
 		// Default implementation: no special configuration needed

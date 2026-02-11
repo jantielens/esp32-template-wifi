@@ -162,37 +162,17 @@ void DisplayManager::flushCallback(lv_disp_drv_t *disp, const lv_area_t *area, l
 		}
 		#endif
 		
-		// Direct mode: LVGL rendered directly into panel framebuffers (RGB panels with DMA).
-		// No pixel copying needed — just swap framebuffers on the last flush of a frame.
-		if (disp->direct_mode) {
-				if (lv_disp_flush_is_last(disp)) {
-						mgr->driver->swapBuffers((const lv_color_t*)disp->draw_buf->buf_act);
-						mgr->flushPending = true;
-				}
-				lv_disp_flush_ready(disp);
-				return;
-		}
-		
 		uint32_t w = (area->x2 - area->x1 + 1);
 		uint32_t h = (area->y2 - area->y1 + 1);
 		
-		// For buffered/framebuffer drivers, use bitmap drawing to update framebuffer
-		// For direct drivers, use traditional setAddrWindow/pushColors approach
-		if (mgr->driver->renderMode() == DisplayDriver::RenderMode::Buffered) {
-				// Framebuffer mode: Use Arduino_GFX draw16bitRGBBitmap
-				mgr->driver->startWrite();
-				// Note: draw16bitRGBBitmap will be called via the driver's internal Arduino_GFX methods
-				// For now, use pushColors which should map to the correct method
-				mgr->driver->setAddrWindow(area->x1, area->y1, w, h);
-				mgr->driver->pushColors((uint16_t *)&color_p->full, w * h, false);  // no swap for framebuffer
-				mgr->driver->endWrite();
-		} else {
-				// Direct mode: Traditional approach
-				mgr->driver->startWrite();
-				mgr->driver->setAddrWindow(area->x1, area->y1, w, h);
-				mgr->driver->pushColors((uint16_t *)&color_p->full, w * h, true);
-				mgr->driver->endWrite();
-		}
+		// Push pixels to display via driver HAL.
+		// swap_bytes differs: framebuffer drivers already have correct byte order,
+		// direct SPI drivers need the swap.
+		bool swap = (mgr->driver->renderMode() != DisplayDriver::RenderMode::Buffered);
+		mgr->driver->startWrite();
+		mgr->driver->setAddrWindow(area->x1, area->y1, w, h);
+		mgr->driver->pushColors((uint16_t *)&color_p->full, w * h, swap);
+		mgr->driver->endWrite();
 
 		// Signal that the driver may need a post-render present() step.
 		// For Direct render-mode drivers this is harmless (present() is a no-op).
@@ -395,22 +375,7 @@ void DisplayManager::initLVGL() {
 		
 		lv_init();
 		
-		// Check if driver provides direct framebuffers (RGB panels with DMA).
-		// In direct mode, LVGL renders directly into the panel's own framebuffers,
-		// eliminating intermediate buffer copies.
-		lv_color_t* direct_fb1 = nullptr;
-		lv_color_t* direct_fb2 = nullptr;
-		uint32_t direct_buf_px = 0;
-		bool useDirectBuffers = driver->getLVGLDirectBuffers(&direct_fb1, &direct_fb2, &direct_buf_px);
-		
-		if (useDirectBuffers) {
-				LOGI("Display", "Direct mode: using panel FBs (%lu px, %lu KB each)",
-						(unsigned long)direct_buf_px, (unsigned long)(direct_buf_px * sizeof(lv_color_t) / 1024));
-				lv_disp_draw_buf_init(&draw_buf, direct_fb1, direct_fb2, direct_buf_px);
-		} else {
-		// Allocate LVGL working buffer (even for buffered mode)
-		// For RGB panels: LVGL draws to working buffer → flush copies to DMA framebuffer
-		// For direct panels: LVGL draws to working buffer → flush pushes to display
+		// Allocate LVGL draw buffer.
 		// Some QSPI panels/drivers require internal RAM for flush reliability.
 		if (LVGL_BUFFER_PREFER_INTERNAL) {
 				buf = (lv_color_t*)heap_caps_malloc(LVGL_BUFFER_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
@@ -431,46 +396,45 @@ void DisplayManager::initLVGL() {
 				return;
 		}
 		LOGI("Display", "Buffer allocated: %d bytes (%d pixels)", LVGL_BUFFER_SIZE * sizeof(lv_color_t), LVGL_BUFFER_SIZE);
-	
-	// Allocate second buffer for double-buffering if configured
-	lv_color_t* buf2 = NULL;
-	#if defined(LVGL_DRAW_BUF_COUNT) && LVGL_DRAW_BUF_COUNT == 2
-	if (LVGL_BUFFER_PREFER_INTERNAL) {
-			buf2 = (lv_color_t*)heap_caps_malloc(LVGL_BUFFER_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-	} else {
-			buf2 = (lv_color_t*)heap_caps_malloc(LVGL_BUFFER_SIZE * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
-	}
-	if (buf2) {
-			LOGI("Display", "Second buffer allocated for double-buffering: %d bytes", LVGL_BUFFER_SIZE * sizeof(lv_color_t));
-	} else {
-			LOGW("Display", "Failed to allocate second buffer - using single-buffering");
-	}
-	#endif
-	
-	lv_disp_draw_buf_init(&draw_buf, buf, buf2, LVGL_BUFFER_SIZE);
-	} // !useDirectBuffers
-	
-	// Initialize default theme (dark mode with custom primary color)
-	lv_theme_t* theme = lv_theme_default_init(
-			NULL,                           // Display (use default)
-			lv_color_hex(0x3399FF),        // Primary color (light blue)
-			lv_color_hex(0x303030),        // Secondary color (dark gray)
-			true,                           // Dark mode
-			LV_FONT_DEFAULT                // Default font
-	);
-	lv_disp_set_theme(NULL, theme);
-	LOGI("Display", "Theme: Default dark mode initialized");
-	
-	// Set up display driver (buffer already initialized above)
-	lv_disp_drv_init(&disp_drv);
-	disp_drv.hor_res = DISPLAY_WIDTH;
-	disp_drv.ver_res = DISPLAY_HEIGHT;
-	disp_drv.flush_cb = DisplayManager::flushCallback;
-	disp_drv.draw_buf = &draw_buf;
-	disp_drv.user_data = this;  // Pass instance for callback
-	
-	// Let driver set up hardware-specific LVGL configuration
-	driver->configureLVGL(&disp_drv, DISPLAY_ROTATION);
+		
+		// Allocate second buffer for double-buffering if configured
+		lv_color_t* buf2 = NULL;
+		#if defined(LVGL_DRAW_BUF_COUNT) && LVGL_DRAW_BUF_COUNT == 2
+		if (LVGL_BUFFER_PREFER_INTERNAL) {
+				buf2 = (lv_color_t*)heap_caps_malloc(LVGL_BUFFER_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+		} else {
+				buf2 = (lv_color_t*)heap_caps_malloc(LVGL_BUFFER_SIZE * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
+		}
+		if (buf2) {
+				LOGI("Display", "Second buffer allocated for double-buffering: %d bytes", LVGL_BUFFER_SIZE * sizeof(lv_color_t));
+		} else {
+				LOGW("Display", "Failed to allocate second buffer - using single-buffering");
+		}
+		#endif
+		
+		lv_disp_draw_buf_init(&draw_buf, buf, buf2, LVGL_BUFFER_SIZE);
+		
+		// Initialize default theme (dark mode with custom primary color)
+		lv_theme_t* theme = lv_theme_default_init(
+				NULL,                           // Display (use default)
+				lv_color_hex(0x3399FF),        // Primary color (light blue)
+				lv_color_hex(0x303030),        // Secondary color (dark gray)
+				true,                           // Dark mode
+				LV_FONT_DEFAULT                // Default font
+		);
+		lv_disp_set_theme(NULL, theme);
+		LOGI("Display", "Theme: Default dark mode initialized");
+		
+		// Set up display driver
+		lv_disp_drv_init(&disp_drv);
+		disp_drv.hor_res = DISPLAY_WIDTH;
+		disp_drv.ver_res = DISPLAY_HEIGHT;
+		disp_drv.flush_cb = DisplayManager::flushCallback;
+		disp_drv.draw_buf = &draw_buf;
+		disp_drv.user_data = this;  // Pass instance for callback
+		
+		// Let driver set up hardware-specific LVGL configuration
+		driver->configureLVGL(&disp_drv, DISPLAY_ROTATION);
 		
 		lv_disp_drv_register(&disp_drv);
 		
@@ -511,7 +475,7 @@ void DisplayManager::init() {
 		// On single-core: runs on Core 0 (time-sliced with Arduino loop)
 		// Stack allocated in PSRAM when available to save internal RAM (~8 KB).
 		#if CONFIG_FREERTOS_UNICORE
-		if (!rtos_create_task_psram_stack("LVGL", "LVGL", 8192, this, 1, &lvglTaskHandle, &lvglTaskAlloc)) {
+	if (!rtos_create_task_psram_stack(lvglTask, "LVGL", 8192, this, 1, &lvglTaskHandle, &lvglTaskAlloc)) {
 				xTaskCreate(lvglTask, "LVGL", 8192, this, 1, &lvglTaskHandle);
 				LOGI("Display", "Rendering task created (single-core, internal stack)");
 		} else {

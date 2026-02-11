@@ -23,7 +23,7 @@
  *   → pixel copy to framebuffer + Cache_WriteBack_Addr
  * 
  * Critical timing parameters (from verified hardware testing):
- * - PCLK: 8 MHz (lowered from 12 MHz default to reduce PSRAM bandwidth pressure)
+ * - PCLK: 6 MHz default (board-overridable via ST7701_PCLK_HZ)
  * - HSYNC: polarity=1, front=10, width=8, back=50
  * - VSYNC: polarity=1, front=10, width=8, back=20
  * 
@@ -32,6 +32,14 @@
 
 #include "st7701_rgb_driver.h"
 #include "../log_manager.h"
+
+// PCLK: Pixel clock frequency in Hz.
+// Lower values reduce PSRAM bandwidth pressure but lower the refresh rate.
+// Tested stable at 6-8 MHz with WiFi active on ESP32-S3-4848S040.
+// Override in board_overrides.h if a specific panel needs a different speed.
+#ifndef ST7701_PCLK_HZ
+#define ST7701_PCLK_HZ 6000000L
+#endif
 
 // Bounce buffer: N lines of pixels in internal SRAM, used by LCD DMA
 // instead of reading directly from PSRAM.  This shields scan-out from
@@ -228,7 +236,7 @@ void ST7701_RGB_Driver::init() {
 			LCD_HSYNC_POLARITY, LCD_HSYNC_FRONT_PORCH, LCD_HSYNC_PULSE_WIDTH, LCD_HSYNC_BACK_PORCH,
 			LCD_VSYNC_POLARITY, LCD_VSYNC_FRONT_PORCH, LCD_VSYNC_PULSE_WIDTH, LCD_VSYNC_BACK_PORCH,
 			0,                 // pclk_active_neg (normal polarity)
-			8000000L,          // prefer_speed: 8 MHz (lower = less PSRAM bandwidth pressure)
+			ST7701_PCLK_HZ,    // prefer_speed (board-overridable)
 			false,             // useBigEndian
 			0,                 // de_idle_high
 			0,                 // pclk_idle_high
@@ -258,8 +266,8 @@ void ST7701_RGB_Driver::init() {
 		return;
 	}
 
-	LOGI("ST7701", "Arduino_GFX initialized: %dx%d, auto_flush=true, PCLK=8MHz, bounce=%d lines",
-			displayWidth, displayHeight, ST7701_BOUNCE_BUFFER_LINES);
+	LOGI("ST7701", "Arduino_GFX initialized: %dx%d, auto_flush=true, PCLK=%ldHz, bounce=%d lines",
+			displayWidth, displayHeight, (long)ST7701_PCLK_HZ, ST7701_BOUNCE_BUFFER_LINES);
 	
 	delay(50);  // Brief delay before enabling backlight
 	setBacklight(true);

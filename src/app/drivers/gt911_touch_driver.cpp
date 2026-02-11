@@ -72,8 +72,8 @@ void GT911_TouchDriver::gt911Read() {
 }
 
 bool GT911_TouchDriver::isTouched() {
-		gt911Read();
-		return lastTouched;
+				// Return cached state from last gt911Read() — avoids redundant I2C polling
+				// when getTouch() is called immediately after.
 }
 
 bool GT911_TouchDriver::getTouch(uint16_t* x, uint16_t* y, uint16_t* pressure) {
