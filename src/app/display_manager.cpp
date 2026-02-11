@@ -4,6 +4,7 @@
 
 #include "display_manager.h"
 #include "log_manager.h"
+#include "rtos_task_utils.h"
 
 #include <esp_timer.h>
 
@@ -17,6 +18,8 @@
 #include "drivers/arduino_gfx_driver.h"
 #elif DISPLAY_DRIVER == DISPLAY_DRIVER_ESP_PANEL
 #include "drivers/esp_panel_st77916_driver.h"
+#elif DISPLAY_DRIVER == DISPLAY_DRIVER_ST7701_RGB
+#include "drivers/st7701_rgb_driver.h"
 #endif
 
 #include <SPI.h>
@@ -38,7 +41,7 @@ DisplayManager::DisplayManager(DeviceConfig* cfg)
 			#if HAS_IMAGE_API
 			directImageScreen(this),
 			#endif
-								lvglTaskHandle(nullptr), lvglMutex(nullptr), screenCount(0), buf(nullptr), flushPending(false), directImageActive(false), pendingSplashStatusSet(false) {
+								lvglTaskHandle(nullptr), lvglTaskAlloc{}, lvglMutex(nullptr), screenCount(0), buf(nullptr), flushPending(false), directImageActive(false), pendingSplashStatusSet(false) {
 				pendingSplashStatus[0] = '\0';
 		// Instantiate selected display driver
 		#if DISPLAY_DRIVER == DISPLAY_DRIVER_TFT_ESPI
@@ -49,6 +52,8 @@ DisplayManager::DisplayManager(DeviceConfig* cfg)
 		driver = new Arduino_GFX_Driver();
 		#elif DISPLAY_DRIVER == DISPLAY_DRIVER_ESP_PANEL
 		driver = new ESPPanel_ST77916_Driver();
+		#elif DISPLAY_DRIVER == DISPLAY_DRIVER_ST7701_RGB
+		driver = new ST7701_RGB_Driver();
 		#else
 		#error "No display driver selected or unknown driver type"
 		#endif
@@ -58,19 +63,15 @@ DisplayManager::DisplayManager(DeviceConfig* cfg)
 		
 		// Initialize screen registry (exclude splash - it's boot-specific)
 		availableScreens[0] = {"info", "Info Screen", &infoScreen};
-		availableScreens[1] = {"test", "Test Screen", &testScreen};
-		#if HAS_IMAGE_API
-		// Optional LVGL image screen (JPEG -> RGB565 -> lv_img).
-		// Included under HAS_IMAGE_API for simplicity. To reduce firmware size,
-		// disable LVGL image support via LV_USE_IMG=0 / LV_USE_IMG_TRANSFORM=0 in src/app/lv_conf.h.
-		#if LV_USE_IMG
-		availableScreens[2] = {"lvgl_image", "LVGL Image", &lvglImageScreen};
-		screenCount = 3;
-		#else
+		availableScreens[1] = {"test", "Display Test", &testScreen};
 		screenCount = 2;
+		#if HAS_TOUCH
+		availableScreens[screenCount++] = {"touch_test", "Touch Test", &touchTestScreen};
 		#endif
-		#else
-		screenCount = 2;
+		#if HAS_IMAGE_API
+		#if LV_USE_IMG
+		availableScreens[screenCount++] = {"lvgl_image", "LVGL Image", &lvglImageScreen};
+		#endif
 		#endif
 		
 		#if HAS_IMAGE_API
@@ -93,6 +94,9 @@ DisplayManager::~DisplayManager() {
 		splashScreen.destroy();
 		infoScreen.destroy();
 		testScreen.destroy();
+		#if HAS_TOUCH
+		touchTestScreen.destroy();
+		#endif
 		
 		#if HAS_IMAGE_API
 		directImageScreen.destroy();
@@ -161,9 +165,13 @@ void DisplayManager::flushCallback(lv_disp_drv_t *disp, const lv_area_t *area, l
 		uint32_t w = (area->x2 - area->x1 + 1);
 		uint32_t h = (area->y2 - area->y1 + 1);
 		
+		// Push pixels to display via driver HAL.
+		// swap_bytes differs: framebuffer drivers already have correct byte order,
+		// direct SPI drivers need the swap.
+		bool swap = (mgr->driver->renderMode() != DisplayDriver::RenderMode::Buffered);
 		mgr->driver->startWrite();
 		mgr->driver->setAddrWindow(area->x1, area->y1, w, h);
-		mgr->driver->pushColors((uint16_t *)&color_p->full, w * h, true);
+		mgr->driver->pushColors((uint16_t *)&color_p->full, w * h, swap);
 		mgr->driver->endWrite();
 
 		// Signal that the driver may need a post-render present() step.
@@ -389,6 +397,23 @@ void DisplayManager::initLVGL() {
 		}
 		LOGI("Display", "Buffer allocated: %d bytes (%d pixels)", LVGL_BUFFER_SIZE * sizeof(lv_color_t), LVGL_BUFFER_SIZE);
 		
+		// Allocate second buffer for double-buffering if configured
+		lv_color_t* buf2 = NULL;
+		#if defined(LVGL_DRAW_BUF_COUNT) && LVGL_DRAW_BUF_COUNT == 2
+		if (LVGL_BUFFER_PREFER_INTERNAL) {
+				buf2 = (lv_color_t*)heap_caps_malloc(LVGL_BUFFER_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+		} else {
+				buf2 = (lv_color_t*)heap_caps_malloc(LVGL_BUFFER_SIZE * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
+		}
+		if (buf2) {
+				LOGI("Display", "Second buffer allocated for double-buffering: %d bytes", LVGL_BUFFER_SIZE * sizeof(lv_color_t));
+		} else {
+				LOGW("Display", "Failed to allocate second buffer - using single-buffering");
+		}
+		#endif
+		
+		lv_disp_draw_buf_init(&draw_buf, buf, buf2, LVGL_BUFFER_SIZE);
+		
 		// Initialize default theme (dark mode with custom primary color)
 		lv_theme_t* theme = lv_theme_default_init(
 				NULL,                           // Display (use default)
@@ -400,10 +425,7 @@ void DisplayManager::initLVGL() {
 		lv_disp_set_theme(NULL, theme);
 		LOGI("Display", "Theme: Default dark mode initialized");
 		
-		// Set up display buffer
-		lv_disp_draw_buf_init(&draw_buf, buf, NULL, LVGL_BUFFER_SIZE);
-		
-		// Initialize display driver
+		// Set up display driver
 		lv_disp_drv_init(&disp_drv);
 		disp_drv.hor_res = DISPLAY_WIDTH;
 		disp_drv.ver_res = DISPLAY_HEIGHT;
@@ -411,7 +433,7 @@ void DisplayManager::initLVGL() {
 		disp_drv.draw_buf = &draw_buf;
 		disp_drv.user_data = this;  // Pass instance for callback
 		
-		// Apply driver-specific LVGL configuration (rotation, full refresh, etc.)
+		// Let driver set up hardware-specific LVGL configuration
 		driver->configureLVGL(&disp_drv, DISPLAY_ROTATION);
 		
 		lv_disp_drv_register(&disp_drv);
@@ -433,6 +455,9 @@ void DisplayManager::init() {
 		splashScreen.create();
 		infoScreen.create();
 		testScreen.create();
+		#if HAS_TOUCH
+		touchTestScreen.create();
+		#endif
 		#if HAS_IMAGE_API
 		#if LV_USE_IMG
 		lvglImageScreen.create();
@@ -446,14 +471,23 @@ void DisplayManager::init() {
 		
 		// Create LVGL rendering task
 		// Stack size increased to 8KB for ESP32-S3 and larger displays
-		// On dual-core: pin to Core 0 (Arduino loop runs on Core 1)
+		// On dual-core: pin to configured core (LVGL_TASK_CORE)
 		// On single-core: runs on Core 0 (time-sliced with Arduino loop)
+		// Stack allocated in PSRAM when available to save internal RAM (~8 KB).
 		#if CONFIG_FREERTOS_UNICORE
-		xTaskCreate(lvglTask, "LVGL", 8192, this, 1, &lvglTaskHandle);
-		LOGI("Display", "Rendering task created (single-core)");
+	if (!rtos_create_task_psram_stack(lvglTask, "LVGL", 8192, this, 1, &lvglTaskHandle, &lvglTaskAlloc)) {
+				xTaskCreate(lvglTask, "LVGL", 8192, this, 1, &lvglTaskHandle);
+				LOGI("Display", "Rendering task created (single-core, internal stack)");
+		} else {
+				LOGI("Display", "Rendering task created (single-core, PSRAM stack)");
+		}
 		#else
-		xTaskCreatePinnedToCore(lvglTask, "LVGL", 8192, this, 1, &lvglTaskHandle, 0);
-		LOGI("Display", "Rendering task created (pinned to Core 0)");
+		if (!rtos_create_task_psram_stack_pinned(lvglTask, "LVGL", 8192, this, 1, &lvglTaskHandle, &lvglTaskAlloc, LVGL_TASK_CORE)) {
+				xTaskCreatePinnedToCore(lvglTask, "LVGL", 8192, this, 1, &lvglTaskHandle, LVGL_TASK_CORE);
+				LOGI("Display", "Rendering task created (Core %d, internal stack)", LVGL_TASK_CORE);
+		} else {
+				LOGI("Display", "Rendering task created (Core %d, PSRAM stack)", LVGL_TASK_CORE);
+		}
 		#endif
 		
 		LOGI("Display", "Manager init complete");

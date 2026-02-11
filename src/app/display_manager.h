@@ -9,6 +9,10 @@
 #include "screens/info_screen.h"
 #include "screens/test_screen.h"
 
+#if HAS_TOUCH
+#include "screens/touch_test_screen.h"
+#endif
+
 #if HAS_IMAGE_API
 #include "screens/direct_image_screen.h"
 #include "screens/lvgl_image_screen.h"
@@ -18,6 +22,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/semphr.h>
+#include "rtos_task_utils.h"
 
 // ============================================================================
 // Screen Registry
@@ -60,6 +65,7 @@ private:
 		
 		// FreeRTOS task and mutex
 		TaskHandle_t lvglTaskHandle;
+		RtosTaskPsramAlloc lvglTaskAlloc;  // PSRAM stack allocation (if used)
 		SemaphoreHandle_t lvglMutex;
 		
 		// Screen management
@@ -80,6 +86,10 @@ private:
 		SplashScreen splashScreen;
 		InfoScreen infoScreen;
 		TestScreen testScreen;
+		
+		#if HAS_TOUCH
+		TouchTestScreen touchTestScreen;
+		#endif
 		
 		#if HAS_IMAGE_API
 		DirectImageScreen directImageScreen;

@@ -28,7 +28,7 @@ void TestScreen::create() {
 		lv_label_set_text(titleLabel, "Display Test");
 		lv_obj_set_style_text_color(titleLabel, lv_color_white(), 0);
 		lv_obj_set_style_text_font(titleLabel, &lv_font_montserrat_18, 0);
-		lv_obj_align(titleLabel, LV_ALIGN_CENTER, 0, -90);
+		lv_obj_align(titleLabel, LV_ALIGN_TOP_MID, 0, 8);  // Use TOP alignment to verify Y orientation
 		lv_obj_clear_flag(titleLabel, LV_OBJ_FLAG_CLICKABLE);  // Click-transparent
 		
 		// Red bar
@@ -102,7 +102,7 @@ void TestScreen::create() {
 		snprintf(info_text, sizeof(info_text), "%dx%d RGB565", DISPLAY_WIDTH, DISPLAY_HEIGHT);
 		lv_label_set_text(infoLabel, info_text);
 		lv_obj_set_style_text_color(infoLabel, lv_color_make(150, 150, 150), 0);
-		lv_obj_align(infoLabel, LV_ALIGN_CENTER, 0, 85);
+		lv_obj_align(infoLabel, LV_ALIGN_BOTTOM_MID, 0, -8);  // Use BOTTOM alignment to verify Y orientation
 		lv_obj_clear_flag(infoLabel, LV_OBJ_FLAG_CLICKABLE);  // Click-transparent
 		
 		// Add touch event handler - tap anywhere to go to InfoScreen

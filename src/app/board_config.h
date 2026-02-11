@@ -251,11 +251,13 @@
 //   DISPLAY_DRIVER_ST7789V2 (2) - Native ST7789V2 driver (1.69" IPS LCD 240x280)
 //   DISPLAY_DRIVER_LOVYANGFX (3) - LovyanGFX (future support)
 //   DISPLAY_DRIVER_ARDUINO_GFX (4) - Arduino_GFX (QSPI displays like AXS15231B)
+//   DISPLAY_DRIVER_ST7701_RGB (6) - Arduino_GFX ST7701 RGB panel (ESP32-4848S040)
 #define DISPLAY_DRIVER_TFT_ESPI 1
 #define DISPLAY_DRIVER_ST7789V2 2
 #define DISPLAY_DRIVER_LOVYANGFX 3
 #define DISPLAY_DRIVER_ARDUINO_GFX 4
 #define DISPLAY_DRIVER_ESP_PANEL 5
+#define DISPLAY_DRIVER_ST7701_RGB 6
 
 // Select the display HAL backend (one of the DISPLAY_DRIVER_* constants).
 #ifndef DISPLAY_DRIVER
@@ -275,6 +277,11 @@
 #define LVGL_TICK_PERIOD_MS 5
 #endif
 
+// Core to pin the LVGL render task to on dual-core chips (0 or 1).
+#ifndef LVGL_TASK_CORE
+#define LVGL_TASK_CORE 0
+#endif
+
 // ============================================================================
 // Backlight Configuration
 // ============================================================================
@@ -286,6 +293,27 @@
 // LEDC channel used for backlight PWM.
 #ifndef TFT_BACKLIGHT_PWM_CHANNEL
 #define TFT_BACKLIGHT_PWM_CHANNEL 0  // LEDC channel for PWM control
+#endif
+
+// LEDC PWM frequency in Hz for backlight dimming.
+// Optimal value depends on the board's MOSFET circuit.
+// Lower frequencies give wider dimming range but may cause audible coil whine.
+#ifndef TFT_BACKLIGHT_PWM_FREQ
+#define TFT_BACKLIGHT_PWM_FREQ 1000  // 1 kHz default (wide range, may whine on some boards)
+#endif
+
+// LEDC duty range for backlight dimming (8-bit: 0-255).
+// Maps the visible dimming range to 1-99% brightness.
+// Below DUTY_MIN the backlight is off; above DUTY_MAX it's fully saturated.
+// 100% always uses duty 255 (constant DC, max brightness).
+
+// Duty cycle where backlight first turns on.
+#ifndef TFT_BACKLIGHT_DUTY_MIN
+#define TFT_BACKLIGHT_DUTY_MIN 0
+#endif
+// Duty cycle at full saturation (before constant DC).
+#ifndef TFT_BACKLIGHT_DUTY_MAX
+#define TFT_BACKLIGHT_DUTY_MAX 255
 #endif
 
 // ============================================================================
@@ -305,6 +333,7 @@
 #define TOUCH_DRIVER_FT6236 2
 #define TOUCH_DRIVER_AXS15231B 3
 #define TOUCH_DRIVER_CST816S_ESP_PANEL 4
+#define TOUCH_DRIVER_GT911 5
 
 // Prefer allocating LVGL draw buffer in internal RAM before PSRAM.
 // Default: false (keeps historical PSRAM-first behavior; boards can override).

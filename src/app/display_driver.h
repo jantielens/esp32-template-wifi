@@ -90,8 +90,8 @@ public:
 		virtual void present() {
 				// Override in buffered drivers (e.g., Arduino_GFX canvas)
 		}
-		
-		// LVGL configuration hook (override to customize LVGL driver settings)
+
+		// LVGL configuration hook(override to customize LVGL driver settings)
 		// Called during LVGL initialization to allow driver-specific configuration
 		// such as software rotation, full refresh mode, etc.
 		// Default implementation: no special configuration needed

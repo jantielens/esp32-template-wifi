@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.49] - 2026-02-11
+
+### Added
+- ESP32-4848S040 board support (Guition ESP32-S3, ST7701 RGB 480×480, 16 MB flash, 8 MB OPI PSRAM)
+- ST7701 RGB display driver via Arduino_GFX delegation (SWSPI → ESP32RGBPanel → RGB_Display)
+- GT911 I2C touch driver (vendored, Wire1 bus) with cached `isTouched()` to avoid redundant I2C reads
+- Touch test screen (red dots + white connecting lines on LVGL canvas)
+- Board-overridable `ST7701_PCLK_HZ` (default 6 MHz) and `ST7701_BOUNCE_BUFFER_LINES` defines
+- `LV_USE_CANVAS` now board-overridable via `#ifndef` guard in lv_conf.h
+- PWM backlight brightness control with board-configurable frequency and duty range
+  - New defines: `TFT_BACKLIGHT_PWM_FREQ`, `TFT_BACKLIGHT_DUTY_MIN`, `TFT_BACKLIGHT_DUTY_MAX`
+  - LEDC PWM attached before LCD panel init to prevent GPIO reconfiguration glitch
+  - ESP32-4848S040 tuned to 3.5 kHz (no coil whine, smooth dimming, duty 77–252)
+
+### Fixed
+- Critical single-core bug: `rtos_create_task_psram_stack` passed string literal instead of task function pointer
+- Unified LVGL flush callback to single code path (was three separate paths with dead direct-mode logic)
+
+### Removed
+- Dead display_driver.h methods: `getFramebuffer()`, `getLVGLDirectBuffers()`, `swapBuffers()`
+- Per-board watchdog (unnecessary — Arduino default WDT already watches IDLE tasks)
+
+### Documentation
+- Added `docs/esp32-4848s040.md` board guide (display, touch, memory, LVGL integration)
+- Updated `docs/compile-time-flags.md` with new ST7701 defines
+
 ## [0.0.48] - 2026-01-31
 
 ### Changed

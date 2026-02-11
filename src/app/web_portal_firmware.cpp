@@ -20,8 +20,11 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
+#include "rtos_task_utils.h"
+
 // ===== GitHub Pages firmware update (app-only) =====
 static TaskHandle_t firmware_update_task_handle = nullptr;
+static RtosTaskPsramAlloc fw_update_task_alloc = {};
 static volatile bool firmware_update_in_progress = false;
 static volatile size_t firmware_update_progress = 0;
 static volatile size_t firmware_update_total = 0;
@@ -406,16 +409,21 @@ void handlePostFirmwareUpdate(AsyncWebServerRequest *request, uint8_t *data, siz
 		LOGI("OTA", "Update requested url=%s size=%u", url, (unsigned)size);
 
 		// Spawn background task to avoid blocking AsyncTCP.
-		const BaseType_t task_ok = xTaskCreate(
+		// Try PSRAM stack first (saves 12 KB internal RAM), fall back to internal.
+		bool task_ok = rtos_create_task_psram_stack(
 				firmware_update_task,
 				"fw_update",
 				12288,
 				nullptr,
 				1,
-				&firmware_update_task_handle
+				&firmware_update_task_handle,
+				&fw_update_task_alloc
 		);
+		if (!task_ok) {
+				task_ok = (xTaskCreate(firmware_update_task, "fw_update", 12288, nullptr, 1, &firmware_update_task_handle) == pdPASS);
+		}
 
-		if (task_ok != pdPASS) {
+		if (!task_ok) {
 				firmware_update_in_progress = false;
 				strlcpy(firmware_update_state, "error", sizeof(firmware_update_state));
 				strlcpy(firmware_update_error, "Failed to start update task", sizeof(firmware_update_error));

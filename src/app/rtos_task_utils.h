@@ -24,3 +24,16 @@ bool rtos_create_task_psram_stack(
 		TaskHandle_t* outHandle,
 		RtosTaskPsramAlloc* outAlloc
 );
+
+// Core-pinned variant of rtos_create_task_psram_stack.
+// Pins the task to the specified core (0 or 1). Use tskNO_AFFINITY for no pinning.
+bool rtos_create_task_psram_stack_pinned(
+		TaskFunction_t taskFunction,
+		const char* name,
+		uint32_t stackDepthWords,
+		void* param,
+		UBaseType_t priority,
+		TaskHandle_t* outHandle,
+		RtosTaskPsramAlloc* outAlloc,
+		BaseType_t coreId
+);
