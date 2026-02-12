@@ -2,20 +2,24 @@
  * Arduino_GFX Display Driver Implementation
  * 
  * Wraps Arduino_GFX library for QSPI displays (AXS15231B).
- * Uses canvas-based rendering like the JC3248W535 sample.
+ * Uses a PSRAM framebuffer to work around QSPI partial-write
+ * limitations — see header for full explanation.
+ * Panel stays in portrait; driver-level rotation transposes pixels
+ * from LVGL's landscape coordinate space to portrait for the panel.
  */
 
 #include "arduino_gfx_driver.h"
 #include "../log_manager.h"
+#include <esp_heap_caps.h>
 
 Arduino_GFX_Driver::Arduino_GFX_Driver() 
-		: bus(nullptr), gfx(nullptr), canvas(nullptr), currentBrightness(100), backlightPwmAttached(false),
+		: bus(nullptr), gfx(nullptr), currentBrightness(100), backlightPwmAttached(false),
 			displayWidth(DISPLAY_WIDTH), displayHeight(DISPLAY_HEIGHT), displayRotation(DISPLAY_ROTATION),
-			currentX(0), currentY(0), currentW(0), currentH(0) {
+			currentX(0), currentY(0), currentW(0), currentH(0), framebuffer(nullptr) {
 }
 
 Arduino_GFX_Driver::~Arduino_GFX_Driver() {
-		if (canvas) delete canvas;
+		if (framebuffer) { heap_caps_free(framebuffer); framebuffer = nullptr; }
 		if (gfx) delete gfx;
 		if (bus) delete bus;
 }
@@ -74,34 +78,46 @@ void Arduino_GFX_Driver::init() {
 		gfx = new Arduino_AXS15231B(bus, LCD_QSPI_RST, 0, false, displayWidth, displayHeight);
 		LOGI("GFX", "AXS15231B panel object created");
 		
-		// Create canvas for buffered rendering
-		// Canvas rotation matches DISPLAY_ROTATION for proper LVGL alignment
-		canvas = new Arduino_Canvas(displayWidth, displayHeight, gfx, 0, 0, displayRotation);
-		LOGI("GFX", "Canvas created with rotation=%d", displayRotation);
-		
-		// Initialize display via canvas (canvas->begin() initializes the underlying display)
-		if (!canvas->begin(40000000UL)) {  // 40MHz QSPI frequency
+		// Initialize display directly (no canvas layer)
+		if (!gfx->begin(40000000UL)) {  // 40MHz QSPI frequency
 				LOGE("GFX", "Failed to initialize display");
 				return;
 		}
-		LOGI("GFX", "Display initialized via canvas");
+		LOGI("GFX", "Display initialized (direct QSPI)");
 		
 		// Clear screen
-		canvas->fillScreen(RGB565_BLACK);
-		canvas->flush();
+		gfx->fillScreen(RGB565_BLACK);
 		LOGI("GFX", "Screen cleared");
 		
-		LOGI("GFX", "Display ready: %dx%d", displayWidth, displayHeight);
+		// Allocate portrait-orientation framebuffer in PSRAM.
+		// QSPI partial writes don't work (address window lost on CS toggle),
+		// so we accumulate LVGL strips here and send the full frame in present().
+		size_t fbBytes = (size_t)displayWidth * displayHeight * sizeof(uint16_t);
+		framebuffer = (uint16_t*)heap_caps_malloc(fbBytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+		if (!framebuffer) {
+				framebuffer = (uint16_t*)heap_caps_malloc(fbBytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+		}
+		if (framebuffer) {
+				memset(framebuffer, 0, fbBytes);
+				LOGI("GFX", "Framebuffer allocated: %u bytes (%ux%u)", fbBytes, displayWidth, displayHeight);
+		} else {
+				LOGE("GFX", "Failed to allocate framebuffer! (%u bytes)", fbBytes);
+		}
+		
+		LOGI("GFX", "Display ready: %dx%d (physical), rotation %d", displayWidth, displayHeight, displayRotation);
 }
 
 void Arduino_GFX_Driver::setRotation(uint8_t rotation) {
+		// Panel stays in portrait mode (rotation 0).
+		// Driver-level rotation transposes pixels in pushColors().
+		// MADCTL rotation is unreliable on AXS15231B over QSPI.
 		displayRotation = rotation;
-		if (canvas) {
-				canvas->setRotation(rotation);
-		}
+		LOGI("GFX", "Rotation %d (driver-level transpose in pushColors)", rotation);
 }
 
 int Arduino_GFX_Driver::width() {
+		// Return LOGICAL width (what LVGL uses for layout).
+		// For landscape rotations (1, 3), the logical width is the physical height.
 		if (displayRotation == 1 || displayRotation == 3) {
 				return (int)displayHeight;
 		}
@@ -109,6 +125,8 @@ int Arduino_GFX_Driver::width() {
 }
 
 int Arduino_GFX_Driver::height() {
+		// Return LOGICAL height (what LVGL uses for layout).
+		// For landscape rotations (1, 3), the logical height is the physical width.
 		if (displayRotation == 1 || displayRotation == 3) {
 				return (int)displayWidth;
 		}
@@ -182,17 +200,17 @@ void Arduino_GFX_Driver::applyDisplayFixes() {
 }
 
 void Arduino_GFX_Driver::startWrite() {
-		// Canvas-based rendering doesn't need startWrite/endWrite
-		// All drawing goes to canvas buffer first
+		// draw16bitRGBBitmap() in pushColors() is a complete operation
+		// that handles bus transactions internally — no wrapping needed.
 }
 
 void Arduino_GFX_Driver::endWrite() {
-		// Flush happens in pushColors after all data is written
+		// See startWrite() comment.
 }
 
 void Arduino_GFX_Driver::setAddrWindow(int16_t x, int16_t y, uint16_t w, uint16_t h) {
 		// Store the current drawing area for pushColors
-		// Canvas-based rendering uses draw16bitRGBBitmap instead of raw pixel pushing
+		// draw16bitRGBBitmap takes coordinates + dimensions together
 		currentX = x;
 		currentY = y;
 		currentW = w;
@@ -200,42 +218,69 @@ void Arduino_GFX_Driver::setAddrWindow(int16_t x, int16_t y, uint16_t w, uint16_
 }
 
 void Arduino_GFX_Driver::pushColors(uint16_t* data, uint32_t len, bool swap_bytes) {
-		// For canvas-based rendering, draw the bitmap directly
-		// This matches the sample's approach: canvas->draw16bitRGBBitmap(area->x1, area->y1, (uint16_t *)color_p, w, h)
-		// Note: canvas accumulates draws; flush happens in LVGL rendering task
-		if (canvas) {
-				canvas->draw16bitRGBBitmap(currentX, currentY, data, currentW, currentH);
+		if (!framebuffer) return;
+		
+		const uint16_t w = currentW;
+		const uint16_t h = currentH;
+		const int16_t x = currentX;   // logical x (from LVGL)
+		const int16_t y = currentY;   // logical y (from LVGL)
+		
+		// Copy LVGL flush strip into the portrait framebuffer.
+		// For rotation 0 the coordinates map 1:1; for landscape rotations
+		// each pixel is transposed from logical to physical orientation.
+		
+		switch (displayRotation) {
+				case 0: {
+						// Portrait — direct row-by-row memcpy.
+						for (uint16_t r = 0; r < h; r++) {
+								memcpy(&framebuffer[(y + r) * displayWidth + x],
+											 &data[r * w],
+											 w * sizeof(uint16_t));
+						}
+						break;
+				}
+				case 1: {
+						// 90° CW — logical (lx, ly) → physical (ly, H-1-lx)
+						for (uint16_t r = 0; r < h; r++) {
+								const uint16_t py_base = y + r;  // physical x = ly
+								for (uint16_t c = 0; c < w; c++) {
+										const uint16_t px = py_base;  // physical x = ly
+										const uint16_t py = displayHeight - 1 - (x + c);  // physical y = H-1-lx
+										framebuffer[py * displayWidth + px] = data[r * w + c];
+								}
+						}
+						break;
+				}
+				case 2: {
+						// 180° — logical (lx, ly) → physical (W-1-lx, H-1-ly)
+						for (uint16_t r = 0; r < h; r++) {
+								const uint16_t py = displayHeight - 1 - (y + r);
+								for (uint16_t c = 0; c < w; c++) {
+										const uint16_t px = displayWidth - 1 - (x + c);
+										framebuffer[py * displayWidth + px] = data[r * w + c];
+								}
+						}
+						break;
+				}
+				case 3: {
+						// 270° CW — logical (lx, ly) → physical (W-1-ly, lx)
+						for (uint16_t r = 0; r < h; r++) {
+								for (uint16_t c = 0; c < w; c++) {
+										const uint16_t px = displayWidth - 1 - (y + r);
+										const uint16_t py = x + c;
+										framebuffer[py * displayWidth + px] = data[r * w + c];
+								}
+						}
+						break;
+				}
 		}
-}
-
-DisplayDriver::RenderMode Arduino_GFX_Driver::renderMode() const {
-		return RenderMode::Buffered;
 }
 
 void Arduino_GFX_Driver::present() {
-		// Push canvas buffer to physical display.
-		// Called by DisplayManager only when LVGL produced draw data.
-		if (canvas) {
-				canvas->flush();
-		}
-}
-
-void Arduino_GFX_Driver::configureLVGL(lv_disp_drv_t* drv, uint8_t rotation) {
-		// For Arduino_GFX with canvas, we handle rotation via canvas->setRotation()
-		// LVGL works in logical (rotated) coordinates
-		// Canvas translates to physical panel coordinates
+		if (!gfx || !framebuffer) return;
 		
-		// Software rotation is already set via canvas->setRotation() in init()
-		// No additional LVGL configuration needed - canvas handles it
-		
-		// Set screen dimensions based on rotation
-		if (rotation == 1 || rotation == 3) {
-				// Landscape: swap width/height
-				drv->hor_res = displayHeight;
-				drv->ver_res = displayWidth;
-		} else {
-				// Portrait: keep original
-				drv->hor_res = displayWidth;
-				drv->ver_res = displayHeight;
-		}
+		// Send the entire portrait framebuffer to the panel.
+		// draw16bitRGBBitmap at (0,0) with full panel dimensions works
+		// reliably on QSPI — see header comment for rationale.
+		gfx->draw16bitRGBBitmap(0, 0, framebuffer, displayWidth, displayHeight);
 }

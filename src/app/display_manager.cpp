@@ -427,8 +427,8 @@ void DisplayManager::initLVGL() {
 		
 		// Set up display driver
 		lv_disp_drv_init(&disp_drv);
-		disp_drv.hor_res = DISPLAY_WIDTH;
-		disp_drv.ver_res = DISPLAY_HEIGHT;
+		disp_drv.hor_res = driver->width();
+		disp_drv.ver_res = driver->height();
 		disp_drv.flush_cb = DisplayManager::flushCallback;
 		disp_drv.draw_buf = &draw_buf;
 		disp_drv.user_data = this;  // Pass instance for callback
@@ -438,7 +438,7 @@ void DisplayManager::initLVGL() {
 		
 		lv_disp_drv_register(&disp_drv);
 		
-		LOGI("Display", "Buffer: %d pixels (%d lines)", LVGL_BUFFER_SIZE, LVGL_BUFFER_SIZE / DISPLAY_WIDTH);
+		LOGI("Display", "Buffer: %d pixels (%d lines)", LVGL_BUFFER_SIZE, LVGL_BUFFER_SIZE / driver->width());
 		LOGI("Display", "LVGL init complete");
 }
 

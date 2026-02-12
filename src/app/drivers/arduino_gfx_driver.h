@@ -3,9 +3,24 @@
  * 
  * Wrapper for moononournation's Arduino_GFX library.
  * Supports QSPI displays like AXS15231B (JC3248W535).
- * 
- * This driver wraps Arduino_GFX + Arduino_Canvas to match our DisplayDriver HAL.
- * It translates LVGL flush callbacks to canvas operations, similar to the sample's approach.
+ *
+ * QSPI partial-write limitation:
+ *   The ESP32 QSPI bus toggles CS between each SPI transaction.
+ *   CASET/RASET (address window) and pixel data travel in separate
+ *   CS sessions, so the panel loses the address pointer — every
+ *   writePixels lands at (0,0) regardless of the window coordinates.
+ *   fillScreen works because (0,0) happens to be the correct origin
+ *   for a full-screen write.
+ *
+ * Solution: keep a portrait-orientation PSRAM framebuffer.
+ *   pushColors() copies (with optional rotation) each LVGL flush
+ *   strip into the framebuffer.  present() sends the entire frame
+ *   via draw16bitRGBBitmap(0, 0, fb, 320, 480) — which always
+ *   targets (0,0), matching the panel's actual write position.
+ *
+ * Compared with the former Arduino_Canvas approach this eliminates
+ * the Canvas object (and its full GFX drawing API overhead) while
+ * keeping the same reliable full-frame transfer.
  */
 
 #ifndef ARDUINO_GFX_DRIVER_H
@@ -19,16 +34,19 @@ class Arduino_GFX_Driver : public DisplayDriver {
 private:
 		Arduino_DataBus* bus;
 		Arduino_GFX* gfx;
-		Arduino_Canvas* canvas;
 		uint8_t currentBrightness;  // Current brightness level (0-100%)
 		bool backlightPwmAttached;
-		uint16_t displayWidth;
-		uint16_t displayHeight;
+		uint16_t displayWidth;      // Physical panel width (portrait)
+		uint16_t displayHeight;     // Physical panel height (portrait)
 		uint8_t displayRotation;
 		
 		// Current drawing area (set by setAddrWindow, used by pushColors)
 		int16_t currentX, currentY;
 		uint16_t currentW, currentH;
+		
+		// PSRAM framebuffer: portrait-orientation (displayWidth × displayHeight).
+		// pushColors() writes into this; present() sends it to the panel.
+		uint16_t* framebuffer;
 		
 public:
 		Arduino_GFX_Driver();
@@ -48,12 +66,10 @@ public:
 		void endWrite() override;
 		void setAddrWindow(int16_t x, int16_t y, uint16_t w, uint16_t h) override;
 		void pushColors(uint16_t* data, uint32_t len, bool swap_bytes = true) override;
-
-		RenderMode renderMode() const override;
-		void present() override;  // Flush canvas buffer to physical display
 		
-		// Override LVGL configuration to use software rotation
-		void configureLVGL(lv_disp_drv_t* drv, uint8_t rotation) override;
+		// Buffered render mode — present() flushes the full framebuffer to the panel.
+		RenderMode renderMode() const override { return RenderMode::Buffered; }
+		void present() override;
 };
 
 #endif // ARDUINO_GFX_DRIVER_H

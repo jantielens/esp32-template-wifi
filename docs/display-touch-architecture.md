@@ -196,8 +196,8 @@ void ST7789V2_Driver::configureLVGL(lv_disp_drv_t* drv, uint8_t rotation) {
 ```cpp
 void DisplayManager::initLVGL() {
     lv_disp_drv_init(&disp_drv);
-    disp_drv.hor_res = DISPLAY_WIDTH;
-    disp_drv.ver_res = DISPLAY_HEIGHT;
+    disp_drv.hor_res = driver->width();   // Post-rotation logical width
+    disp_drv.ver_res = driver->height();  // Post-rotation logical height
     disp_drv.flush_cb = DisplayManager::flushCallback;
     
     // Call driver's LVGL configuration hook
@@ -382,7 +382,7 @@ void DisplayManager::lvglTask(void* pvParameter) {
             mgr->currentScreen->update();   // Screen data refresh
         }
 
-        // Buffered display drivers (e.g., Arduino_GFX canvas) require a post-render present().
+        // Buffered display drivers require a post-render present().
         if (mgr->flushPending && mgr->driver->renderMode() == DisplayDriver::RenderMode::Buffered) {
             mgr->driver->present();
         }

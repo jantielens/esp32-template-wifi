@@ -14,7 +14,8 @@ This document captures research performed while adding support for the **JC3248W
 ### JC3248W535 (ESP32-S3, 320×480)
 - Display controller: **AXS15231B**
 - Bus: **QSPI** (ESP32-S3 QSPI)
-- Current approach in this repo: **Arduino_GFX + Arduino_Canvas** as a buffered backend (`renderMode() == Buffered`), with `present()` called after `lv_timer_handler()` when LVGL produced draw data.
+- Current approach in this repo: **Arduino_GFX direct rendering** (`renderMode() == Direct`) with hardware rotation via MADCTL register (`gfx->setRotation()`). Only dirty rectangles are transferred to the panel via `gfx->draw16bitRGBBitmap()`.
+- **History:** Originally used `Arduino_Canvas` as a buffered backend, which was removed in issue #65 due to the double-copy overhead and full-frame flush penalty.
 
 ### CYD v2 / v3 (ESP32-2432S028R, 320×240)
 - Display controller: **ILI9341-class** (SPI)
@@ -128,4 +129,4 @@ Before switching any existing board from TFT_eSPI/native drivers to Arduino_GFX:
 ## Suggested Next Steps (Optional)
 
 - Prototype an Arduino_GFX-based **SPI direct** driver for CYD + ST7789 to evaluate simplification impact.
-- Optionally prototype an Arduino_GFX-based **QSPI direct** path for AXS15231B as an A/B test against the current canvas model.
+- The QSPI direct path for AXS15231B is now implemented (issue #65) — confirmed faster than the canvas model.
