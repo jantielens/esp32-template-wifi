@@ -14,9 +14,12 @@
  *
  * Solution: keep a portrait-orientation PSRAM framebuffer.
  *   pushColors() copies (with optional rotation) each LVGL flush
- *   strip into the framebuffer.  present() sends the entire frame
- *   via draw16bitRGBBitmap(0, 0, fb, 320, 480) — which always
- *   targets (0,0), matching the panel's actual write position.
+ *   strip into the framebuffer and tracks which portrait rows were
+ *   touched.  present() sends rows 0..maxDirtyRow to the panel
+ *   via draw16bitRGBBitmap(0, 0, fb, w, dirtyRows) — starting at
+ *   (0,0) which matches the panel's actual write position.
+ *   For partial redraws (widget animations, status updates) this
+ *   transfers significantly less data than a full-frame flush.
  *
  * Compared with the former Arduino_Canvas approach this eliminates
  * the Canvas object (and its full GFX drawing API overhead) while
@@ -47,6 +50,11 @@ private:
 		// PSRAM framebuffer: portrait-orientation (displayWidth × displayHeight).
 		// pushColors() writes into this; present() sends it to the panel.
 		uint16_t* framebuffer;
+		
+		// Dirty-row tracking: only the portrait rows touched since the last
+		// present() are sent to the panel, reducing QSPI transfer size.
+		uint16_t dirtyMinRow;
+		uint16_t dirtyMaxRow;
 		
 public:
 		Arduino_GFX_Driver();

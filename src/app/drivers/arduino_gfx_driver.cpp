@@ -15,7 +15,8 @@
 Arduino_GFX_Driver::Arduino_GFX_Driver() 
 		: bus(nullptr), gfx(nullptr), currentBrightness(100), backlightPwmAttached(false),
 			displayWidth(DISPLAY_WIDTH), displayHeight(DISPLAY_HEIGHT), displayRotation(DISPLAY_ROTATION),
-			currentX(0), currentY(0), currentW(0), currentH(0), framebuffer(nullptr) {
+			currentX(0), currentY(0), currentW(0), currentH(0),
+			framebuffer(nullptr), dirtyMinRow(UINT16_MAX), dirtyMaxRow(0) {
 }
 
 Arduino_GFX_Driver::~Arduino_GFX_Driver() {
@@ -228,31 +229,42 @@ void Arduino_GFX_Driver::pushColors(uint16_t* data, uint32_t len, bool swap_byte
 		// Copy LVGL flush strip into the portrait framebuffer.
 		// For rotation 0 the coordinates map 1:1; for landscape rotations
 		// each pixel is transposed from logical to physical orientation.
+		// Track the portrait row range touched for dirty-row optimisation.
 		
 		switch (displayRotation) {
 				case 0: {
 						// Portrait — direct row-by-row memcpy.
+						const uint16_t rowStart = (uint16_t)y;
+						const uint16_t rowEnd   = (uint16_t)(y + h - 1);
 						for (uint16_t r = 0; r < h; r++) {
 								memcpy(&framebuffer[(y + r) * displayWidth + x],
 											 &data[r * w],
 											 w * sizeof(uint16_t));
 						}
+						if (rowStart < dirtyMinRow) dirtyMinRow = rowStart;
+						if (rowEnd   > dirtyMaxRow) dirtyMaxRow = rowEnd;
 						break;
 				}
 				case 1: {
 						// 90° CW — logical (lx, ly) → physical (ly, H-1-lx)
+						const uint16_t rowStart = displayHeight - 1 - (x + w - 1);
+						const uint16_t rowEnd   = displayHeight - 1 - x;
 						for (uint16_t r = 0; r < h; r++) {
-								const uint16_t py_base = y + r;  // physical x = ly
+								const uint16_t py_base = y + r;
 								for (uint16_t c = 0; c < w; c++) {
-										const uint16_t px = py_base;  // physical x = ly
-										const uint16_t py = displayHeight - 1 - (x + c);  // physical y = H-1-lx
+										const uint16_t px = py_base;
+										const uint16_t py = displayHeight - 1 - (x + c);
 										framebuffer[py * displayWidth + px] = data[r * w + c];
 								}
 						}
+						if (rowStart < dirtyMinRow) dirtyMinRow = rowStart;
+						if (rowEnd   > dirtyMaxRow) dirtyMaxRow = rowEnd;
 						break;
 				}
 				case 2: {
 						// 180° — logical (lx, ly) → physical (W-1-lx, H-1-ly)
+						const uint16_t rowStart = displayHeight - 1 - (y + h - 1);
+						const uint16_t rowEnd   = displayHeight - 1 - y;
 						for (uint16_t r = 0; r < h; r++) {
 								const uint16_t py = displayHeight - 1 - (y + r);
 								for (uint16_t c = 0; c < w; c++) {
@@ -260,10 +272,14 @@ void Arduino_GFX_Driver::pushColors(uint16_t* data, uint32_t len, bool swap_byte
 										framebuffer[py * displayWidth + px] = data[r * w + c];
 								}
 						}
+						if (rowStart < dirtyMinRow) dirtyMinRow = rowStart;
+						if (rowEnd   > dirtyMaxRow) dirtyMaxRow = rowEnd;
 						break;
 				}
 				case 3: {
 						// 270° CW — logical (lx, ly) → physical (W-1-ly, lx)
+						const uint16_t rowStart = (uint16_t)x;
+						const uint16_t rowEnd   = (uint16_t)(x + w - 1);
 						for (uint16_t r = 0; r < h; r++) {
 								for (uint16_t c = 0; c < w; c++) {
 										const uint16_t px = displayWidth - 1 - (y + r);
@@ -271,6 +287,8 @@ void Arduino_GFX_Driver::pushColors(uint16_t* data, uint32_t len, bool swap_byte
 										framebuffer[py * displayWidth + px] = data[r * w + c];
 								}
 						}
+						if (rowStart < dirtyMinRow) dirtyMinRow = rowStart;
+						if (rowEnd   > dirtyMaxRow) dirtyMaxRow = rowEnd;
 						break;
 				}
 		}
@@ -279,8 +297,20 @@ void Arduino_GFX_Driver::pushColors(uint16_t* data, uint32_t len, bool swap_byte
 void Arduino_GFX_Driver::present() {
 		if (!gfx || !framebuffer) return;
 		
-		// Send the entire portrait framebuffer to the panel.
-		// draw16bitRGBBitmap at (0,0) with full panel dimensions works
-		// reliably on QSPI — see header comment for rationale.
-		gfx->draw16bitRGBBitmap(0, 0, framebuffer, displayWidth, displayHeight);
+		// Nothing dirty — skip the transfer entirely.
+		if (dirtyMinRow > dirtyMaxRow) return;
+		
+		// Clamp to valid range.
+		if (dirtyMaxRow >= displayHeight) dirtyMaxRow = displayHeight - 1;
+		
+		// Send only the dirty portrait rows to the panel.
+		// draw16bitRGBBitmap at (0,0) works reliably on QSPI (see header).
+		// We always start at row 0 because the panel ignores address windows,
+		// but we limit the height to (dirtyMaxRow + 1) to reduce transfer size.
+		const uint16_t rowCount = dirtyMaxRow + 1;
+		gfx->draw16bitRGBBitmap(0, 0, framebuffer, displayWidth, rowCount);
+		
+		// Reset dirty tracking for next frame.
+		dirtyMinRow = UINT16_MAX;
+		dirtyMaxRow = 0;
 }
