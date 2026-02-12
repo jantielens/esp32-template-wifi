@@ -34,8 +34,8 @@
 // Panel height in pixels.
 #define DISPLAY_HEIGHT 480
 
-// Software rotation via LVGL (1 = 90° landscape)
-// UI rotation (LVGL).
+// Driver-level rotation (1 = 90° landscape, transposed in pushColors)
+// UI rotation.
 #define DISPLAY_ROTATION 1
 
 // LVGL buffer size - larger for 320x480 display

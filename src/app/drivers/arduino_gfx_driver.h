@@ -51,9 +51,9 @@ private:
 		// pushColors() writes into this; present() sends it to the panel.
 		uint16_t* framebuffer;
 		
-		// Dirty-row tracking: only the portrait rows touched since the last
-		// present() are sent to the panel, reducing QSPI transfer size.
-		uint16_t dirtyMinRow;
+		// Dirty-row tracking: rows 0..dirtyMaxRow are sent in present(),
+		// skipping everything below the lowest dirty row.
+		bool hasDirtyRows;
 		uint16_t dirtyMaxRow;
 		
 public:

@@ -16,7 +16,7 @@ Arduino_GFX_Driver::Arduino_GFX_Driver()
 		: bus(nullptr), gfx(nullptr), currentBrightness(100), backlightPwmAttached(false),
 			displayWidth(DISPLAY_WIDTH), displayHeight(DISPLAY_HEIGHT), displayRotation(DISPLAY_ROTATION),
 			currentX(0), currentY(0), currentW(0), currentH(0),
-			framebuffer(nullptr), dirtyMinRow(UINT16_MAX), dirtyMaxRow(0) {
+			framebuffer(nullptr), hasDirtyRows(false), dirtyMaxRow(0) {
 }
 
 Arduino_GFX_Driver::~Arduino_GFX_Driver() {
@@ -201,8 +201,8 @@ void Arduino_GFX_Driver::applyDisplayFixes() {
 }
 
 void Arduino_GFX_Driver::startWrite() {
-		// draw16bitRGBBitmap() in pushColors() is a complete operation
-		// that handles bus transactions internally — no wrapping needed.
+		// pushColors() writes to the framebuffer; present() sends it to the
+		// panel via draw16bitRGBBitmap() which handles bus transactions internally.
 }
 
 void Arduino_GFX_Driver::endWrite() {
@@ -234,20 +234,18 @@ void Arduino_GFX_Driver::pushColors(uint16_t* data, uint32_t len, bool swap_byte
 		switch (displayRotation) {
 				case 0: {
 						// Portrait — direct row-by-row memcpy.
-						const uint16_t rowStart = (uint16_t)y;
 						const uint16_t rowEnd   = (uint16_t)(y + h - 1);
 						for (uint16_t r = 0; r < h; r++) {
 								memcpy(&framebuffer[(y + r) * displayWidth + x],
 											 &data[r * w],
 											 w * sizeof(uint16_t));
 						}
-						if (rowStart < dirtyMinRow) dirtyMinRow = rowStart;
-						if (rowEnd   > dirtyMaxRow) dirtyMaxRow = rowEnd;
+						hasDirtyRows = true;
+						if (rowEnd > dirtyMaxRow) dirtyMaxRow = rowEnd;
 						break;
 				}
 				case 1: {
 						// 90° CW — logical (lx, ly) → physical (ly, H-1-lx)
-						const uint16_t rowStart = displayHeight - 1 - (x + w - 1);
 						const uint16_t rowEnd   = displayHeight - 1 - x;
 						for (uint16_t r = 0; r < h; r++) {
 								const uint16_t py_base = y + r;
@@ -257,13 +255,12 @@ void Arduino_GFX_Driver::pushColors(uint16_t* data, uint32_t len, bool swap_byte
 										framebuffer[py * displayWidth + px] = data[r * w + c];
 								}
 						}
-						if (rowStart < dirtyMinRow) dirtyMinRow = rowStart;
-						if (rowEnd   > dirtyMaxRow) dirtyMaxRow = rowEnd;
+						hasDirtyRows = true;
+						if (rowEnd > dirtyMaxRow) dirtyMaxRow = rowEnd;
 						break;
 				}
 				case 2: {
 						// 180° — logical (lx, ly) → physical (W-1-lx, H-1-ly)
-						const uint16_t rowStart = displayHeight - 1 - (y + h - 1);
 						const uint16_t rowEnd   = displayHeight - 1 - y;
 						for (uint16_t r = 0; r < h; r++) {
 								const uint16_t py = displayHeight - 1 - (y + r);
@@ -272,13 +269,12 @@ void Arduino_GFX_Driver::pushColors(uint16_t* data, uint32_t len, bool swap_byte
 										framebuffer[py * displayWidth + px] = data[r * w + c];
 								}
 						}
-						if (rowStart < dirtyMinRow) dirtyMinRow = rowStart;
-						if (rowEnd   > dirtyMaxRow) dirtyMaxRow = rowEnd;
+						hasDirtyRows = true;
+						if (rowEnd > dirtyMaxRow) dirtyMaxRow = rowEnd;
 						break;
 				}
 				case 3: {
 						// 270° CW — logical (lx, ly) → physical (W-1-ly, lx)
-						const uint16_t rowStart = (uint16_t)x;
 						const uint16_t rowEnd   = (uint16_t)(x + w - 1);
 						for (uint16_t r = 0; r < h; r++) {
 								for (uint16_t c = 0; c < w; c++) {
@@ -287,8 +283,8 @@ void Arduino_GFX_Driver::pushColors(uint16_t* data, uint32_t len, bool swap_byte
 										framebuffer[py * displayWidth + px] = data[r * w + c];
 								}
 						}
-						if (rowStart < dirtyMinRow) dirtyMinRow = rowStart;
-						if (rowEnd   > dirtyMaxRow) dirtyMaxRow = rowEnd;
+						hasDirtyRows = true;
+						if (rowEnd > dirtyMaxRow) dirtyMaxRow = rowEnd;
 						break;
 				}
 		}
@@ -298,7 +294,7 @@ void Arduino_GFX_Driver::present() {
 		if (!gfx || !framebuffer) return;
 		
 		// Nothing dirty — skip the transfer entirely.
-		if (dirtyMinRow > dirtyMaxRow) return;
+		if (!hasDirtyRows) return;
 		
 		// Clamp to valid range.
 		if (dirtyMaxRow >= displayHeight) dirtyMaxRow = displayHeight - 1;
@@ -311,6 +307,6 @@ void Arduino_GFX_Driver::present() {
 		gfx->draw16bitRGBBitmap(0, 0, framebuffer, displayWidth, rowCount);
 		
 		// Reset dirty tracking for next frame.
-		dirtyMinRow = UINT16_MAX;
+		hasDirtyRows = false;
 		dirtyMaxRow = 0;
 }
