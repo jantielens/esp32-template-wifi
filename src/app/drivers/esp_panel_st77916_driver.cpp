@@ -4,7 +4,6 @@
 #include "../log_manager.h"
 
 #include <esp_heap_caps.h>
-#include <driver/ledc.h>
 
 #ifndef TFT_SPI_FREQ_HZ
 #define TFT_SPI_FREQ_HZ (50 * 1000 * 1000)
@@ -230,39 +229,20 @@ ESPPanel_ST77916_Driver::~ESPPanel_ST77916_Driver() {
 void ESPPanel_ST77916_Driver::init() {
 		LOGI("ESP_Panel", "Initializing ST77916 QSPI display");
 
-		// Backlight PWM (LEDC), mirrored from sample.
-		ledc_timer_config_t ledc_timer = {
-				.speed_mode = LEDC_LOW_SPEED_MODE,
-				.duty_resolution = LEDC_TIMER_13_BIT,
-				.timer_num = LEDC_TIMER_0,
-				.freq_hz = 5000,
-				.clk_cfg = LEDC_AUTO_CLK,
-		};
-		ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
-
-		ledc_channel_config_t ledc_channel = {
-				.gpio_num = (LCD_BL_PIN),
-				.speed_mode = LEDC_LOW_SPEED_MODE,
-				.channel = LEDC_CHANNEL_0,
-				.intr_type = LEDC_INTR_DISABLE,
-				.timer_sel = LEDC_TIMER_0,
-				.duty = 0,
-				.hpoint = 0,
-		};
-		ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
-
-		backlight = new ESP_PanelBacklight(ledc_timer, ledc_channel);
+		// Backlight PWM (LEDC) — library handles timer/channel setup internally.
+		backlight = new esp_panel::drivers::BacklightPWM_LEDC(LCD_BL_PIN, /*on_level=*/true);
 		backlight->begin();
 		backlight->off();
 		backlightIsOn = false;
 
 		// Display bus (QSPI)
-		auto* panel_bus = new ESP_PanelBus_QSPI(TFT_CS, TFT_SCK, TFT_SDA0, TFT_SDA1, TFT_SDA2, TFT_SDA3);
-		panel_bus->configQspiFreqHz(TFT_SPI_FREQ_HZ);
+		auto* panel_bus = new esp_panel::drivers::BusQSPI(TFT_CS, TFT_SCK, TFT_SDA0, TFT_SDA1, TFT_SDA2, TFT_SDA3);
+		panel_bus->configQSPI_FreqHz(TFT_SPI_FREQ_HZ);
+		panel_bus->init();
 		panel_bus->begin();
 
 		// ST77916 panel
-		lcd = new ESP_PanelLcd_ST77916(panel_bus, 16, TFT_RST);
+		lcd = new esp_panel::drivers::LCD_ST77916(panel_bus, DISPLAY_WIDTH, DISPLAY_HEIGHT, 16, TFT_RST);
 		lcd->configVendorCommands(lcd_init_cmd, sizeof(lcd_init_cmd) / sizeof(lcd_init_cmd[0]));
 		lcd->init();
 		lcd->reset();
