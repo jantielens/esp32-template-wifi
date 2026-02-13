@@ -9,13 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.50] - 2026-02-13
+
+### Added
+- jc3248w535: PSRAM framebuffer with driver-level rotation replaces Arduino_Canvas (eliminates GFX API overhead)
+- jc3248w535: dirty-row tracking — `present()` sends only rows `0..maxDirtyRow` instead of full 480 rows
+
 ### Fixed
 - AXS15231B touch driver: complete rewrite of I2C protocol (11-byte command per Espressif reference, correct response byte layout, event field state machine with `touchActive` flag to prevent double-tap artifacts from stale controller replays)
 - Phantom CLICKED events after screen switch: `lv_indev_reset(NULL, NULL)` called after every deferred screen transition in DisplayManager
 - Touch test screen: use LVGL runtime dimensions (`lv_disp_get_hor/ver_res`) instead of compile-time `DISPLAY_WIDTH/HEIGHT` (fixes canvas mismatch on rotated displays)
 - Touch test screen: ghost touch suppression via `touch_manager_suppress_lvgl_input(200)` on show
+- jc3636w518 build: migrate ESP32_Display_Panel API to v1.0.4 (class renames, namespace changes)
 
 ### Changed
+- Bump `ESP32_Display_Panel` library from 0.1.4 to 1.0.4
 - LVGL touch polling rate reduced from 30 ms to 10 ms (`LV_INDEV_DEF_READ_PERIOD`) for more responsive touch input
 - Touch test screen canvas allocated in PSRAM on show, freed on hide (zero memory cost while inactive)
 - Removed all diagnostic I2C logging from AXS15231B vendored touch driver (692 bytes smaller)
