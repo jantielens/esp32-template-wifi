@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.52] - 2026-02-13
+
+### Changed
+- Upgraded ESP32 Arduino core from 3.3.5 to 3.3.7 (resolves #58)
+- Upgraded Arduino_GFX (GFX Library for Arduino) from 1.6.4 to 1.6.5 (fixes `spiFrequencyToClockDiv` SPI API breakage with core ≥3.3.6)
+- Removed "pinned for library compatibility" comment in setup.sh — no longer needed
+
 ## [0.0.51] - 2026-02-13
 
 ### Changed

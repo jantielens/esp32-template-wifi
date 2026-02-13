@@ -35,8 +35,8 @@ arduino-cli core update-index
 echo "Updating library index..."
 arduino-cli lib update-index
 
-# Install ESP32 board support (pinned for library compatibility)
-ESP32_CORE_VERSION="3.3.5"
+# Install ESP32 board support
+ESP32_CORE_VERSION="3.3.7"
 echo "Installing ESP32 board support (esp32:esp32@${ESP32_CORE_VERSION})..."
 arduino-cli core install "esp32:esp32@${ESP32_CORE_VERSION}"
 
