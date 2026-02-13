@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.51] - 2026-02-13
+
+### Changed
+- **jc3636w518**: replaced ESP_Panel library with Arduino_GFX for ST77916 display (fixes I2C driver conflict, #67)
+  - New `Arduino_GFX_ST77916_Driver`: direct rendering via `draw16bitRGBBitmap()` (no PSRAM framebuffer needed, saves ~253 KB)
+  - New `Wire_CST816S_TouchDriver`: pure Wire.h I2C driver with auto-sleep disable
+  - Removed `ESP32_Display_Panel@1.0.4` and `ESP32_IO_Expander@1.1.1` library dependencies
+  - Deleted `esp_panel_st77916_driver.cpp/h` and `esp_panel_cst816s_touch_driver.cpp/h`
+- Renamed `TOUCH_DRIVER_AXS15231B` → `TOUCH_DRIVER_AXS15231B_I2C` for consistency
+
+### Documentation
+- Updated `docs/display-touch-architecture.md`: replaced ESP_Panel references with Arduino_GFX/Wire
+- Updated `docs/compile-time-flags.md`: regenerated flag report
+- Regenerated `src/app/drivers/README.md` board→drivers table
+
 ## [0.0.50] - 2026-02-13
 
 ### Added

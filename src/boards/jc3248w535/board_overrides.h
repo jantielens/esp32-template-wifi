@@ -25,8 +25,8 @@
 // Touch backend:   AXS15231B (I2C)
 // Select Arduino_GFX as the display HAL backend.
 #define DISPLAY_DRIVER DISPLAY_DRIVER_ARDUINO_GFX
-// Select AXS15231B as the touch HAL backend.
-#define TOUCH_DRIVER   TOUCH_DRIVER_AXS15231B
+// Select AXS15231B (I2C) as the touch HAL backend.
+#define TOUCH_DRIVER   TOUCH_DRIVER_AXS15231B_I2C
 
 // Physical panel resolution (portrait)
 // Panel width in pixels.

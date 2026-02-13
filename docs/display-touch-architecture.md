@@ -66,8 +66,8 @@ The display and touch subsystem is built on four main pillars:
         ↓                               ↓
 ┌──────────────────┐          ┌──────────────────┐
 │ TFT_eSPI library │          │ XPT2046 library  │
-│ Arduino_GFX lib  │          │ ESP_Panel (I2C)  │
-│ ESP_Panel lib    │          │ Vendored drivers │
+│ Arduino_GFX lib  │          │ Wire.h (I2C)     │
+│                  │          │ Vendored drivers │
 └──────────────────┘          └──────────────────┘
 ```
 │  (Base Class)    │          │  HAL Interface   │
@@ -493,10 +493,16 @@ public:
   - Driver-level rotation (inverse of display pixel transpose)
   - Calibration via `setOffsets()` with real→ideal coordinate mapping
 
-**CST816S_ESP_Panel_TouchDriver** ([`src/app/drivers/esp_panel_cst816s_touch_driver.h/cpp`](../src/app/drivers/esp_panel_cst816s_touch_driver.cpp))
-- **Library**: ESP32_Display_Panel (`ESP_PanelTouch`)
+**Wire_CST816S_TouchDriver** ([`src/app/drivers/wire_cst816s_touch_driver.h/cpp`](../src/app/drivers/wire_cst816s_touch_driver.cpp))
+- **Library**: Arduino Wire.h (I2C)
 - **Hardware**: CST816S capacitive touch controller
-- **Communication**: I2C via ESP_Panel bus abstraction
+- **Communication**: I2C via Wire.h, address 0x15, 400 kHz
+- **Protocol**: Register 0x02, 5 bytes [numPoints, event|xH, xL, touchID|yH, yL]
+- **Features**:
+  - Auto-sleep disabled on init (reg 0xFE = 0x01) for reliable polling
+  - Hardware reset via TOUCH_RST pin
+  - Edge clamping to calibration range before coordinate mapping
+  - Driver-level rotation
 - **Used by**: jc3636w518 (ESP32-S3 + ST77916 QSPI 360×360)
 
 **GT911_TouchDriver** ([`src/app/drivers/gt911_touch_driver.h/cpp`](../src/app/drivers/gt911_touch_driver.cpp))
@@ -1086,13 +1092,13 @@ src/app/
 ├── drivers/
 │   ├── tft_espi_driver.h/cpp             # TFT_eSPI display
 │   ├── st7789v2_driver.h/cpp             # ST7789V2 native SPI display
-│   ├── arduino_gfx_driver.h/cpp          # Arduino_GFX QSPI display
-│   ├── esp_panel_st77916_driver.h/cpp    # ESP_Panel ST77916 QSPI display
+│   ├── arduino_gfx_driver.h/cpp          # Arduino_GFX QSPI display (AXS15231B)
+│   ├── arduino_gfx_st77916_driver.h/cpp  # Arduino_GFX ST77916 QSPI display
 │   ├── st7701_rgb_driver.h/cpp           # ST7701 RGB panel display
 │   ├── xpt2046_driver.h/cpp              # XPT2046 resistive touch
 │   ├── axs15231b_touch_driver.h/cpp      # AXS15231B capacitive touch
 │   ├── axs15231b/vendor/                 # Vendored AXS15231B I2C touch
-│   ├── esp_panel_cst816s_touch_driver.h/cpp  # CST816S capacitive touch
+│   ├── wire_cst816s_touch_driver.h/cpp   # CST816S capacitive touch (Wire I2C)
 │   └── gt911_touch_driver.h/cpp          # GT911 capacitive touch
 └── screens/
     ├── screen.h                  # Base class
@@ -1121,7 +1127,7 @@ Touch input is supported through a TouchDriver HAL interface following the same 
 **Supported Controllers:**
 - XPT2046 (resistive touch — via standalone SPI library)
 - AXS15231B (capacitive touch — vendored I2C driver)
-- CST816S (capacitive touch — via ESP32_Display_Panel)
+- CST816S (capacitive touch — via Wire.h I2C)
 - GT911 (capacitive touch — vendored I2C driver)
 
 ### Touch Driver HAL
@@ -1263,7 +1269,7 @@ src/app/
 │   ├── xpt2046_driver.h/cpp              # XPT2046 resistive touch
 │   ├── axs15231b_touch_driver.h/cpp      # AXS15231B capacitive touch
 │   ├── axs15231b/vendor/                 # Vendored AXS15231B I2C touch
-│   ├── esp_panel_cst816s_touch_driver.h/cpp  # CST816S capacitive touch
+│   ├── wire_cst816s_touch_driver.h/cpp   # CST816S capacitive touch (Wire I2C)
 │   └── gt911_touch_driver.h/cpp          # GT911 capacitive touch
 ```
 
