@@ -4,13 +4,15 @@
 
 #include "../board_config.h"
 #include "../log_manager.h"
+#include "../touch_manager.h"
 
 #include <stdlib.h>  // abs()
 
 TouchTestScreen::TouchTestScreen()
 		: screen(nullptr), canvas(nullptr), canvasBuf(nullptr),
 			headerLabel(nullptr),
-			prevTouchValid(false), prevX(0), prevY(0), brushRadius(3) {}
+				prevTouchValid(false), prevX(0), prevY(0), brushRadius(3),
+			canvasWidth(0), canvasHeight(0) {}
 
 TouchTestScreen::~TouchTestScreen() {
 		destroy();
@@ -20,9 +22,13 @@ void TouchTestScreen::create() {
 		if (screen) return;
 
 		LOGI("TouchTest", "Create start");
-
+		
+		// Query logical (post-rotation) dimensions from LVGL.
+		canvasWidth  = (uint16_t)lv_disp_get_hor_res(NULL);
+		canvasHeight = (uint16_t)lv_disp_get_ver_res(NULL);
+		
 		// Adaptive brush size: ~0.8% of the smaller display dimension, clamped 2-6px
-		uint16_t minDim = DISPLAY_WIDTH < DISPLAY_HEIGHT ? DISPLAY_WIDTH : DISPLAY_HEIGHT;
+		uint16_t minDim = canvasWidth < canvasHeight ? canvasWidth : canvasHeight;
 		brushRadius = (uint8_t)(minDim * 8 / 1000);
 		if (brushRadius < 2) brushRadius = 2;
 		if (brushRadius > 6) brushRadius = 6;
@@ -34,7 +40,7 @@ void TouchTestScreen::create() {
 		// Header label — small, semi-transparent, top-center
 		headerLabel = lv_label_create(screen);
 		char header[48];
-		snprintf(header, sizeof(header), "Touch Test  %dx%d", DISPLAY_WIDTH, DISPLAY_HEIGHT);
+		snprintf(header, sizeof(header), "Touch Test  %dx%d", canvasWidth, canvasHeight);
 		lv_label_set_text(headerLabel, header);
 		lv_obj_set_style_text_color(headerLabel, lv_color_make(80, 80, 80), 0);
 		lv_obj_set_style_text_font(headerLabel, &lv_font_montserrat_14, 0);
@@ -67,7 +73,7 @@ void TouchTestScreen::show() {
 
 		// Allocate canvas buffer in PSRAM (only while this screen is active)
 		if (!canvasBuf) {
-				size_t bufSize = (size_t)DISPLAY_WIDTH * DISPLAY_HEIGHT * sizeof(lv_color_t);
+				size_t bufSize = (size_t)canvasWidth * canvasHeight * sizeof(lv_color_t);
 				canvasBuf = (lv_color_t*)heap_caps_malloc(bufSize, MALLOC_CAP_SPIRAM);
 				if (!canvasBuf) {
 						LOGE("TouchTest", "Failed to allocate canvas (%u bytes PSRAM)", (unsigned)bufSize);
@@ -85,7 +91,7 @@ void TouchTestScreen::show() {
 		}
 
 		canvas = lv_canvas_create(screen);
-		lv_canvas_set_buffer(canvas, canvasBuf, DISPLAY_WIDTH, DISPLAY_HEIGHT, LV_IMG_CF_TRUE_COLOR);
+		lv_canvas_set_buffer(canvas, canvasBuf, canvasWidth, canvasHeight, LV_IMG_CF_TRUE_COLOR);
 		lv_obj_align(canvas, LV_ALIGN_CENTER, 0, 0);
 
 		// Clear canvas to black
@@ -102,8 +108,17 @@ void TouchTestScreen::show() {
 		// Reset touch tracking
 		prevTouchValid = false;
 
+		// Suppress touch input briefly to discard any residual press
+		// from the previous screen (ghost dot prevention).
+		touch_manager_suppress_lvgl_input(200);
+
 		lv_scr_load(screen);
-		LOGI("TouchTest", "Screen shown");
+
+		// Log canvas geometry for diagnostics
+		lv_area_t ca;
+		lv_obj_get_coords(canvas, &ca);
+		LOGI("TouchTest", "Screen shown  canvas=%dx%d  pos=(%d,%d)-(%d,%d)",
+				 canvasWidth, canvasHeight, ca.x1, ca.y1, ca.x2, ca.y2);
 }
 
 void TouchTestScreen::hide() {
@@ -147,8 +162,8 @@ void TouchTestScreen::drawDot(int16_t cx, int16_t cy, lv_color_t color, uint8_t 
 		// Clamp to canvas bounds
 		if (x1 < 0) x1 = 0;
 		if (y1 < 0) y1 = 0;
-		if (x2 >= DISPLAY_WIDTH) x2 = DISPLAY_WIDTH - 1;
-		if (y2 >= DISPLAY_HEIGHT) y2 = DISPLAY_HEIGHT - 1;
+		if (x2 >= canvasWidth) x2 = canvasWidth - 1;
+		if (y2 >= canvasHeight) y2 = canvasHeight - 1;
 
 		lv_canvas_draw_rect(canvas, x1, y1, x2 - x1 + 1, y2 - y1 + 1, &rect_dsc);
 }
@@ -197,8 +212,11 @@ void TouchTestScreen::touchEventCallback(lv_event_t* e) {
 		lv_point_t point;
 		lv_indev_get_point(indev, &point);
 
-		int16_t x = point.x;
-		int16_t y = point.y;
+		// Convert screen-space coordinates to canvas-local coordinates.
+		lv_area_t ca;
+		lv_obj_get_coords(self->canvas, &ca);
+		int16_t x = point.x - ca.x1;
+		int16_t y = point.y - ca.y1;
 
 		if (self->prevTouchValid) {
 				// 1. White connecting line (thinner, drawn first)

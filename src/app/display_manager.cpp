@@ -266,6 +266,10 @@ void DisplayManager::lvglTask(void* pvParameter) {
 						mgr->currentScreen->show();
 						mgr->pendingScreen = nullptr;
 
+						// Reset LVGL input device state so leftover PRESSED from the
+						// previous screen doesn't fire a phantom CLICKED on the new screen.
+						lv_indev_reset(NULL, NULL);
+
 						#if HAS_IMAGE_API
 						// Keep the flush gate in sync with the active screen.
 						mgr->directImageActive = (mgr->currentScreen == &mgr->directImageScreen);

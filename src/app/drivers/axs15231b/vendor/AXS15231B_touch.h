@@ -16,6 +16,8 @@ private:
 		uint16_t point_X = 0;
 		uint16_t point_Y = 0;
 
+		bool touchActive = false;  // State machine: true after press(0), false after lift(1)
+
 		bool en_offset_correction = false;
 
 		uint16_t x_real_min = 0;
@@ -49,11 +51,14 @@ private:
 		bool update();
 };
 
-// Read / extract coordinates from controller response
-// X: bytes 3 (high 4 bits) + 4 (low 8 bits)
-// Y: bytes 5 (high 4 bits) + 6 (low 8 bits)
-#define AXS_GET_POINT_X(buf) (((buf[3] & 0x0F) << 8) | buf[4])
-#define AXS_GET_POINT_Y(buf) (((buf[5] & 0x0F) << 8) | buf[6])
+// Response layout (per Espressif esp_lcd_touch_axs15231b.c):
+//   [0] gesture, [1] num_points,
+//   [2] event(2b):unused(2b):x_h(4b), [3] x_l,
+//   [4] unused(4b):y_h(4b), [5] y_l
+// X: bytes 2 (low 4 bits) + 3
+#define AXS_GET_POINT_X(buf) (((buf[2] & 0x0F) << 8) | buf[3])
+// Y: bytes 4 (low 4 bits) + 5
+#define AXS_GET_POINT_Y(buf) (((buf[4] & 0x0F) << 8) | buf[5])
 
 // Some vendor samples define ISR_ATTR / IRAM_ATTR wrappers; keep compatible.
 #ifndef ISR_PREFIX

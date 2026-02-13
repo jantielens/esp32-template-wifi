@@ -93,7 +93,8 @@
 #define TOUCH_RST -1
 #define TOUCH_INT -1
 
-// Touch calibration (from sample: dispcfg.h)
+// Touch calibration (raw coordinate range mapped to screen pixels).
+// These values match the panel's physical active area boundaries.
 // Touch calibration: X minimum.
 #define TOUCH_CAL_X_MIN 12
 // Touch calibration: X maximum.

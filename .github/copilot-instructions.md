@@ -22,7 +22,7 @@ ESP32 Arduino development template using `arduino-cli` for headless builds. Desi
   - `display_drivers.cpp` - Sketch-root “translation unit” that conditionally includes exactly one selected display driver `.cpp`
   - `touch_drivers.cpp` - Sketch-root “translation unit” that conditionally includes exactly one selected touch driver `.cpp`
   - `drivers/` - Driver implementations (TFT_eSPI, ST7789V2, Arduino_GFX, XPT2046, AXS15231B)
-  - `screens/` - Screen base class and implementations (splash, info, test)
+  - `screens/` - Screen base class and implementations (splash, info, test, touch test)
   - Conditional compilation: Only selected drivers are compiled via `display_drivers.cpp` / `touch_drivers.cpp` (Arduino doesn’t auto-compile subdir `.cpp`)
 - **Power + Transport Subsystem**: Power modes, BLE/MQTT transport selection, and duty-cycle runtime
   - `power_config.cpp/h` - Power mode and transport parsing helpers
@@ -200,6 +200,7 @@ See `docs/wsl-development.md` for complete USB/IP setup guide.
 - `src/app/screens/splash_screen.cpp/h` - Boot splash with animated spinner
 - `src/app/screens/info_screen.cpp/h` - Device info and real-time stats
 - `src/app/screens/test_screen.cpp/h` - Display calibration and color testing
+- `src/app/screens/touch_test_screen.cpp/h` - Touch accuracy test (red dots + connecting lines, PSRAM canvas, HAS_TOUCH only)
 - `src/app/screens.cpp` - Screen compilation unit (includes all screen .cpp files)
 - `src/app/web/_header.html` - Common HTML head template
 - `src/app/web/_nav.html` - Navigation tabs and loading overlay wrapper

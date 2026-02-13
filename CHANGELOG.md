@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- AXS15231B touch driver: complete rewrite of I2C protocol (11-byte command per Espressif reference, correct response byte layout, event field state machine with `touchActive` flag to prevent double-tap artifacts from stale controller replays)
+- Phantom CLICKED events after screen switch: `lv_indev_reset(NULL, NULL)` called after every deferred screen transition in DisplayManager
+- Touch test screen: use LVGL runtime dimensions (`lv_disp_get_hor/ver_res`) instead of compile-time `DISPLAY_WIDTH/HEIGHT` (fixes canvas mismatch on rotated displays)
+- Touch test screen: ghost touch suppression via `touch_manager_suppress_lvgl_input(200)` on show
+
+### Changed
+- LVGL touch polling rate reduced from 30 ms to 10 ms (`LV_INDEV_DEF_READ_PERIOD`) for more responsive touch input
+- Touch test screen canvas allocated in PSRAM on show, freed on hide (zero memory cost while inactive)
+- Removed all diagnostic I2C logging from AXS15231B vendored touch driver (692 bytes smaller)
+
+### Documentation
+- Updated `docs/display-touch-architecture.md`: added AXS15231B, CST816S, GT911 touch driver docs; updated touch event flow and screen switching; added TouchTestScreen description; refreshed file organization and future enhancements
+
 ## [0.0.49] - 2026-02-11
 
 ### Added
