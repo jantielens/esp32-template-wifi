@@ -3,7 +3,7 @@
 
 #include "../touch_driver.h"
 
-#include <ESP_Panel_Library.h>
+#include <esp_display_panel.hpp>
 
 class ESPPanel_CST816S_TouchDriver : public TouchDriver {
 public:
@@ -19,7 +19,7 @@ public:
 		void setRotation(uint8_t rotation) override;
 
 private:
-		ESP_PanelTouch* touch;
+		esp_panel::drivers::Touch* touch;
 		uint8_t rotation;
 
 		bool calibrationEnabled;

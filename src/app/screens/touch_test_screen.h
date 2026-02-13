@@ -15,7 +15,7 @@
 // Draws white circles at each touch point and interpolates between them
 // so fast finger movements produce continuous lines.
 //
-// Resolution-independent: adapts to DISPLAY_WIDTH × DISPLAY_HEIGHT.
+// Resolution-independent: adapts to LVGL logical display dimensions.
 //
 // Memory: Canvas buffer (~width*height*2 bytes) allocated in PSRAM on show(),
 // freed on hide(). Zero PSRAM cost when the screen is not active.
@@ -40,6 +40,10 @@ private:
 
 		// Drawing parameters (resolution-adaptive)
 		uint8_t brushRadius;
+
+	// Logical (post-rotation) canvas dimensions, queried from LVGL in create().
+	uint16_t canvasWidth;
+	uint16_t canvasHeight;
 
 		// Draw a filled circle at (cx, cy)
 		void drawDot(int16_t cx, int16_t cy, lv_color_t color, uint8_t radius);

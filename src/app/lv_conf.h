@@ -56,7 +56,7 @@
 #define LV_DISP_DEF_REFR_PERIOD 30      /*[ms]*/
 
 /* Input device read period in milliseconds */
-#define LV_INDEV_DEF_READ_PERIOD 30     /*[ms]*/
+#define LV_INDEV_DEF_READ_PERIOD 10     /*[ms] (default 30; lowered for responsive touch)*/
 
 /*=================
 	 HAL SETTINGS

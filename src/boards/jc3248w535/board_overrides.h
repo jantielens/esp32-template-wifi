@@ -34,8 +34,8 @@
 // Panel height in pixels.
 #define DISPLAY_HEIGHT 480
 
-// Software rotation via LVGL (1 = 90° landscape)
-// UI rotation (LVGL).
+// Driver-level rotation (1 = 90° landscape, transposed in pushColors)
+// UI rotation.
 #define DISPLAY_ROTATION 1
 
 // LVGL buffer size - larger for 320x480 display
@@ -93,7 +93,8 @@
 #define TOUCH_RST -1
 #define TOUCH_INT -1
 
-// Touch calibration (from sample: dispcfg.h)
+// Touch calibration (raw coordinate range mapped to screen pixels).
+// These values match the panel's physical active area boundaries.
 // Touch calibration: X minimum.
 #define TOUCH_CAL_X_MIN 12
 // Touch calibration: X maximum.

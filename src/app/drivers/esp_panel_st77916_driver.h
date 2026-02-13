@@ -3,8 +3,7 @@
 
 #include "../display_driver.h"
 
-// ESP32_Display_Panel provides backward-compatible ESP_Panel_Library.h
-#include <ESP_Panel_Library.h>
+#include <esp_display_panel.hpp>
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
@@ -33,8 +32,8 @@ public:
 		void pushColors(uint16_t* data, uint32_t len, bool swap_bytes = true) override;
 
 private:
-		ESP_PanelBacklight* backlight;
-		ESP_PanelLcd* lcd;
+		esp_panel::drivers::BacklightPWM_LEDC* backlight;
+		esp_panel::drivers::LCD* lcd;
 
 		SemaphoreHandle_t busMutex;
 

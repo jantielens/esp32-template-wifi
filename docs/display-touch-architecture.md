@@ -59,12 +59,15 @@ The display and touch subsystem is built on four main pillars:
         ↓                               ↓
 ┌──────────────────┐          ┌──────────────────┐
 │ TFT_eSPI_Driver  │          │ XPT2046_Driver   │
-│ LovyanGFX_Driver │          │ FT6236_Driver    │
+│ ST7789V2_Driver  │          │ AXS15231B_Touch  │
+│ Arduino_GFX_Drv  │          │ CST816S_Driver   │
+│ ST7701_RGB_Driver│          │ GT911_Driver     │
 └──────────────────┘          └──────────────────┘
         ↓                               ↓
 ┌──────────────────┐          ┌──────────────────┐
 │ TFT_eSPI library │          │ XPT2046 library  │
-│ LovyanGFX library│          │ FT6236 library   │
+│ Arduino_GFX lib  │          │ ESP_Panel (I2C)  │
+│ ESP_Panel lib    │          │ Vendored drivers │
 └──────────────────┘          └──────────────────┘
 ```
 │  (Base Class)    │          │  HAL Interface   │
@@ -196,8 +199,8 @@ void ST7789V2_Driver::configureLVGL(lv_disp_drv_t* drv, uint8_t rotation) {
 ```cpp
 void DisplayManager::initLVGL() {
     lv_disp_drv_init(&disp_drv);
-    disp_drv.hor_res = DISPLAY_WIDTH;
-    disp_drv.ver_res = DISPLAY_HEIGHT;
+    disp_drv.hor_res = driver->width();   // Post-rotation logical width
+    disp_drv.ver_res = driver->height();  // Post-rotation logical height
     disp_drv.flush_cb = DisplayManager::flushCallback;
     
     // Call driver's LVGL configuration hook
@@ -360,6 +363,14 @@ public:
 - Centered grayscale gradient (black to white)
 - Resolution info display
 
+**TouchTestScreen** (`touch_test_screen.h/cpp`)
+- Touch accuracy and tracking verification (only compiled when `HAS_TOUCH`)
+- Red dots at touch points with white connecting lines on LVGL canvas
+- Resolution-independent: queries `lv_disp_get_hor/ver_res(NULL)` at create time
+- Canvas allocated in PSRAM on `show()`, freed on `hide()` (zero cost while inactive)
+- Ghost touch suppression via `touch_manager_suppress_lvgl_input(200)` on show
+- Adaptive brush size (~0.8% of smaller display dimension, clamped 2–6 px)
+
 **DirectImageScreen** (`direct_image_screen.h/cpp`)
 - Blank black LVGL screen for direct LCD hardware writes
 - Used by Image API for JPEG image display
@@ -382,7 +393,7 @@ void DisplayManager::lvglTask(void* pvParameter) {
             mgr->currentScreen->update();   // Screen data refresh
         }
 
-        // Buffered display drivers (e.g., Arduino_GFX canvas) require a post-render present().
+        // Buffered display drivers require a post-render present().
         if (mgr->flushPending && mgr->driver->renderMode() == DisplayDriver::RenderMode::Buffered) {
             mgr->driver->present();
         }
@@ -424,7 +435,8 @@ DisplayManager uses a deferred pattern for screen navigation (`showSplash()`, `s
 1. Navigation methods set `pendingScreen` flag (no mutex, returns instantly)
 2. LVGL rendering task checks flag and performs switch on next frame
 3. Avoids blocking rendering task during screen transitions (prevents FPS drops)
-4. Screens switch within 1 frame (~30ms), imperceptible to users
+4. After switching, `lv_indev_reset(NULL, NULL)` is called to flush any in-progress PRESSED state from the previous screen, preventing phantom CLICKED events on the new screen
+5. Screens switch within 1 frame (~10ms), imperceptible to users
 
 Direct LVGL operations still require manual locking.
 
@@ -459,12 +471,39 @@ public:
   - Built-in noise filtering (pressure threshold)
   - Automatic SPI bus initialization
   - Calibration via raw coordinate mapping
+- **Key Details**:
+  - Independent SPI bus — can run on separate SPI from display
+  - Pressure filtering — rejects electrical noise (z < 200 threshold)
+  - Persistent SPIClass — avoids dangling reference by allocating with `new`
+  - Destructor properly deletes SPIClass instance
 
-**Key Features**:
-- **Independent SPI bus** - Can run on separate SPI from display
-- **Pressure filtering** - Rejects electrical noise (z < 200 threshold)
-- **Persistent SPIClass** - Avoids dangling reference by allocating with `new`
-- **Clean up** - Destructor properly deletes SPIClass instance
+**AXS15231B_TouchDriver** ([`src/app/drivers/axs15231b_touch_driver.h/cpp`](../src/app/drivers/axs15231b_touch_driver.cpp))
+- **Library**: Vendored I2C driver ([`drivers/axs15231b/vendor/`](../src/app/drivers/axs15231b/vendor/))
+- **Hardware**: AXS15231B capacitive touch (same chip as QSPI display, different bus)
+- **Communication**: I2C (400 kHz), default address 0x3B
+- **Protocol**: 11-byte command + 100 µs delay + 8-byte response (per Espressif `esp_lcd_touch_axs15231b.c`)
+- **Response layout**:
+  - `[0]` gesture, `[1]` num_points
+  - `[2]` event(2b):unused(2b):x_h(4b), `[3]` x_l
+  - `[4]` unused(4b):y_h(4b), `[5]` y_l
+- **Event field state machine**: Byte `[2]` bits 7:6 encode press(0), lift(1), contact(2), no-event(3). A `touchActive` flag requires a fresh press(0) before accepting contact(2) events, preventing double-tap artifacts from stale controller replays after lift.
+- **Features**:
+  - Optional IRQ pin (polling fallback when INT=-1)
+  - Edge clamping to calibration range before coordinate mapping
+  - Driver-level rotation (inverse of display pixel transpose)
+  - Calibration via `setOffsets()` with real→ideal coordinate mapping
+
+**CST816S_ESP_Panel_TouchDriver** ([`src/app/drivers/esp_panel_cst816s_touch_driver.h/cpp`](../src/app/drivers/esp_panel_cst816s_touch_driver.cpp))
+- **Library**: ESP32_Display_Panel (`ESP_PanelTouch`)
+- **Hardware**: CST816S capacitive touch controller
+- **Communication**: I2C via ESP_Panel bus abstraction
+- **Used by**: jc3636w518 (ESP32-S3 + ST77916 QSPI 360×360)
+
+**GT911_TouchDriver** ([`src/app/drivers/gt911_touch_driver.h/cpp`](../src/app/drivers/gt911_touch_driver.cpp))
+- **Library**: Vendored I2C driver
+- **Hardware**: GT911 multi-touch capacitive controller (up to 5 points, uses 1)
+- **Communication**: I2C (Wire1 bus)
+- **Used by**: ESP32-4848S040 (Guition ESP32-S3, ST7701 RGB 480×480)
 
 ### Touch Manager
 
@@ -479,15 +518,15 @@ TouchManager ([`src/app/touch_manager.h/cpp`](../src/app/touch_manager.cpp)) han
 ```
 1. User touches screen
    ↓
-2. XPT2046 hardware detects via IRQ pin
+2. Hardware detects (IRQ pin or polling at LV_INDEV_DEF_READ_PERIOD)
    ↓
-3. LVGL timer calls TouchManager::readCallback() (every ~5ms)
+3. LVGL timer calls TouchManager::readCallback() (every ~10ms)
    ↓
-4. TouchDriver::getTouch() reads SPI data
+4. TouchDriver::getTouch() reads I2C/SPI data
    ↓
-5. Raw coordinates (0-4095) mapped to screen pixels
+5. Driver validates event field / pressure (driver-specific)
    ↓
-6. Pressure validated (z >= 200 threshold)
+6. Raw coordinates mapped to screen pixels via calibration
    ↓
 7. LVGL receives LV_INDEV_STATE_PRESSED + coordinates
    ↓
@@ -495,6 +534,8 @@ TouchManager ([`src/app/touch_manager.h/cpp`](../src/app/touch_manager.cpp)) han
    ↓
 9. Screen's touchEventCallback() handles navigation
 ```
+
+**Polling rate**: `LV_INDEV_DEF_READ_PERIOD` is set to 10 ms (default 30) in `lv_conf.h` for responsive touch input.
 
 ### Touch Integration Pattern
 
@@ -1034,17 +1075,31 @@ Key settings in `src/app/lv_conf.h`:
 
 ```
 src/app/
-├── display_driver.h              # HAL interface
-├── display_manager.h/cpp         # Manager (owns everything)
-├── screens.cpp                   # Compilation unit
+├── display_driver.h              # Display HAL interface
+├── display_drivers.cpp           # Display driver compilation unit
+├── display_manager.h/cpp         # Display lifecycle, LVGL, FreeRTOS task
+├── touch_driver.h                # Touch HAL interface
+├── touch_drivers.cpp             # Touch driver compilation unit
+├── touch_manager.h/cpp           # Touch input + LVGL integration
+├── screens.cpp                   # Screen compilation unit
 ├── lv_conf.h                     # LVGL configuration
 ├── drivers/
-│   └── tft_espi_driver.h/cpp    # TFT_eSPI implementation
+│   ├── tft_espi_driver.h/cpp             # TFT_eSPI display
+│   ├── st7789v2_driver.h/cpp             # ST7789V2 native SPI display
+│   ├── arduino_gfx_driver.h/cpp          # Arduino_GFX QSPI display
+│   ├── esp_panel_st77916_driver.h/cpp    # ESP_Panel ST77916 QSPI display
+│   ├── st7701_rgb_driver.h/cpp           # ST7701 RGB panel display
+│   ├── xpt2046_driver.h/cpp              # XPT2046 resistive touch
+│   ├── axs15231b_touch_driver.h/cpp      # AXS15231B capacitive touch
+│   ├── axs15231b/vendor/                 # Vendored AXS15231B I2C touch
+│   ├── esp_panel_cst816s_touch_driver.h/cpp  # CST816S capacitive touch
+│   └── gt911_touch_driver.h/cpp          # GT911 capacitive touch
 └── screens/
     ├── screen.h                  # Base class
     ├── splash_screen.h/cpp       # Boot screen
     ├── info_screen.h/cpp         # Device info screen
-    └── test_screen.h/cpp         # Display test/calibration
+    ├── test_screen.h/cpp         # Display test/calibration
+    └── touch_test_screen.h/cpp   # Touch accuracy test (HAS_TOUCH)
 ```
 
 ## Best Practices
@@ -1064,8 +1119,10 @@ src/app/
 Touch input is supported through a TouchDriver HAL interface following the same pattern as DisplayDriver. This allows different touch controllers to be used without changing application code.
 
 **Supported Controllers:**
-- XPT2046 (resistive touch - via TFT_eSPI)
-- FT6236 (capacitive touch - future support)
+- XPT2046 (resistive touch — via standalone SPI library)
+- AXS15231B (capacitive touch — vendored I2C driver)
+- CST816S (capacitive touch — via ESP32_Display_Panel)
+- GT911 (capacitive touch — vendored I2C driver)
 
 ### Touch Driver HAL
 
@@ -1199,10 +1256,15 @@ To determine calibration values for a new board:
 
 ```
 src/app/
-├── touch_driver.h              # HAL interface
-├── touch_manager.h/cpp         # Manager + LVGL integration
+├── touch_driver.h                # HAL interface
+├── touch_drivers.cpp             # Touch driver compilation unit
+├── touch_manager.h/cpp           # Manager + LVGL integration
 ├── drivers/
-│   └── xpt2046_driver.h/cpp   # XPT2046 implementation
+│   ├── xpt2046_driver.h/cpp              # XPT2046 resistive touch
+│   ├── axs15231b_touch_driver.h/cpp      # AXS15231B capacitive touch
+│   ├── axs15231b/vendor/                 # Vendored AXS15231B I2C touch
+│   ├── esp_panel_cst816s_touch_driver.h/cpp  # CST816S capacitive touch
+│   └── gt911_touch_driver.h/cpp          # GT911 capacitive touch
 ```
 
 ### Architecture Benefits
@@ -1216,8 +1278,8 @@ src/app/
 ## Future Enhancements
 
 - LovyanGFX driver implementation
-- FT6236 capacitive touch driver
 - Touch gestures (swipe, pinch, long-press)
+- Buffered touch polling (collect points during QSPI render cycle — see GitHub issue #68)
 - Screen navigation with buttons
 - Settings screen for WiFi configuration
 - Graph widgets for sensor data visualization

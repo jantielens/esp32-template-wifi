@@ -14,7 +14,8 @@ This document captures research performed while adding support for the **JC3248W
 ### JC3248W535 (ESP32-S3, 320×480)
 - Display controller: **AXS15231B**
 - Bus: **QSPI** (ESP32-S3 QSPI)
-- Current approach in this repo: **Arduino_GFX + Arduino_Canvas** as a buffered backend (`renderMode() == Buffered`), with `present()` called after `lv_timer_handler()` when LVGL produced draw data.
+- Current approach in this repo: **PSRAM framebuffer** (`renderMode() == Buffered`) with driver-level pixel rotation in `pushColors()`. The panel stays in portrait; `present()` sends dirty rows 0..maxDirtyRow via `gfx->draw16bitRGBBitmap(0, 0, fb, w, rows)` — always starting at (0,0) because QSPI address windows are lost on CS toggle.
+- **History:** Originally used `Arduino_Canvas` as a buffered backend, replaced in issue #65 with a leaner PSRAM framebuffer (no Canvas object or GFX drawing API overhead) and dirty-row tracking.
 
 ### CYD v2 / v3 (ESP32-2432S028R, 320×240)
 - Display controller: **ILI9341-class** (SPI)
@@ -128,4 +129,4 @@ Before switching any existing board from TFT_eSPI/native drivers to Arduino_GFX:
 ## Suggested Next Steps (Optional)
 
 - Prototype an Arduino_GFX-based **SPI direct** driver for CYD + ST7789 to evaluate simplification impact.
-- Optionally prototype an Arduino_GFX-based **QSPI direct** path for AXS15231B as an A/B test against the current canvas model.
+- The Canvas has been replaced with a leaner PSRAM framebuffer (issue #65) — same memory footprint but avoids the Canvas object overhead. True direct QSPI partial writes are impossible due to CS-toggle address-window loss.
