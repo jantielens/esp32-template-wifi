@@ -226,6 +226,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/board_config.h
   - src/app/display_manager.cpp
   - src/app/drivers/arduino_gfx_driver.cpp
+  - src/app/drivers/arduino_gfx_st77916_driver.cpp
   - src/app/drivers/st7701_rgb_driver.cpp
   - src/app/drivers/tft_espi_driver.cpp
 - **HAS_BLE**
@@ -376,6 +377,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/board_config.h
 - **LCD_BL_PIN**
   - src/app/drivers/arduino_gfx_driver.cpp
+  - src/app/drivers/arduino_gfx_st77916_driver.cpp
   - src/app/drivers/st7701_rgb_driver.cpp
 - **LCD_CS_PIN**
   - src/app/drivers/st7701_rgb_driver.cpp
@@ -383,6 +385,9 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/drivers/st7701_rgb_driver.cpp
 - **LCD_QSPI_CS**
   - src/app/drivers/arduino_gfx_driver.cpp
+  - src/app/drivers/arduino_gfx_st77916_driver.cpp
+- **LCD_QSPI_RST**
+  - src/app/drivers/arduino_gfx_st77916_driver.cpp
 - **LCD_SCK_PIN**
   - src/app/drivers/st7701_rgb_driver.cpp
 - **LD2410_OUT_DEBOUNCE_MS**
@@ -423,6 +428,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/board_config.h
 - **TFT_BACKLIGHT_ON**
   - src/app/drivers/arduino_gfx_driver.cpp
+  - src/app/drivers/arduino_gfx_st77916_driver.cpp
   - src/app/drivers/st7701_rgb_driver.cpp
   - src/app/drivers/tft_espi_driver.cpp
 - **TFT_BACKLIGHT_PWM_CHANNEL**
@@ -431,6 +437,8 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/board_config.h
 - **TFT_BL**
   - src/app/drivers/tft_espi_driver.cpp
+- **TFT_SPI_FREQ_HZ**
+  - src/app/drivers/arduino_gfx_st77916_driver.cpp
 - **TOUCH_CAL_X_MAX**
   - src/app/touch_manager.cpp
 - **TOUCH_CAL_X_MIN**
@@ -445,12 +453,17 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/drivers/gt911_touch_driver.cpp
 - **TOUCH_I2C_SCL**
   - src/app/drivers/axs15231b_touch_driver.cpp
+  - src/app/drivers/wire_cst816s_touch_driver.cpp
+- **TOUCH_I2C_SDA**
+  - src/app/drivers/wire_cst816s_touch_driver.cpp
 - **TOUCH_INT**
   - src/app/drivers/axs15231b_touch_driver.cpp
 - **TOUCH_MISO**
   - src/app/drivers/xpt2046_driver.cpp
 - **TOUCH_MOSI**
   - src/app/drivers/xpt2046_driver.cpp
+- **TOUCH_RST**
+  - src/app/drivers/wire_cst816s_touch_driver.cpp
 - **TOUCH_SCLK**
   - src/app/drivers/xpt2046_driver.cpp
 - **WEB_PORTAL_CONFIG_BODY_TIMEOUT_MS**
