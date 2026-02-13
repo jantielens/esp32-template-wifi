@@ -252,12 +252,13 @@
 //   DISPLAY_DRIVER_LOVYANGFX (3) - LovyanGFX (future support)
 //   DISPLAY_DRIVER_ARDUINO_GFX (4) - Arduino_GFX (QSPI displays like AXS15231B)
 //   DISPLAY_DRIVER_ST7701_RGB (6) - Arduino_GFX ST7701 RGB panel (ESP32-4848S040)
+//   DISPLAY_DRIVER_ARDUINO_GFX_ST77916 (7) - Arduino_GFX ST77916 QSPI 360x360 (JC3636W518)
 #define DISPLAY_DRIVER_TFT_ESPI 1
 #define DISPLAY_DRIVER_ST7789V2 2
 #define DISPLAY_DRIVER_LOVYANGFX 3
 #define DISPLAY_DRIVER_ARDUINO_GFX 4
-#define DISPLAY_DRIVER_ESP_PANEL 5
 #define DISPLAY_DRIVER_ST7701_RGB 6
+#define DISPLAY_DRIVER_ARDUINO_GFX_ST77916 7
 
 // Select the display HAL backend (one of the DISPLAY_DRIVER_* constants).
 #ifndef DISPLAY_DRIVER
@@ -328,24 +329,20 @@
 // Available drivers:
 //   TOUCH_DRIVER_XPT2046 (1) - XPT2046 resistive touch (via TFT_eSPI)
 //   TOUCH_DRIVER_FT6236 (2) - FT6236 capacitive touch (future support)
-//   TOUCH_DRIVER_AXS15231B (3) - AXS15231B capacitive touch (I2C, JC3248W535)
+//   TOUCH_DRIVER_AXS15231B_I2C (3) - AXS15231B capacitive touch (I2C, JC3248W535)
+//   TOUCH_DRIVER_GT911 (5) - GT911 capacitive touch (I2C)
+//   TOUCH_DRIVER_CST816S_WIRE (6) - CST816S capacitive touch (Wire I2C, JC3636W518)
 #define TOUCH_DRIVER_XPT2046 1
 #define TOUCH_DRIVER_FT6236 2
-#define TOUCH_DRIVER_AXS15231B 3
-#define TOUCH_DRIVER_CST816S_ESP_PANEL 4
+#define TOUCH_DRIVER_AXS15231B_I2C 3
 #define TOUCH_DRIVER_GT911 5
+#define TOUCH_DRIVER_CST816S_WIRE 6
 
 // Prefer allocating LVGL draw buffer in internal RAM before PSRAM.
 // Default: false (keeps historical PSRAM-first behavior; boards can override).
 // Prefer internal RAM over PSRAM for LVGL draw buffer allocation.
 #ifndef LVGL_BUFFER_PREFER_INTERNAL
 #define LVGL_BUFFER_PREFER_INTERNAL false
-#endif
-
-// ESP_Panel (QSPI) display driver: prefer internal RAM for the byte-swap buffer.
-// Default: true. Some panel buses are more reliable with internal/DMA-capable buffers.
-#ifndef ESP_PANEL_SWAPBUF_PREFER_INTERNAL
-#define ESP_PANEL_SWAPBUF_PREFER_INTERNAL true
 #endif
 
 // ============================================================================

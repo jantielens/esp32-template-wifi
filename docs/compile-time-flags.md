@@ -22,7 +22,7 @@ This document is a template. Sections marked with `COMPILE_FLAG_REPORT` markers 
 ## Flags (generated)
 
 <!-- BEGIN COMPILE_FLAG_REPORT:FLAGS -->
-Total flags: 151
+Total flags: 145
 
 ### Features (HAS_*)
 
@@ -40,9 +40,9 @@ Total flags: 151
 
 ### Selectors (*_DRIVER)
 
-- **DISPLAY_DRIVER** default: `DISPLAY_DRIVER_TFT_ESPI` (values: DISPLAY_DRIVER_ARDUINO_GFX, DISPLAY_DRIVER_ESP_PANEL, DISPLAY_DRIVER_ST7701_RGB, DISPLAY_DRIVER_ST7789V2, DISPLAY_DRIVER_TFT_ESPI) — Select the display HAL backend (one of the DISPLAY_DRIVER_* constants).
+- **DISPLAY_DRIVER** default: `DISPLAY_DRIVER_TFT_ESPI` (values: DISPLAY_DRIVER_ARDUINO_GFX, DISPLAY_DRIVER_ARDUINO_GFX_ST77916, DISPLAY_DRIVER_ST7701_RGB, DISPLAY_DRIVER_ST7789V2, DISPLAY_DRIVER_TFT_ESPI) — Select the display HAL backend (one of the DISPLAY_DRIVER_* constants).
 - **ILI9341_2_DRIVER** default: `(no default)` — These macros are consumed by the TFT_eSPI library itself.
-- **TOUCH_DRIVER** default: `TOUCH_DRIVER_XPT2046` (values: TOUCH_DRIVER_AXS15231B, TOUCH_DRIVER_CST816S_ESP_PANEL, TOUCH_DRIVER_GT911, TOUCH_DRIVER_XPT2046) — Select the touch HAL backend (one of the TOUCH_DRIVER_* constants).
+- **TOUCH_DRIVER** default: `TOUCH_DRIVER_XPT2046` (values: TOUCH_DRIVER_AXS15231B_I2C, TOUCH_DRIVER_CST816S_WIRE, TOUCH_DRIVER_GT911, TOUCH_DRIVER_XPT2046) — Select the touch HAL backend (one of the TOUCH_DRIVER_* constants).
 
 ### Hardware (Geometry)
 
@@ -97,12 +97,7 @@ Total flags: 151
 - **TFT_MISO** default: `(no default)` — TFT_eSPI: MISO pin.
 - **TFT_MOSI** default: `(no default)` — TFT_eSPI: MOSI pin.
 - **TFT_RST** default: `(no default)` — TFT_eSPI: RST pin (-1 = none).
-- **TFT_SCK** default: `(no default)` — QSPI clock pin.
 - **TFT_SCLK** default: `(no default)` — TFT_eSPI: SCLK pin.
-- **TFT_SDA0** default: `(no default)` — QSPI data line 0 pin.
-- **TFT_SDA1** default: `(no default)` — QSPI data line 1 pin.
-- **TFT_SDA2** default: `(no default)` — QSPI data line 2 pin.
-- **TFT_SDA3** default: `(no default)` — QSPI data line 3 pin.
 - **TOUCH_CS** default: `(no default)` — TFT_eSPI touch: CS pin.
 - **TOUCH_I2C_SCL** default: `(no default)` — Touch I2C SCL pin.
 - **TOUCH_I2C_SDA** default: `(no default)` — Touch I2C SDA pin.
@@ -160,7 +155,6 @@ Total flags: 151
 - **DISPLAY_DRIVER_ILI9341_2** default: `(no default)` — Use the ILI9341_2 controller setup in TFT_eSPI.
 - **DISPLAY_INVERSION_ON** default: `(no default)` — Enable display inversion (panel-specific).
 - **DISPLAY_NEEDS_GAMMA_FIX** default: `(no default)` — Apply gamma correction fix for this panel variant.
-- **ESP_PANEL_SWAPBUF_PREFER_INTERNAL** default: `true` — Default: true. Some panel buses are more reliable with internal/DMA-capable buffers.
 - **HEALTH_HISTORY_ENABLED** default: `1` — Default: enabled.
 - **HEALTH_HISTORY_SAMPLES** default: `((HEALTH_HISTORY_SECONDS * 1000) / HEALTH_HISTORY_PERIOD_MS)` — Derived number of samples.
 - **HEALTH_HISTORY_SECONDS** default: `300` — How much client-side history (sparklines) to keep.
@@ -219,8 +213,8 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
 | cyd-v2 | DISPLAY_DRIVER_TFT_ESPI | TOUCH_DRIVER_XPT2046 |
 | esp32c3-waveshare-169-st7789v2 | DISPLAY_DRIVER_ST7789V2 | — |
 | esp32-4848S040 | DISPLAY_DRIVER_ST7701_RGB | TOUCH_DRIVER_GT911 |
-| jc3248w535 | DISPLAY_DRIVER_ARDUINO_GFX | TOUCH_DRIVER_AXS15231B |
-| jc3636w518 | DISPLAY_DRIVER_ESP_PANEL | TOUCH_DRIVER_CST816S_ESP_PANEL |
+| jc3248w535 | DISPLAY_DRIVER_ARDUINO_GFX | TOUCH_DRIVER_AXS15231B_I2C |
+| jc3636w518 | DISPLAY_DRIVER_ARDUINO_GFX_ST77916 | TOUCH_DRIVER_CST816S_WIRE |
 | esp32c3-withsensors | — | — |
 <!-- END COMPILE_FLAG_REPORT:MATRIX_SELECTORS -->
 
@@ -356,8 +350,6 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/drivers/tft_espi_driver.cpp
 - **DISPLAY_ROTATION**
   - src/app/touch_manager.cpp
-- **ESP_PANEL_SWAPBUF_PREFER_INTERNAL**
-  - src/app/board_config.h
 - **HEALTH_HISTORY_ENABLED**
   - src/app/app.ino
   - src/app/board_config.h
@@ -439,8 +431,6 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/board_config.h
 - **TFT_BL**
   - src/app/drivers/tft_espi_driver.cpp
-- **TFT_SPI_FREQ_HZ**
-  - src/app/drivers/esp_panel_st77916_driver.cpp
 - **TOUCH_CAL_X_MAX**
   - src/app/touch_manager.cpp
 - **TOUCH_CAL_X_MIN**

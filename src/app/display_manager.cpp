@@ -16,8 +16,8 @@
 #include "drivers/st7789v2_driver.h"
 #elif DISPLAY_DRIVER == DISPLAY_DRIVER_ARDUINO_GFX
 #include "drivers/arduino_gfx_driver.h"
-#elif DISPLAY_DRIVER == DISPLAY_DRIVER_ESP_PANEL
-#include "drivers/esp_panel_st77916_driver.h"
+#elif DISPLAY_DRIVER == DISPLAY_DRIVER_ARDUINO_GFX_ST77916
+#include "drivers/arduino_gfx_st77916_driver.h"
 #elif DISPLAY_DRIVER == DISPLAY_DRIVER_ST7701_RGB
 #include "drivers/st7701_rgb_driver.h"
 #endif
@@ -50,8 +50,8 @@ DisplayManager::DisplayManager(DeviceConfig* cfg)
 		driver = new ST7789V2_Driver();
 		#elif DISPLAY_DRIVER == DISPLAY_DRIVER_ARDUINO_GFX
 		driver = new Arduino_GFX_Driver();
-		#elif DISPLAY_DRIVER == DISPLAY_DRIVER_ESP_PANEL
-		driver = new ESPPanel_ST77916_Driver();
+		#elif DISPLAY_DRIVER == DISPLAY_DRIVER_ARDUINO_GFX_ST77916
+		driver = new Arduino_GFX_ST77916_Driver();
 		#elif DISPLAY_DRIVER == DISPLAY_DRIVER_ST7701_RGB
 		driver = new ST7701_RGB_Driver();
 		#else

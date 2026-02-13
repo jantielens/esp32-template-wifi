@@ -33,7 +33,7 @@ python3 tools/generate-board-driver-table.py --update-drivers-readme
 | esp32c3-waveshare-169-st7789v2 | ST7789V2 | ST7789V2 | SPI | 240×280 | 1 | none |  |
 | esp32c3-withsensors | ? | ? | ? | ?×? | ? | ? |  |
 | jc3248w535 | ARDUINO_GFX | AXS15231B | QSPI | 320×480 | 1 | AXS15231B |  |
-| jc3636w518 | ESP_PANEL | ST77916 | QSPI | 360×360 | 0 | CST816S |  |
+| jc3636w518 | ARDUINO_GFX_ST77916 | ST77916 | QSPI | 360×360 | 0 | CST816S |  |
 
 <!-- BOARD_DRIVER_TABLE_END -->
 
@@ -52,7 +52,7 @@ Driver filenames are named by the "primary identity" of the implementation:
 - **Chip/controller-specific drivers** are named after the controller/panel (because they are tightly coupled to that hardware):
 	- Examples: `st7789v2_driver.*`, `xpt2046_driver.*`, `axs15231b_touch_driver.*`
 - **Hybrid implementations** may include both backend + panel/controller when the implementation is intentionally panel-specific within a backend:
-	- Example: `esp_panel_st77916_driver.*`
+	- Example: `arduino_gfx_st77916_driver.*`
 
 ### Vendored (3rd-party) code
 

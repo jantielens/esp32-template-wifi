@@ -32,10 +32,10 @@
 // ---------------------------------------------------------------------------
 // Driver Selection (HAL)
 // ---------------------------------------------------------------------------
-// Select ESP_Panel as the display HAL backend.
-#define DISPLAY_DRIVER DISPLAY_DRIVER_ESP_PANEL
-// Select CST816S (ESP_Panel) as the touch HAL backend.
-#define TOUCH_DRIVER TOUCH_DRIVER_CST816S_ESP_PANEL
+// Select Arduino_GFX ST77916 as the display HAL backend.
+#define DISPLAY_DRIVER DISPLAY_DRIVER_ARDUINO_GFX_ST77916
+// Select CST816S (Wire I2C) as the touch HAL backend.
+#define TOUCH_DRIVER TOUCH_DRIVER_CST816S_WIRE
 
 // ---------------------------------------------------------------------------
 // Display geometry
@@ -60,24 +60,23 @@
 #define LCD_BL_PIN 15
 
 // ---------------------------------------------------------------------------
-// QSPI panel pins (ST77916)
+// QSPI panel pins (ST77916) — Arduino_GFX naming convention
 // ---------------------------------------------------------------------------
 // QSPI reset pin.
-#define TFT_RST 47
+#define LCD_QSPI_RST 47
 // QSPI chip select pin.
-#define TFT_CS 10
-// QSPI clock pin.
-#define TFT_SCK 9
+#define LCD_QSPI_CS 10
+// QSPI pixel clock pin.
+#define LCD_QSPI_PCLK 9
 // QSPI data line 0 pin.
-#define TFT_SDA0 11
+#define LCD_QSPI_D0 11
 // QSPI data line 1 pin.
-#define TFT_SDA1 12
+#define LCD_QSPI_D1 12
 // QSPI data line 2 pin.
-#define TFT_SDA2 13
+#define LCD_QSPI_D2 13
 // QSPI data line 3 pin.
-#define TFT_SDA3 14
+#define LCD_QSPI_D3 14
 
-// QSPI clock (matches sample)
 // QSPI clock frequency (Hz).
 #define TFT_SPI_FREQ_HZ (50 * 1000 * 1000)
 

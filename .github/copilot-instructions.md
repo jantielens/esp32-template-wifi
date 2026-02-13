@@ -21,7 +21,7 @@ ESP32 Arduino development template using `arduino-cli` for headless builds. Desi
   - `touch_manager.cpp/h` - Touch input registration and calibration
   - `display_drivers.cpp` - Sketch-root “translation unit” that conditionally includes exactly one selected display driver `.cpp`
   - `touch_drivers.cpp` - Sketch-root “translation unit” that conditionally includes exactly one selected touch driver `.cpp`
-  - `drivers/` - Driver implementations (TFT_eSPI, ST7789V2, Arduino_GFX, XPT2046, AXS15231B)
+  - `drivers/` - Driver implementations (TFT_eSPI, ST7789V2, Arduino_GFX, ST77916, ST7701, XPT2046, AXS15231B, CST816S, GT911)
   - `screens/` - Screen base class and implementations (splash, info, test, touch test)
   - Conditional compilation: Only selected drivers are compiled via `display_drivers.cpp` / `touch_drivers.cpp` (Arduino doesn’t auto-compile subdir `.cpp`)
 - **Power + Transport Subsystem**: Power modes, BLE/MQTT transport selection, and duty-cycle runtime
@@ -193,8 +193,10 @@ See `docs/wsl-development.md` for complete USB/IP setup guide.
 - `src/app/drivers/st7789v2_driver.cpp/h` - ST7789V2 native SPI driver (software rotation)
 - `src/app/drivers/xpt2046_driver.cpp/h` - XPT2046 resistive touch driver
 - `src/app/drivers/arduino_gfx_driver.cpp/h` - Arduino_GFX display backend (AXS15231B QSPI)
+- `src/app/drivers/arduino_gfx_st77916_driver.cpp/h` - Arduino_GFX ST77916 QSPI display driver (JC3636W518)
 - `src/app/drivers/axs15231b_touch_driver.cpp/h` - AXS15231B touch backend wrapper
 - `src/app/drivers/axs15231b/vendor/AXS15231B_touch.cpp/h` - Vendored AXS15231B touch implementation (driver-scoped vendor code)
+- `src/app/drivers/wire_cst816s_touch_driver.cpp/h` - CST816S Wire I2C touch driver (JC3636W518)
 - `src/app/drivers/README.md` - Driver selection conventions + generated board→drivers table
 - `src/app/screens/screen.h` - Screen base class interface
 - `src/app/screens/splash_screen.cpp/h` - Boot splash with animated spinner

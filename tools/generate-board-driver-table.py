@@ -30,7 +30,7 @@ def _infer_panel_from_path(include_path: str) -> Optional[str]:
     """Try to infer a panel/controller name from a driver include path.
 
     Examples:
-    - drivers/esp_panel_st77916_driver.cpp -> ST77916
+    - drivers/arduino_gfx_st77916_driver.cpp -> ST77916
     - drivers/st7789v2_driver.cpp -> ST7789V2
     """
 
@@ -146,7 +146,7 @@ def _map_touch_backend(token: str) -> Tuple[str, str]:
     if not token or token == "?":
         return "?", "?"
     stripped = _strip_prefix(token, "TOUCH_DRIVER_")
-    # Generic readability tweak: if token is something like CST816S_ESP_PANEL,
+    # Generic readability tweak: if token is something like CST816S_WIRE,
     # show the leading controller name while keeping the full token available.
     primary = stripped.split("_", 1)[0] if "_" in stripped else stripped
     return primary, primary
@@ -154,9 +154,6 @@ def _map_touch_backend(token: str) -> Tuple[str, str]:
 
 def _detect_bus(defines: Dict[str, str]) -> str:
     if "LCD_QSPI_CS" in defines or "LCD_QSPI_PCLK" in defines:
-        return "QSPI"
-    # ESP_Panel QSPI boards in this repo use TFT_SDA0..3 naming.
-    if any(k in defines for k in ("TFT_SDA0", "TFT_SDA1", "TFT_SDA2", "TFT_SDA3")):
         return "QSPI"
     if any(k.startswith("TFT_") for k in defines.keys()) or "LCD_SCK_PIN" in defines:
         return "SPI"
@@ -190,7 +187,7 @@ def _detect_panel(
             return inferred
 
     # Heuristic: if Arduino_GFX is used with AXS15231B touch, the common pairing is AXS15231B.
-    if display_backend_token == "DISPLAY_DRIVER_ARDUINO_GFX" and touch_backend_token == "TOUCH_DRIVER_AXS15231B":
+    if display_backend_token == "DISPLAY_DRIVER_ARDUINO_GFX" and touch_backend_token.startswith("TOUCH_DRIVER_AXS15231B"):
         return "AXS15231B"
 
     return "?"
