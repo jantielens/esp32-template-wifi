@@ -57,7 +57,16 @@ void GT911_TouchDriver::gt911Read() {
 		uint8_t bufferStatus = (pointInfo >> 7) & 1;
 		uint8_t touches = pointInfo & 0x0F;
 
-		lastTouched = (bufferStatus == 1 && touches > 0);
+		// Only update state when the GT911 has completed a new scan.
+		// When bufferStatus==0, no new data is available — keep the previous
+		// touch state to avoid inserting a false RELEASED between scans.
+		// The GT911 scans at ~60-140 Hz; the LVGL task can poll much faster,
+		// so empty reads are expected while the finger is still down.
+		if (bufferStatus == 0) {
+				return;
+		}
+
+		lastTouched = (touches > 0);
 
 		if (lastTouched) {
 				// Read first touch point only (7 bytes: id, x_lo, x_hi, y_lo, y_hi, size_lo, size_hi)
@@ -72,8 +81,9 @@ void GT911_TouchDriver::gt911Read() {
 }
 
 bool GT911_TouchDriver::isTouched() {
-				// Return cached state from last gt911Read() — avoids redundant I2C polling
-				// when getTouch() is called immediately after.
+		// Return cached state from last gt911Read() — avoids redundant I2C polling
+		// when getTouch() is called immediately after.
+		return lastTouched;
 }
 
 bool GT911_TouchDriver::getTouch(uint16_t* x, uint16_t* y, uint16_t* pressure) {

@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Upgraded Arduino_GFX (GFX Library for Arduino) from 1.6.4 to 1.6.5 (fixes `spiFrequencyToClockDiv` SPI API breakage with core ≥3.3.6)
 - Removed "pinned for library compatibility" comment in setup.sh — no longer needed
 
+### Fixed
+- GT911 touch: single taps registering as double taps on esp32-4848S040 (GT911 `bufferStatus=0` between scans was incorrectly interpreted as finger-up, causing a false RELEASED→PRESSED cycle that fired two CLICKED events)
+- GT911 touch: `isTouched()` had no return statement (undefined behavior)
+
 ## [0.0.51] - 2026-02-13
 
 ### Changed
