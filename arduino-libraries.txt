@@ -40,4 +40,4 @@ TFT_eSPI@2.5.43
 lvgl@8.4.0
 
 # Display (Arduino_GFX for JC3248W535, JC3636W518, and other QSPI displays)
-GFX Library for Arduino@1.6.4
+GFX Library for Arduino@1.6.5
