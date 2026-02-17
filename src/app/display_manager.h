@@ -8,6 +8,7 @@
 #include "screens/splash_screen.h"
 #include "screens/info_screen.h"
 #include "screens/test_screen.h"
+#include "screens/fps_screen.h"
 
 #if HAS_TOUCH
 #include "screens/touch_test_screen.h"
@@ -94,6 +95,7 @@ private:
 		SplashScreen splashScreen;
 		InfoScreen infoScreen;
 		TestScreen testScreen;
+		FpsScreen fpsScreen;
 		
 		#if HAS_TOUCH
 		TouchTestScreen touchTestScreen;

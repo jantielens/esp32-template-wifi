@@ -37,7 +37,7 @@ DisplayManager* displayManager = nullptr;
 
 DisplayManager::DisplayManager(DeviceConfig* cfg) 
 		: driver(nullptr), config(cfg), currentScreen(nullptr), previousScreen(nullptr), pendingScreen(nullptr), 
-			infoScreen(cfg, this), testScreen(this),
+			infoScreen(cfg, this), testScreen(this), fpsScreen(this),
 			#if HAS_IMAGE_API
 			directImageScreen(this),
 			#endif
@@ -66,7 +66,8 @@ DisplayManager::DisplayManager(DeviceConfig* cfg)
 		// Initialize screen registry (exclude splash - it's boot-specific)
 		availableScreens[0] = {"info", "Info Screen", &infoScreen};
 		availableScreens[1] = {"test", "Display Test", &testScreen};
-		screenCount = 2;
+		availableScreens[2] = {"fps", "FPS Benchmark", &fpsScreen};
+		screenCount = 3;
 		#if HAS_TOUCH
 		availableScreens[screenCount++] = {"touch_test", "Touch Test", &touchTestScreen};
 		#endif
@@ -106,6 +107,7 @@ DisplayManager::~DisplayManager() {
 		splashScreen.destroy();
 		infoScreen.destroy();
 		testScreen.destroy();
+		fpsScreen.destroy();
 		#if HAS_TOUCH
 		touchTestScreen.destroy();
 		#endif
@@ -517,7 +519,8 @@ void DisplayManager::init() {
 		// Create all screens
 		splashScreen.create();
 		infoScreen.create();
-		testScreen.create();
+	testScreen.create();
+		fpsScreen.create();
 		#if HAS_TOUCH
 		touchTestScreen.create();
 		#endif
@@ -556,6 +559,11 @@ void DisplayManager::init() {
 		// Create async present task for Buffered render mode.
 		// Decouples the slow QSPI panel transfer from the LVGL timer/input loop,
 		// allowing touch polling and animations to run at ~50 Hz instead of ~4 Hz.
+		// On dual-core: pin to the OPPOSITE core from LVGL.  Both tasks are
+		// priority 1, so sharing a core starves IDLE's WDT reset (the tasks
+		// perfectly leapfrog and IDLE never runs).  Separate cores also give
+		// true parallelism — the QSPI transfer runs while LVGL renders the
+		// next frame.
 		if (driver->renderMode() == DisplayDriver::RenderMode::Buffered) {
 				presentSem = xSemaphoreCreateBinary();
 				#if CONFIG_FREERTOS_UNICORE
@@ -566,11 +574,12 @@ void DisplayManager::init() {
 						LOGI("Display", "Present task created (single-core, PSRAM stack)");
 				}
 				#else
-				if (!rtos_create_task_psram_stack_pinned(presentTask, "Present", 4096, this, 1, &presentTaskHandle, &presentTaskAlloc, LVGL_TASK_CORE)) {
-						xTaskCreatePinnedToCore(presentTask, "Present", 4096, this, 1, &presentTaskHandle, LVGL_TASK_CORE);
-						LOGI("Display", "Present task created (Core %d, internal stack)", LVGL_TASK_CORE);
+				const BaseType_t presentCore = 1 - LVGL_TASK_CORE;
+				if (!rtos_create_task_psram_stack_pinned(presentTask, "Present", 4096, this, 1, &presentTaskHandle, &presentTaskAlloc, presentCore)) {
+						xTaskCreatePinnedToCore(presentTask, "Present", 4096, this, 1, &presentTaskHandle, presentCore);
+						LOGI("Display", "Present task created (Core %d, internal stack)", presentCore);
 				} else {
-						LOGI("Display", "Present task created (Core %d, PSRAM stack)", LVGL_TASK_CORE);
+						LOGI("Display", "Present task created (Core %d, PSRAM stack)", presentCore);
 				}
 				#endif
 		}
