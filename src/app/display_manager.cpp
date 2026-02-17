@@ -41,7 +41,9 @@ DisplayManager::DisplayManager(DeviceConfig* cfg)
 			#if HAS_IMAGE_API
 			directImageScreen(this),
 			#endif
-								lvglTaskHandle(nullptr), lvglTaskAlloc{}, lvglMutex(nullptr), screenCount(0), buf(nullptr), flushPending(false), directImageActive(false), pendingSplashStatusSet(false) {
+								lvglTaskHandle(nullptr), lvglTaskAlloc{}, lvglMutex(nullptr),
+							presentTaskHandle(nullptr), presentTaskAlloc{}, presentSem(nullptr), sharedLvTimerUs(0),
+							screenCount(0), buf(nullptr), flushPending(false), directImageActive(false), pendingSplashStatusSet(false) {
 				pendingSplashStatus[0] = '\0';
 		// Instantiate selected display driver
 		#if DISPLAY_DRIVER == DISPLAY_DRIVER_TFT_ESPI
@@ -81,6 +83,16 @@ DisplayManager::DisplayManager(DeviceConfig* cfg)
 }
 
 DisplayManager::~DisplayManager() {
+		// Stop present task first (depends on driver, must be deleted before LVGL task)
+		if (presentTaskHandle) {
+				vTaskDelete(presentTaskHandle);
+				presentTaskHandle = nullptr;
+		}
+		if (presentSem) {
+				vSemaphoreDelete(presentSem);
+				presentSem = nullptr;
+		}
+		
 		// Stop rendering task
 		if (lvglTaskHandle) {
 				vTaskDelete(lvglTaskHandle);
@@ -291,36 +303,37 @@ void DisplayManager::lvglTask(void* pvParameter) {
 				
 				// Flush canvas buffer only when LVGL produced draw data.
 				if (mgr->flushPending) {
-						const uint32_t now_ms = millis();
-						if (g_perf_window_start_ms == 0) {
-								g_perf_window_start_ms = now_ms;
-								g_perf_frames_in_window = 0;
+						if (mgr->driver->renderMode() == DisplayDriver::RenderMode::Buffered
+								&& mgr->presentSem) {
+								// Buffered mode: delegate present() to the async present task.
+								// This frees the LVGL mutex during the slow QSPI panel transfer,
+								// allowing touch input and animations to continue processing.
+								mgr->sharedLvTimerUs = lv_timer_us;
+								xSemaphoreGive(mgr->presentSem);
+						} else {
+								// Direct mode: present() is a no-op. Update perf stats inline.
+								const uint32_t now_ms = millis();
+								if (g_perf_window_start_ms == 0) {
+										g_perf_window_start_ms = now_ms;
+										g_perf_frames_in_window = 0;
+								}
+
+								g_perf_frames_in_window++;
+
+								const uint32_t elapsed = now_ms - g_perf_window_start_ms;
+								if (elapsed >= 1000) {
+										const uint16_t fps = g_perf_frames_in_window;
+										portENTER_CRITICAL(&g_perf_mux);
+										g_perf.fps = fps;
+										g_perf.lv_timer_us = lv_timer_us;
+										g_perf.present_us = 0;
+										g_perf_ready = true;
+										portEXIT_CRITICAL(&g_perf_mux);
+
+										g_perf_window_start_ms = now_ms;
+										g_perf_frames_in_window = 0;
+								}
 						}
-
-						uint64_t present_start_us = 0;
-						if (mgr->driver->renderMode() == DisplayDriver::RenderMode::Buffered) {
-								present_start_us = esp_timer_get_time();
-								mgr->driver->present();
-						}
-
-						const uint32_t present_us = (present_start_us == 0) ? 0 : (uint32_t)(esp_timer_get_time() - present_start_us);
-						g_perf_frames_in_window++;
-
-						// Update published stats every ~1s.
-						const uint32_t elapsed = now_ms - g_perf_window_start_ms;
-						if (elapsed >= 1000) {
-								const uint16_t fps = g_perf_frames_in_window;
-								portENTER_CRITICAL(&g_perf_mux);
-								g_perf.fps = fps;
-								g_perf.lv_timer_us = lv_timer_us;
-								g_perf.present_us = present_us;
-								g_perf_ready = true;
-								portEXIT_CRITICAL(&g_perf_mux);
-
-								g_perf_window_start_ms = now_ms;
-								g_perf_frames_in_window = 0;
-						}
-
 						mgr->flushPending = false;
 				}
 				
@@ -331,6 +344,52 @@ void DisplayManager::lvglTask(void* pvParameter) {
 				if (delayMs < 1) delayMs = 1;
 				if (delayMs > 20) delayMs = 20;
 				vTaskDelay(pdMS_TO_TICKS(delayMs));
+		}
+}
+
+// FreeRTOS task: async QSPI panel transfer for Buffered render mode.
+// Runs concurrently with the LVGL task — present() reads the PSRAM
+// framebuffer while pushColors() may be writing to it.  The dirty-
+// row spinlock in the driver ensures no tracking data is lost; pixel-
+// level overlap is harmless (minor one-frame tear, self-correcting).
+void DisplayManager::presentTask(void* pvParameter) {
+		DisplayManager* mgr = (DisplayManager*)pvParameter;
+		
+		LOGI("Display", "Present task start (core %d)", xPortGetCoreID());
+		
+		while (true) {
+				// Wait for signal from LVGL task
+				xSemaphoreTake(mgr->presentSem, portMAX_DELAY);
+				
+				// Time the QSPI panel transfer
+				const uint64_t start_us = esp_timer_get_time();
+				mgr->driver->present();
+				const uint32_t present_us = (uint32_t)(esp_timer_get_time() - start_us);
+				
+				// Update perf stats (frame count + periodic publish).
+				// These statics are only accessed from one task context per board
+				// (either here for Buffered, or inline in lvglTask for Direct).
+				const uint32_t now_ms = millis();
+				if (g_perf_window_start_ms == 0) {
+						g_perf_window_start_ms = now_ms;
+						g_perf_frames_in_window = 0;
+				}
+				g_perf_frames_in_window++;
+				
+				const uint32_t elapsed = now_ms - g_perf_window_start_ms;
+				if (elapsed >= 1000) {
+						const uint16_t fps = g_perf_frames_in_window;
+						const uint32_t lv_us = mgr->sharedLvTimerUs;
+						portENTER_CRITICAL(&g_perf_mux);
+						g_perf.fps = fps;
+						g_perf.lv_timer_us = lv_us;
+						g_perf.present_us = present_us;
+						g_perf_ready = true;
+						portEXIT_CRITICAL(&g_perf_mux);
+						
+						g_perf_window_start_ms = now_ms;
+						g_perf_frames_in_window = 0;
+				}
 		}
 }
 
@@ -493,6 +552,28 @@ void DisplayManager::init() {
 				LOGI("Display", "Rendering task created (Core %d, PSRAM stack)", LVGL_TASK_CORE);
 		}
 		#endif
+		
+		// Create async present task for Buffered render mode.
+		// Decouples the slow QSPI panel transfer from the LVGL timer/input loop,
+		// allowing touch polling and animations to run at ~50 Hz instead of ~4 Hz.
+		if (driver->renderMode() == DisplayDriver::RenderMode::Buffered) {
+				presentSem = xSemaphoreCreateBinary();
+				#if CONFIG_FREERTOS_UNICORE
+				if (!rtos_create_task_psram_stack(presentTask, "Present", 4096, this, 1, &presentTaskHandle, &presentTaskAlloc)) {
+						xTaskCreate(presentTask, "Present", 4096, this, 1, &presentTaskHandle);
+						LOGI("Display", "Present task created (single-core, internal stack)");
+				} else {
+						LOGI("Display", "Present task created (single-core, PSRAM stack)");
+				}
+				#else
+				if (!rtos_create_task_psram_stack_pinned(presentTask, "Present", 4096, this, 1, &presentTaskHandle, &presentTaskAlloc, LVGL_TASK_CORE)) {
+						xTaskCreatePinnedToCore(presentTask, "Present", 4096, this, 1, &presentTaskHandle, LVGL_TASK_CORE);
+						LOGI("Display", "Present task created (Core %d, internal stack)", LVGL_TASK_CORE);
+				} else {
+						LOGI("Display", "Present task created (Core %d, PSRAM stack)", LVGL_TASK_CORE);
+				}
+				#endif
+		}
 		
 		LOGI("Display", "Manager init complete");
 }
