@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.53] - 2026-02-17
+
+### Added
+- FPS benchmark screen: spinning arc animation with live panel FPS, present/render/frame timing (navigate via web portal screen API)
+- Async present task for Buffered render mode (jc3248w535): decouples slow QSPI panel transfer from LVGL timer loop, allowing touch input and animations to process at ~50 Hz instead of ~4 Hz
+- Dirty-row spinlock in Arduino_GFX driver: thread-safe tracking between LVGL flush and async present task
+
+### Fixed
+- Task watchdog crash on jc3248w535: present task now pinned to opposite core from LVGL task (both at priority 1 on same core starved IDLE0's WDT reset)
+
 ## [0.0.52] - 2026-02-13
 
 ### Changed
