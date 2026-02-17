@@ -8,6 +8,7 @@
 #include "screens/splash_screen.h"
 #include "screens/info_screen.h"
 #include "screens/test_screen.h"
+#include "screens/fps_screen.h"
 
 #if HAS_TOUCH
 #include "screens/touch_test_screen.h"
@@ -68,6 +69,14 @@ private:
 		RtosTaskPsramAlloc lvglTaskAlloc;  // PSRAM stack allocation (if used)
 		SemaphoreHandle_t lvglMutex;
 		
+		// Async present task (Buffered render mode only).
+		// Decouples the slow panel transfer from the LVGL timer loop
+		// so touch input and animations can process at ~50 Hz.
+		TaskHandle_t presentTaskHandle;
+		RtosTaskPsramAlloc presentTaskAlloc;
+		SemaphoreHandle_t presentSem;
+		volatile uint32_t sharedLvTimerUs;  // Latest lv_timer_handler() duration for perf stats
+		
 		// Screen management
 		Screen* currentScreen;
 		Screen* previousScreen;  // Track previous screen for return navigation
@@ -86,6 +95,7 @@ private:
 		SplashScreen splashScreen;
 		InfoScreen infoScreen;
 		TestScreen testScreen;
+		FpsScreen fpsScreen;
 		
 		#if HAS_TOUCH
 		TouchTestScreen touchTestScreen;
@@ -127,6 +137,9 @@ private:
 		
 		// FreeRTOS task for LVGL rendering
 		static void lvglTask(void* pvParameter);
+		
+		// FreeRTOS task for async panel transfer (Buffered render mode only)
+		static void presentTask(void* pvParameter);
 		
 public:
 		DisplayManager(DeviceConfig* config);

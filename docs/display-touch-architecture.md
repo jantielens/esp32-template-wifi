@@ -393,10 +393,13 @@ void DisplayManager::lvglTask(void* pvParameter) {
             mgr->currentScreen->update();   // Screen data refresh
         }
 
-        // Buffered display drivers require a post-render present().
+        // Signal async present task for Buffered drivers (e.g., QSPI panels).
+        // Releases the mutex before the slow panel transfer so touch and animation
+        // processing can continue at ~50 Hz instead of ~4 Hz.
         if (mgr->flushPending && mgr->driver->renderMode() == DisplayDriver::RenderMode::Buffered) {
-            mgr->driver->present();
+            xSemaphoreGive(mgr->presentSem);  // Wake presentTask
         }
+        // Direct-mode drivers handle perf stats inline (present() is a no-op).
         mgr->flushPending = false;
         mgr->unlock();                      // Release mutex
 
@@ -413,10 +416,32 @@ void DisplayManager::lvglTask(void* pvParameter) {
 - No manual `update()` calls needed in `loop()`
 - Works on both single-core and dual-core ESP32
 - Thread-safe via mutex protection
+- Buffered drivers (QSPI panels) use an **async present task** — the slow panel transfer runs concurrently with LVGL timer/input processing, reducing effective LVGL cycle time from ~225ms to ~20ms
 
 **Core Assignment:**
-- **Dual-core:** Task pinned to Core 0, Arduino `loop()` on Core 1
-- **Single-core:** Task time-sliced with Arduino `loop()` on Core 0
+- **Dual-core:** LVGL + Present tasks pinned to Core 0, Arduino `loop()` on Core 1
+- **Single-core:** All tasks time-sliced on Core 0
+
+### Async Present Task (Buffered Render Mode)
+
+For Buffered render-mode drivers (e.g., Arduino_GFX / AXS15231B on jc3248w535), `present()` is decoupled into a separate FreeRTOS task:
+
+```
+lvglTask:      lock → lv_timer_handler() → signal presentSem → unlock → vTaskDelay
+                  ~20ms (LVGL free for touch/animation every ~20ms)
+
+presentTask:   wait(presentSem) → driver->present() → update perf stats
+                  ~200ms QSPI transfer (runs without holding LVGL mutex)
+```
+
+This means:
+- Touch input is read every ~10-20ms instead of every ~225ms
+- LVGL gesture recognition gets far more data points for accurate swipe detection
+- Animations compute more intermediate steps between panel refreshes
+- The PSRAM framebuffer is shared: `pushColors()` writes while `present()` reads — minor one-frame tears are possible but self-correcting
+- Dirty-row tracking (`hasDirtyRows` / `dirtyMaxRow`) is protected by a portMUX spinlock
+
+Direct-mode boards are unaffected — no present task is created (their `present()` is a no-op).
 
 ### Thread Safety
 
