@@ -94,6 +94,14 @@ def _find_nvs_partition(entries: Iterable[PartitionEntry]) -> PartitionEntry:
     raise ValueError("No NVS partition found")
 
 
+def _find_otadata_partition(entries: Iterable[PartitionEntry]) -> PartitionEntry:
+    data_entries = [e for e in entries if e.type == 0x01]
+    for e in data_entries:
+        if e.label == "otadata" or e.subtype == 0x00:
+            return e
+    raise ValueError("No otadata partition found")
+
+
 def _format_offset(value: int, fmt: str) -> str:
     if fmt == "hex":
         return f"0x{value:x}"
@@ -120,6 +128,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--app-offset", action="store_true", help="Print app0/factory offset")
     group.add_argument("--nvs", action="store_true", help="Print NVS offset and size")
+    group.add_argument("--otadata", action="store_true", help="Print otadata offset")
 
     args = parser.parse_args(list(argv) if argv is not None else None)
 
@@ -138,6 +147,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         if args.nvs:
             nvs = _find_nvs_partition(entries)
             print(f"{_format_offset(nvs.offset, args.format)} {_format_offset(nvs.size, args.format)}")
+            return 0
+        if args.otadata:
+            otadata = _find_otadata_partition(entries)
+            print(_format_offset(otadata.offset, args.format))
             return 0
         return 2
     except Exception as e:
