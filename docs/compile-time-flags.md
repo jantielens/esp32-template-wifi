@@ -258,6 +258,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/display_drivers.cpp
   - src/app/display_manager.cpp
   - src/app/ha_discovery.cpp
+  - src/app/lv_conf.h
   - src/app/screen_saver_manager.cpp
   - src/app/screen_saver_manager.h
   - src/app/screens.cpp

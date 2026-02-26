@@ -151,10 +151,9 @@
 #define LV_USE_CHECKBOX   0
 #define LV_USE_DROPDOWN   0
 
-// Image widget support: required by LV_USE_CANVAS (canvas inherits from lv_img_t,
-// so the img widget must be compiled).
-// Keep it disabled by default to reduce flash size in template builds.
-#if LV_USE_CANVAS
+// Image widget support: required by splash screen (PNG logo) and LV_USE_CANVAS.
+// Enable for all display-capable boards; disable for non-display builds to save flash.
+#if HAS_DISPLAY || LV_USE_CANVAS
 	#ifndef LV_USE_IMG
 		#define LV_USE_IMG        1
 	#endif
