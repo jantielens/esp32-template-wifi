@@ -9,6 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.55] - 2026-02-26
+
+### Added
+- ESP32-P4 board support: Waveshare ESP32-P4-WIFI6-Touch-LCD-4B (720×720 ST7703 MIPI-DSI + GT911 touch)
+- ST7703 MIPI-DSI display driver using direct ESP-IDF calls (bypasses Arduino_GFX for DSI path)
+- Custom 32MB flash partition table with 8MB OTA slots (`partitions_ota_8mb_32MB.csv`)
+- Performance analysis doc (`docs/esp32-p4-display-performance.md`) with A/B test data
+
+### Fixed
+- ESP32-P4 cyan/idle-color display flashes caused by DSI LP transitions during blanking intervals
+  - Root cause: Arduino_GFX `Arduino_ESP32DSIPanel` does not set `disable_lp=true` in DPI panel config
+  - Fix: direct ESP-IDF DSI init with `.flags.disable_lp = true` keeps D-PHY in HS mode continuously
+  - Result: ~40 fps (up from ~30), cyan flashes eliminated
+- ESP32-P4 bootloader offset (0x2000) added to `upload.sh` for `--full` flash mode
+
+### Changed
+- LVGL draw buffers use internal RAM on ESP32-P4 (`LVGL_BUFFER_PREFER_INTERNAL true`) — +4 fps vs PSRAM
+- LVGL refresh period lowered to 15 ms on ESP32-P4 (matches IDF reference projects)
+- `pushColors()` flush path uses `memcpy()` per row + `esp_cache_msync()` (replaces per-pixel copy)
+
+### Removed
+- Image API subsystem: `strip_decoder`, `lvgl_jpeg_decoder`, `direct_image_screen`, `lvgl_image_screen`, `image_api`, `jpeg_preflight` (~3900 lines)
+- `HAS_IMAGE_API` compile flag and all board overrides
+- `tools/upload_image.py` and `tools/camera_to_esp32.py`
+
+### Documentation
+- Updated display-touch-architecture, compile-time-flags, web-portal, scripts, drivers README
+- Regenerated `docs/compile-time-flags.md`
+
 ## [0.0.54] - 2026-02-26
 
 ### Fixed

@@ -234,6 +234,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/drivers/arduino_gfx_driver.cpp
   - src/app/drivers/arduino_gfx_st77916_driver.cpp
   - src/app/drivers/st7701_rgb_driver.cpp
+  - src/app/drivers/st7703_dsi_driver.cpp
   - src/app/drivers/tft_espi_driver.cpp
 - **HAS_BLE**
   - src/app/app.ino
@@ -349,6 +350,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/drivers/arduino_gfx_driver.cpp
   - src/app/drivers/arduino_gfx_st77916_driver.cpp
   - src/app/drivers/st7701_rgb_driver.cpp
+  - src/app/drivers/st7703_dsi_driver.cpp
 - **LCD_CS_PIN**
   - src/app/drivers/st7701_rgb_driver.cpp
 - **LCD_MOSI_PIN**
@@ -358,6 +360,8 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/drivers/arduino_gfx_st77916_driver.cpp
 - **LCD_QSPI_RST**
   - src/app/drivers/arduino_gfx_st77916_driver.cpp
+- **LCD_RST_PIN**
+  - src/app/drivers/st7703_dsi_driver.cpp
 - **LCD_SCK_PIN**
   - src/app/drivers/st7701_rgb_driver.cpp
 - **LD2410_OUT_DEBOUNCE_MS**
@@ -396,20 +400,28 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/board_config.h
 - **ST7703_DPI_CLK_HZ**
   - src/app/board_config.h
+  - src/boards/esp32-p4-lcd4b/board_overrides.h
 - **ST7703_HSYNC_BACK_PORCH**
   - src/app/board_config.h
+  - src/boards/esp32-p4-lcd4b/board_overrides.h
 - **ST7703_HSYNC_FRONT_PORCH**
   - src/app/board_config.h
+  - src/boards/esp32-p4-lcd4b/board_overrides.h
 - **ST7703_HSYNC_PULSE_WIDTH**
   - src/app/board_config.h
+  - src/boards/esp32-p4-lcd4b/board_overrides.h
 - **ST7703_LANE_BIT_RATE**
   - src/app/board_config.h
+  - src/boards/esp32-p4-lcd4b/board_overrides.h
 - **ST7703_VSYNC_BACK_PORCH**
   - src/app/board_config.h
+  - src/boards/esp32-p4-lcd4b/board_overrides.h
 - **ST7703_VSYNC_FRONT_PORCH**
   - src/app/board_config.h
+  - src/boards/esp32-p4-lcd4b/board_overrides.h
 - **ST7703_VSYNC_PULSE_WIDTH**
   - src/app/board_config.h
+  - src/boards/esp32-p4-lcd4b/board_overrides.h
 - **TFT_BACKLIGHT_DUTY_MAX**
   - src/app/board_config.h
 - **TFT_BACKLIGHT_DUTY_MIN**
@@ -418,6 +430,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/drivers/arduino_gfx_driver.cpp
   - src/app/drivers/arduino_gfx_st77916_driver.cpp
   - src/app/drivers/st7701_rgb_driver.cpp
+  - src/app/drivers/st7703_dsi_driver.cpp
   - src/app/drivers/tft_espi_driver.cpp
 - **TFT_BACKLIGHT_PWM_CHANNEL**
   - src/app/board_config.h
