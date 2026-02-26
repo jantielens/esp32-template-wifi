@@ -192,11 +192,9 @@ python3 tools/compile_flags_report.py build --board cyd-v2
 ```bash
 python3 tools/portal_stress_test.py --host 192.168.1.111 --no-reboot --cycles 10 --scenario api
 python3 tools/portal_stress_test.py --host 192.168.1.111 --no-reboot --cycles 10 --scenario portal
-python3 tools/portal_stress_test.py --host 192.168.1.111 --no-reboot --cycles 5 --scenario image --image-generate 320x240
 ```
 
 **Notes:**
-- `--scenario image` requires firmware built with `HAS_IMAGE_API` enabled.
 - Use `--no-reboot` when the device should remain up between cycles.
 
 ---

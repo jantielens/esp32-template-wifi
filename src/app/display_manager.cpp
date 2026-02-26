@@ -20,6 +20,8 @@
 #include "drivers/arduino_gfx_st77916_driver.h"
 #elif DISPLAY_DRIVER == DISPLAY_DRIVER_ST7701_RGB
 #include "drivers/st7701_rgb_driver.h"
+#elif DISPLAY_DRIVER == DISPLAY_DRIVER_ST7703_DSI
+#include "drivers/st7703_dsi_driver.h"
 #endif
 
 #include <SPI.h>
@@ -38,12 +40,9 @@ DisplayManager* displayManager = nullptr;
 DisplayManager::DisplayManager(DeviceConfig* cfg) 
 		: driver(nullptr), config(cfg), currentScreen(nullptr), previousScreen(nullptr), pendingScreen(nullptr), 
 			infoScreen(cfg, this), testScreen(this), fpsScreen(this),
-			#if HAS_IMAGE_API
-			directImageScreen(this),
-			#endif
-								lvglTaskHandle(nullptr), lvglTaskAlloc{}, lvglMutex(nullptr),
-							presentTaskHandle(nullptr), presentTaskAlloc{}, presentSem(nullptr), sharedLvTimerUs(0),
-							screenCount(0), buf(nullptr), flushPending(false), directImageActive(false), pendingSplashStatusSet(false) {
+							lvglTaskHandle(nullptr), lvglTaskAlloc{}, lvglMutex(nullptr),
+						presentTaskHandle(nullptr), presentTaskAlloc{}, presentSem(nullptr), sharedLvTimerUs(0),
+						screenCount(0), buf(nullptr), flushPending(false), pendingSplashStatusSet(false) {
 				pendingSplashStatus[0] = '\0';
 		// Instantiate selected display driver
 		#if DISPLAY_DRIVER == DISPLAY_DRIVER_TFT_ESPI
@@ -56,6 +55,8 @@ DisplayManager::DisplayManager(DeviceConfig* cfg)
 		driver = new Arduino_GFX_ST77916_Driver();
 		#elif DISPLAY_DRIVER == DISPLAY_DRIVER_ST7701_RGB
 		driver = new ST7701_RGB_Driver();
+		#elif DISPLAY_DRIVER == DISPLAY_DRIVER_ST7703_DSI
+		driver = new ST7703_DSI_Driver();
 		#else
 		#error "No display driver selected or unknown driver type"
 		#endif
@@ -70,16 +71,6 @@ DisplayManager::DisplayManager(DeviceConfig* cfg)
 		screenCount = 3;
 		#if HAS_TOUCH
 		availableScreens[screenCount++] = {"touch_test", "Touch Test", &touchTestScreen};
-		#endif
-		#if HAS_IMAGE_API
-		#if LV_USE_IMG
-		availableScreens[screenCount++] = {"lvgl_image", "LVGL Image", &lvglImageScreen};
-		#endif
-		#endif
-		
-		#if HAS_IMAGE_API
-		// Register DirectImageScreen (optional, only shown via API)
-		// Not added to navigation menu - shown programmatically
 		#endif
 }
 
@@ -112,13 +103,6 @@ DisplayManager::~DisplayManager() {
 		touchTestScreen.destroy();
 		#endif
 		
-		#if HAS_IMAGE_API
-		directImageScreen.destroy();
-		#if LV_USE_IMG
-		lvglImageScreen.destroy();
-		#endif
-		#endif
-		
 		// Delete display driver
 		if (driver) {
 				delete driver;
@@ -146,13 +130,6 @@ const char* DisplayManager::getScreenIdForInstance(const Screen* screen) const {
 				return "splash";
 		}
 
-		#if HAS_IMAGE_API
-		// Direct image mode is API-driven and intentionally not part of availableScreens.
-		if (screen == &directImageScreen) {
-				return "direct_image";
-		}
-		#endif
-
 		// Registered runtime screens.
 		for (size_t i = 0; i < screenCount; i++) {
 				if (availableScreens[i].instance == screen) {
@@ -167,15 +144,6 @@ const char* DisplayManager::getScreenIdForInstance(const Screen* screen) const {
 void DisplayManager::flushCallback(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p) {
 		DisplayManager* mgr = (DisplayManager*)disp->user_data;
 
-		// When DirectImageScreen is active, the JPEG decoder writes directly to the LCD.
-		// Avoid concurrent SPI/TFT_eSPI access from LVGL flushes (can cause WDT/deadlocks).
-		#if HAS_IMAGE_API
-		if (mgr && (mgr->directImageActive || mgr->currentScreen == &mgr->directImageScreen)) {
-				lv_disp_flush_ready(disp);
-				return;
-		}
-		#endif
-		
 		uint32_t w = (area->x2 - area->x1 + 1);
 		uint32_t h = (area->y2 - area->y1 + 1);
 		
@@ -266,16 +234,7 @@ void DisplayManager::lvglTask(void* pvParameter) {
 								mgr->currentScreen->hide();
 						}
 
-						#if HAS_IMAGE_API
-						// DirectImageScreen return behavior uses previousScreen.
-						// Do not clobber it here for DirectImageScreen transitions; it's managed
-						// explicitly in showDirectImage()/returnToPreviousScreen().
-						if (mgr->pendingScreen != &mgr->directImageScreen) {
-								mgr->previousScreen = mgr->currentScreen;
-						}
-						#else
 						mgr->previousScreen = mgr->currentScreen;
-						#endif
 						mgr->currentScreen = target;
 						mgr->currentScreen->show();
 						mgr->pendingScreen = nullptr;
@@ -283,11 +242,6 @@ void DisplayManager::lvglTask(void* pvParameter) {
 						// Reset LVGL input device state so leftover PRESSED from the
 						// previous screen doesn't fire a phantom CLICKED on the new screen.
 						lv_indev_reset(NULL, NULL);
-
-						#if HAS_IMAGE_API
-						// Keep the flush gate in sync with the active screen.
-						mgr->directImageActive = (mgr->currentScreen == &mgr->directImageScreen);
-						#endif
 
 						const char* screenId = mgr->getScreenIdForInstance(mgr->currentScreen);
 						LOGI("Display", "Switched to %s", screenId ? screenId : "(unregistered)");
@@ -503,7 +457,21 @@ void DisplayManager::initLVGL() {
 		
 		lv_disp_drv_register(&disp_drv);
 		
-		LOGI("Display", "Buffer: %d pixels (%d lines)", LVGL_BUFFER_SIZE, LVGL_BUFFER_SIZE / driver->width());
+		// Override LVGL refresh period if board specifies a custom value.
+		// LVGL 8.4 default is 30 ms; display-heavy boards benefit from 15 ms.
+		#ifdef LVGL_REFR_PERIOD_MS
+		lv_timer_set_period(_lv_disp_get_refr_timer(NULL), LVGL_REFR_PERIOD_MS);
+		LOGI("Display", "Refresh period: %d ms", LVGL_REFR_PERIOD_MS);
+		#endif
+		
+		LOGI("Display", "Buffer: %d pixels (%d lines), %s",
+				 LVGL_BUFFER_SIZE, LVGL_BUFFER_SIZE / driver->width(),
+				 #if defined(LVGL_DRAW_BUF_COUNT) && LVGL_DRAW_BUF_COUNT == 2
+				 "double-buffered"
+				 #else
+				 "single-buffered"
+				 #endif
+		);
 		LOGI("Display", "LVGL init complete");
 }
 
@@ -524,14 +492,7 @@ void DisplayManager::init() {
 		#if HAS_TOUCH
 		touchTestScreen.create();
 		#endif
-		#if HAS_IMAGE_API
-		#if LV_USE_IMG
-		lvglImageScreen.create();
-		#endif
-		#endif
-		
-		LOGI("Display", "Screens created");
-		
+
 		// Show splash immediately
 		showSplash();
 		
@@ -610,44 +571,6 @@ void DisplayManager::showTest() {
 		pendingScreen = &testScreen;
 		LOGI("Display", "Queued switch to TestScreen");
 }
-
-#if HAS_IMAGE_API
-void DisplayManager::showDirectImage() {
-		// If we're already showing the DirectImageScreen, don't queue a redundant
-		// LVGL screen switch (it would also risk clobbering previousScreen).
-		if (currentScreen == &directImageScreen) {
-				directImageActive = true;
-				LOGI("Display", "Already on DirectImageScreen");
-				return;
-		}
-
-		// Save current screen so we can return to it after timeout
-		// If we're already on DirectImageScreen, don't overwrite previousScreen
-		if (currentScreen && currentScreen != &directImageScreen) {
-				previousScreen = currentScreen;
-		}
-		
-		// Defer screen switch to lvglTask (non-blocking)
-		// Immediately gate LVGL flushes so the decoder can safely write even before
-		// the screen switch is processed by the LVGL task.
-		// Also drop any pending buffered present() to avoid flushing stale LVGL content
-		// over the direct-image content.
-		flushPending = false;
-		directImageActive = true;
-		pendingScreen = &directImageScreen;
-		LOGI("Display", "Queued switch to DirectImageScreen");
-}
-
-void DisplayManager::returnToPreviousScreen() {
-		// Defer screen switch to lvglTask (non-blocking)
-		// If no previous screen, default to info screen
-		Screen* targetScreen = previousScreen ? previousScreen : &infoScreen;
-		directImageActive = false;
-		pendingScreen = targetScreen;
-		previousScreen = nullptr;  // Clear previous screen reference
-		LOGI("Display", "Queued return to previous screen");
-}
-#endif
 
 void DisplayManager::setSplashStatus(const char* text) {
 		// If called before the LVGL task exists (during early setup), update directly.
@@ -775,35 +698,5 @@ bool display_manager_try_lock(uint32_t timeout_ms) {
 		if (!displayManager) return false;
 		return displayManager->tryLock(timeout_ms);
 }
-
-#if HAS_IMAGE_API
-void display_manager_show_direct_image() {
-		if (displayManager) {
-				displayManager->showDirectImage();
-		}
-}
-
-DirectImageScreen* display_manager_get_direct_image_screen() {
-		if (displayManager) {
-				return displayManager->getDirectImageScreen();
-		}
-		return nullptr;
-}
-
-#if LV_USE_IMG
-LvglImageScreen* display_manager_get_lvgl_image_screen() {
-		if (displayManager) {
-				return displayManager->getLvglImageScreen();
-		}
-		return nullptr;
-}
-#endif
-
-void display_manager_return_to_previous_screen() {
-		if (displayManager) {
-				displayManager->returnToPreviousScreen();
-		}
-}
-#endif // HAS_IMAGE_API
 
 #endif // HAS_DISPLAY

@@ -305,11 +305,6 @@ void loop()
 	// Handle web portal (DNS for captive portal)
 	web_portal_handle();
 
-	#if HAS_IMAGE_API
-	// Process pending image uploads (deferred decoding)
-	web_portal_process_pending_images();
-	#endif
-
 	#if HAS_MQTT
 	mqtt_manager.loop();
 	#endif

@@ -16,6 +16,8 @@
 #include "drivers/arduino_gfx_st77916_driver.cpp"
 #elif DISPLAY_DRIVER == DISPLAY_DRIVER_ST7701_RGB
 #include "drivers/st7701_rgb_driver.cpp"
+#elif DISPLAY_DRIVER == DISPLAY_DRIVER_ST7703_DSI
+#include "drivers/st7703_dsi_driver.cpp"
 #else
 #error "No display driver selected or unknown driver type"
 #endif

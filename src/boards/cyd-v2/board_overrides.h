@@ -160,15 +160,5 @@
 // #define HAS_LDR true
 // #define LDR_PIN 34
 
-// ============================================================================
-// Image API Configuration
-// ============================================================================
-// Enable Image API on this board.
-#define HAS_IMAGE_API true
-// Compromise cap: accepts worst-case 320x240 JPEGs while reducing allocation pressure
-// Max JPEG bytes accepted for full image uploads.
-#define IMAGE_API_MAX_SIZE_BYTES (80 * 1024)  // 80KB max for full image upload
-// Additional RAM required for decoding.
-#define IMAGE_API_DECODE_HEADROOM_BYTES (50 * 1024)  // 50KB headroom for decoding
 
 #endif // BOARD_OVERRIDES_CYD2USB_V2_H

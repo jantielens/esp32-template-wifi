@@ -21,7 +21,7 @@ ESP32 Arduino development template using `arduino-cli` for headless builds. Desi
   - `touch_manager.cpp/h` - Touch input registration and calibration
   - `display_drivers.cpp` - Sketch-root “translation unit” that conditionally includes exactly one selected display driver `.cpp`
   - `touch_drivers.cpp` - Sketch-root “translation unit” that conditionally includes exactly one selected touch driver `.cpp`
-  - `drivers/` - Driver implementations (TFT_eSPI, ST7789V2, Arduino_GFX, ST77916, ST7701, XPT2046, AXS15231B, CST816S, GT911)
+  - `drivers/` - Driver implementations (TFT_eSPI, ST7789V2, Arduino_GFX, ST77916, ST7701, ST7703_DSI, XPT2046, AXS15231B, CST816S, GT911)
   - `screens/` - Screen base class and implementations (splash, info, test, touch test)
   - Conditional compilation: Only selected drivers are compiled via `display_drivers.cpp` / `touch_drivers.cpp` (Arduino doesn’t auto-compile subdir `.cpp`)
 - **Power + Transport Subsystem**: Power modes, BLE/MQTT transport selection, and duty-cycle runtime
@@ -45,6 +45,7 @@ ESP32 Arduino development template using `arduino-cli` for headless builds. Desi
   - `["esp32c3-waveshare-169-st7789v2"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"` → `build/esp32c3-waveshare-169-st7789v2/` (ESP32-C3 Super Mini + Waveshare 1.69" ST7789V2 240x280)
   - `["esp32c6"]="esp32:esp32:esp32c6:CDCOnBoot=cdc"` → `build/esp32c6/` (ESP32-C6 Dev Module)
   - `["cyd-v2"]="esp32:esp32:esp32"` → `build/cyd-v2/` (CYD v2 - same FQBN as esp32, different config)
+  - `["esp32-p4-lcd4b"]="esp32:esp32:esp32p4:FlashSize=32M,PSRAM=enabled,PartitionScheme=ota_8mb_32MB"` → `build/esp32-p4-lcd4b/` (Waveshare ESP32-P4-WIFI6-Touch-LCD-4B, 720×720 MIPI-DSI + GT911 touch, 32MB Flash + 32MB PSRAM)
 
 ## Critical Developer Workflows
 
@@ -194,6 +195,7 @@ See `docs/wsl-development.md` for complete USB/IP setup guide.
 - `src/app/drivers/xpt2046_driver.cpp/h` - XPT2046 resistive touch driver
 - `src/app/drivers/arduino_gfx_driver.cpp/h` - Arduino_GFX display backend (AXS15231B QSPI)
 - `src/app/drivers/arduino_gfx_st77916_driver.cpp/h` - Arduino_GFX ST77916 QSPI display driver (JC3636W518)
+- `src/app/drivers/st7703_dsi_driver.cpp/h` - ST7703 MIPI-DSI display driver using direct ESP-IDF calls (ESP32-P4-WIFI6-Touch-LCD-4B)
 - `src/app/drivers/axs15231b_touch_driver.cpp/h` - AXS15231B touch backend wrapper
 - `src/app/drivers/axs15231b/vendor/AXS15231B_touch.cpp/h` - Vendored AXS15231B touch implementation (driver-scoped vendor code)
 - `src/app/drivers/wire_cst816s_touch_driver.cpp/h` - CST816S Wire I2C touch driver (JC3636W518)

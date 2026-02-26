@@ -14,11 +14,6 @@
 #include "screens/touch_test_screen.h"
 #endif
 
-#if HAS_IMAGE_API
-#include "screens/direct_image_screen.h"
-#include "screens/lvgl_image_screen.h"
-#endif
-
 #include <lvgl.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -101,13 +96,6 @@ private:
 		TouchTestScreen touchTestScreen;
 		#endif
 		
-		#if HAS_IMAGE_API
-		DirectImageScreen directImageScreen;
-		#if LV_USE_IMG
-		LvglImageScreen lvglImageScreen;
-		#endif
-		#endif
-		
 		// Screen registry for runtime navigation (static allocation, no heap)
 		// screenCount tracks how many slots are actually used (currently 2: info, test)
 		// Splash excluded from runtime selection (boot-specific only)
@@ -130,11 +118,6 @@ private:
 		// present() step, but only after LVGL has actually rendered something.
 		bool flushPending;
 
-		// When true, LVGL flushes must not touch the panel.
-		// This is enabled as soon as DirectImageScreen is requested so that
-		// the JPEG decoder can safely write to the display without SPI contention.
-		volatile bool directImageActive;
-		
 		// FreeRTOS task for LVGL rendering
 		static void lvglTask(void* pvParameter);
 		
@@ -152,11 +135,6 @@ public:
 		void showSplash();
 		void showInfo();
 		void showTest();
-		
-		#if HAS_IMAGE_API
-		void showDirectImage();
-		void returnToPreviousScreen();  // Return to screen before image was shown
-		#endif
 		
 		// Screen selection by ID (thread-safe, returns true if found)
 		bool showScreen(const char* screen_id);
@@ -185,16 +163,6 @@ public:
 		
 		// Access to splash screen for status updates
 		SplashScreen* getSplash() { return &splashScreen; }
-		
-		#if HAS_IMAGE_API
-		// Access to direct image screen for image API
-		DirectImageScreen* getDirectImageScreen() { return &directImageScreen; }
-
-		// Access to LVGL image screen (shows images via lv_img)
-		#if LV_USE_IMG
-		LvglImageScreen* getLvglImageScreen() { return &lvglImageScreen; }
-		#endif
-		#endif
 		
 		// Access to display driver (for touch integration)
 		DisplayDriver* getDriver() { return driver; }
@@ -230,15 +198,5 @@ bool display_manager_try_lock(uint32_t timeout_ms);
 // Best-effort perf stats for diagnostics (/api/health).
 // Returns false until a first stats window has been captured.
 bool display_manager_get_perf_stats(DisplayPerfStats* out);
-
-#if HAS_IMAGE_API
-// C-style interface for image API
-void display_manager_show_direct_image();
-DirectImageScreen* display_manager_get_direct_image_screen();
-#if LV_USE_IMG
-LvglImageScreen* display_manager_get_lvgl_image_screen();
-#endif
-void display_manager_return_to_previous_screen();
-#endif
 
 #endif // DISPLAY_MANAGER_H

@@ -104,15 +104,4 @@
 // Touch calibration: Y maximum.
 #define TOUCH_CAL_Y_MAX 461
 
-// ============================================================================
-// Image API
-// ============================================================================
-// Enable Image API on this board.
-#define HAS_IMAGE_API true
-
-// PSRAM board: allow larger full-image uploads than the global default.
-// Worst-case (high-entropy) 480x320 JPEGs at quality 95 can exceed 100KB.
-// Max JPEG bytes accepted for full image uploads.
-#define IMAGE_API_MAX_SIZE_BYTES (300 * 1024)
-
 #endif // BOARD_OVERRIDES_JC3248W535_H

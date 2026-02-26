@@ -62,6 +62,7 @@ The display and touch subsystem is built on four main pillars:
 │ ST7789V2_Driver  │          │ AXS15231B_Touch  │
 │ Arduino_GFX_Drv  │          │ CST816S_Driver   │
 │ ST7701_RGB_Driver│          │ GT911_Driver     │
+│ ST7703_DSI_Driver│          │                  │
 └──────────────────┘          └──────────────────┘
         ↓                               ↓
 ┌──────────────────┐          ┌──────────────────┐
@@ -371,13 +372,6 @@ public:
 - Ghost touch suppression via `touch_manager_suppress_lvgl_input(200)` on show
 - Adaptive brush size (~0.8% of smaller display dimension, clamped 2–6 px)
 
-**DirectImageScreen** (`direct_image_screen.h/cpp`)
-- Blank black LVGL screen for direct LCD hardware writes
-- Used by Image API for JPEG image display
-- Automatic timeout returns to previous screen
-- No LVGL widgets (allows strip decoder to write directly to display)
-- Configured via `display_manager_show_direct_image(timeout_ms)`
-
 ## Rendering System
 
 ### FreeRTOS Task-Based Architecture
@@ -533,8 +527,9 @@ public:
 **GT911_TouchDriver** ([`src/app/drivers/gt911_touch_driver.h/cpp`](../src/app/drivers/gt911_touch_driver.cpp))
 - **Library**: Vendored I2C driver
 - **Hardware**: GT911 multi-touch capacitive controller (up to 5 points, uses 1)
-- **Communication**: I2C (Wire1 bus)
-- **Used by**: ESP32-4848S040 (Guition ESP32-S3, ST7701 RGB 480×480)
+- **Communication**: I2C (compile-time bus selection via `TOUCH_I2C_BUS`: Wire or Wire1)
+- **Optional reset**: Hardware reset via `TOUCH_RST` pin (INT pin selects I2C address)
+- **Used by**: ESP32-4848S040 (Guition ESP32-S3, ST7701 RGB 480×480), ESP32-P4-LCD4B (Waveshare, ST7703 DSI 720×720)
 
 ### Touch Manager
 
@@ -1120,6 +1115,7 @@ src/app/
 │   ├── arduino_gfx_driver.h/cpp          # Arduino_GFX QSPI display (AXS15231B)
 │   ├── arduino_gfx_st77916_driver.h/cpp  # Arduino_GFX ST77916 QSPI display
 │   ├── st7701_rgb_driver.h/cpp           # ST7701 RGB panel display
+│   ├── st7703_dsi_driver.h/cpp           # ST7703 MIPI-DSI display (ESP32-P4)
 │   ├── xpt2046_driver.h/cpp              # XPT2046 resistive touch
 │   ├── axs15231b_touch_driver.h/cpp      # AXS15231B capacitive touch
 │   ├── axs15231b/vendor/                 # Vendored AXS15231B I2C touch

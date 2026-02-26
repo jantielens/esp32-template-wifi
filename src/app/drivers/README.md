@@ -30,6 +30,7 @@ python3 tools/generate-board-driver-table.py --update-drivers-readme
 |---|---|---|---:|---:|---:|---|---|
 | cyd-v2 | TFT_ESPI | ILI9341 | SPI | 320×240 | 1 | XPT2046 | inversion on, gamma fix |
 | esp32-4848S040 | ST7701_RGB | ST7701 | SPI | 480×480 | 0 | GT911 |  |
+| esp32-p4-lcd4b | ST7703_DSI | ST7703 | DSI | 720×720 | 0 | GT911 |  |
 | esp32c3-waveshare-169-st7789v2 | ST7789V2 | ST7789V2 | SPI | 240×280 | 1 | none |  |
 | esp32c3-withsensors | ? | ? | ? | ?×? | ? | ? |  |
 | jc3248w535 | ARDUINO_GFX | AXS15231B | QSPI | 320×480 | 1 | AXS15231B |  |

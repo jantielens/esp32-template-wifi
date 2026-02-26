@@ -155,6 +155,10 @@ def _map_touch_backend(token: str) -> Tuple[str, str]:
 def _detect_bus(defines: Dict[str, str]) -> str:
     if "LCD_QSPI_CS" in defines or "LCD_QSPI_PCLK" in defines:
         return "QSPI"
+    # ST7703 DSI uses MIPI-DSI, not SPI
+    driver = defines.get("DISPLAY_DRIVER", "")
+    if "ST7703_DSI" in driver:
+        return "DSI"
     if any(k.startswith("TFT_") for k in defines.keys()) or "LCD_SCK_PIN" in defines:
         return "SPI"
     return "?"

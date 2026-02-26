@@ -9,11 +9,11 @@
 #include <stdint.h>
 
 // lv_conf.h is included by LVGL's C sources.
-// The project uses true/false-style feature flags (e.g., HAS_IMAGE_API true) in board_config.h
+// The project uses true/false-style feature flags (e.g., HAS_DISPLAY true) in board_config.h
 // and board_overrides.h. In C, those require <stdbool.h> to make true/false available.
 #include <stdbool.h>
 
-// Pull in project feature flags (HAS_DISPLAY, HAS_IMAGE_API, etc.).
+// Pull in project feature flags (HAS_DISPLAY, HAS_TOUCH, etc.).
 // board_config.h will include board_overrides.h when BOARD_HAS_OVERRIDE is set.
 #include "board_config.h"
 
@@ -151,9 +151,10 @@
 #define LV_USE_CHECKBOX   0
 #define LV_USE_DROPDOWN   0
 
-// Image widget support is only needed for the Image API's optional LVGL image screen.
+// Image widget support: required by LV_USE_CANVAS (canvas inherits from lv_img_t,
+// so the img widget must be compiled).
 // Keep it disabled by default to reduce flash size in template builds.
-#if HAS_IMAGE_API
+#if LV_USE_CANVAS
 	#ifndef LV_USE_IMG
 		#define LV_USE_IMG        1
 	#endif

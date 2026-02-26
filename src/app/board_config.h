@@ -253,16 +253,55 @@
 //   DISPLAY_DRIVER_ARDUINO_GFX (4) - Arduino_GFX (QSPI displays like AXS15231B)
 //   DISPLAY_DRIVER_ST7701_RGB (6) - Arduino_GFX ST7701 RGB panel (ESP32-4848S040)
 //   DISPLAY_DRIVER_ARDUINO_GFX_ST77916 (7) - Arduino_GFX ST77916 QSPI 360x360 (JC3636W518)
+//   DISPLAY_DRIVER_ST7703_DSI (8) - Arduino_GFX ST7703 MIPI-DSI (ESP32-P4-WIFI6-Touch-LCD-4B)
 #define DISPLAY_DRIVER_TFT_ESPI 1
 #define DISPLAY_DRIVER_ST7789V2 2
 #define DISPLAY_DRIVER_LOVYANGFX 3
 #define DISPLAY_DRIVER_ARDUINO_GFX 4
 #define DISPLAY_DRIVER_ST7701_RGB 6
 #define DISPLAY_DRIVER_ARDUINO_GFX_ST77916 7
+#define DISPLAY_DRIVER_ST7703_DSI 8
 
 // Select the display HAL backend (one of the DISPLAY_DRIVER_* constants).
 #ifndef DISPLAY_DRIVER
 #define DISPLAY_DRIVER DISPLAY_DRIVER_TFT_ESPI  // Default to TFT_eSPI
+#endif
+
+// DPI pixel clock in Hz for ST7703 MIPI-DSI panels (ESP32-P4 only).
+#ifndef ST7703_DPI_CLK_HZ
+#define ST7703_DPI_CLK_HZ 38000000L
+#endif
+
+// MIPI-DSI lane bit rate in Mbps for ST7703 panels (ESP32-P4 only).
+#ifndef ST7703_LANE_BIT_RATE
+#define ST7703_LANE_BIT_RATE 480
+#endif
+
+// DSI timing defaults for ST7703 panels (ESP32-P4 only).
+// Values from Waveshare BSP, validated on hardware.
+// HSYNC pulse width in pixel clocks.
+#ifndef ST7703_HSYNC_PULSE_WIDTH
+#define ST7703_HSYNC_PULSE_WIDTH 20
+#endif
+// HSYNC back porch in pixel clocks.
+#ifndef ST7703_HSYNC_BACK_PORCH
+#define ST7703_HSYNC_BACK_PORCH 50
+#endif
+// HSYNC front porch in pixel clocks.
+#ifndef ST7703_HSYNC_FRONT_PORCH
+#define ST7703_HSYNC_FRONT_PORCH 50
+#endif
+// VSYNC pulse width in lines.
+#ifndef ST7703_VSYNC_PULSE_WIDTH
+#define ST7703_VSYNC_PULSE_WIDTH 4
+#endif
+// VSYNC back porch in lines.
+#ifndef ST7703_VSYNC_BACK_PORCH
+#define ST7703_VSYNC_BACK_PORCH 20
+#endif
+// VSYNC front porch in lines.
+#ifndef ST7703_VSYNC_FRONT_PORCH
+#define ST7703_VSYNC_FRONT_PORCH 20
 #endif
 
 // ============================================================================
@@ -338,6 +377,18 @@
 #define TOUCH_DRIVER_GT911 5
 #define TOUCH_DRIVER_CST816S_WIRE 6
 
+// Touch reset pin (-1 = no hardware reset, GT911 boots normally).
+#ifndef TOUCH_RST
+#define TOUCH_RST -1
+#endif
+
+// I2C bus for touch controller: 0 = Wire, 1 = Wire1.
+// Default: Wire1 to avoid ISR contention with WiFi on dual-core ESP32.
+// ESP32-P4 can use Wire (bus 0) since WiFi runs on external C6 over SDIO.
+#ifndef TOUCH_I2C_BUS
+#define TOUCH_I2C_BUS 1
+#endif
+
 // Prefer allocating LVGL draw buffer in internal RAM before PSRAM.
 // Default: false (keeps historical PSRAM-first behavior; boards can override).
 // Prefer internal RAM over PSRAM for LVGL draw buffer allocation.
@@ -376,58 +427,6 @@
 // Select the touch HAL backend (one of the TOUCH_DRIVER_* constants).
 #ifndef TOUCH_DRIVER
 #define TOUCH_DRIVER TOUCH_DRIVER_XPT2046  // Default to XPT2046
-#endif
-
-// ============================================================================
-// Image API Configuration
-// ============================================================================
-// Enable web-based image upload and display functionality
-// Requires: HAS_DISPLAY = true
-//
-// Template note (bloat control):
-// - When HAS_IMAGE_API is enabled, the firmware also compiles an optional LVGL-based image screen
-//   (screen id: "lvgl_image") which can display downloaded/uploaded JPEGs via LVGL (lv_img).
-// - LVGL image widget + zoom support are enabled via src/app/lv_conf.h when HAS_IMAGE_API is true.
-// - If you want Image API without the LVGL image widget/zoom code, you can override LVGL config
-//   by setting LV_USE_IMG=0 and/or LV_USE_IMG_TRANSFORM=0 in src/app/lv_conf.h (or via build flags).
-// Adds REST endpoints:
-//   POST   /api/display/image          - Upload full JPEG (deferred decode)
-//   DELETE /api/display/image          - Dismiss current image
-//   POST   /api/display/image/strips   - Upload JPEG strip (synchronous)
-//   POST   /api/display/image_url      - Download JPEG via HTTP/HTTPS (deferred)
-// Enable Image API endpoints (JPEG upload/download/display).
-#ifndef HAS_IMAGE_API
-#define HAS_IMAGE_API false
-#endif
-
-// Image API configuration (only relevant when HAS_IMAGE_API is true)
-// Max bytes accepted for full image uploads (JPEG).
-#ifndef IMAGE_API_MAX_SIZE_BYTES
-#define IMAGE_API_MAX_SIZE_BYTES (100 * 1024)  // 100KB max for full image upload
-#endif
-
-// Extra free RAM required for decoding (bytes).
-#ifndef IMAGE_API_DECODE_HEADROOM_BYTES
-#define IMAGE_API_DECODE_HEADROOM_BYTES (50 * 1024)  // 50KB headroom for decoding
-#endif
-
-// Default image display timeout in milliseconds.
-#ifndef IMAGE_API_DEFAULT_TIMEOUT_MS
-#define IMAGE_API_DEFAULT_TIMEOUT_MS 10000  // 10 seconds default display timeout
-#endif
-
-// Maximum image display timeout in milliseconds.
-#ifndef IMAGE_API_MAX_TIMEOUT_MS
-#define IMAGE_API_MAX_TIMEOUT_MS (86400UL * 1000UL)  // 24 hours max timeout
-#endif
-
-// Image API performance tuning
-// Controls how many rows the strip decoder batches into one LCD transaction.
-// Higher = fewer LCD transactions (faster) but more temporary RAM.
-// Set to 1 to disable batching.
-// Max rows batched per LCD transaction when decoding JPEG strips.
-#ifndef IMAGE_STRIP_BATCH_MAX_ROWS
-#define IMAGE_STRIP_BATCH_MAX_ROWS 16
 #endif
 
 #endif // BOARD_CONFIG_H

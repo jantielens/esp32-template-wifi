@@ -2,15 +2,33 @@
 #define GT911_TOUCH_DRIVER_H
 
 #include "../touch_driver.h"
+#include "../board_config.h"
 
 #include <Wire.h>
 
-// Minimal GT911 capacitive touch driver using Wire1 (I2C bus 1).
+// Minimal GT911 capacitive touch driver.
 //
-// Uses Wire1 to avoid ISR contention with WiFi on Core 0.
-// When Wire (bus 0) is initialized from Core 0, its ISR is pinned there.
-// LVGL polls touch from Core 1, so using bus 0 from Core 1 causes
-// interrupt watchdog timeouts when WiFi is active on Core 0.
+// The I2C bus is selected at compile time via TOUCH_I2C_BUS (board_config.h):
+//   - Bus 1 (Wire1, default): Avoids ISR contention with WiFi on Core 0.
+//     When Wire (bus 0) is initialized from Core 0, its ISR is pinned there.
+//     LVGL polls touch from Core 1, so using bus 0 from Core 1 causes
+//     interrupt watchdog timeouts when WiFi is active on Core 0.
+//   - Bus 0 (Wire): Safe when WiFi runs on a separate co-processor (e.g.,
+//     ESP32-P4 with external ESP32-C6 over SDIO — no I2C ISR contention).
+//
+// Optional hardware reset via TOUCH_RST pin:
+//   - When TOUCH_RST >= 0, the driver toggles the reset pin during init.
+//   - When TOUCH_INT >= 0, the INT pin state during reset selects the I2C
+//     address (LOW → 0x5D, HIGH → 0x14).
+
+// I2C bus abstraction: compile-time Wire/Wire1 selection
+#if TOUCH_I2C_BUS == 0
+#define GT911_WIRE  Wire
+#define GT911_WIRE_NAME "Wire"
+#else
+#define GT911_WIRE  Wire1
+#define GT911_WIRE_NAME "Wire1"
+#endif
 
 class GT911_TouchDriver : public TouchDriver {
 public:

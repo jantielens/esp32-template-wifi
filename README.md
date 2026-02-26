@@ -275,8 +275,6 @@ The hostname is automatically set from the device name and includes the last 4 h
 
 Build-time gating:
 - Display endpoints require `HAS_DISPLAY` (typically set per-board in `src/boards/<board>/board_overrides.h`).
-- Image endpoints require `HAS_DISPLAY` + `HAS_IMAGE_API`.
-- When `HAS_IMAGE_API` is enabled, an optional LVGL image screen (`lvgl_image`) is also compiled and can be selected via `PUT /api/display/screen`.
 
 | Method | Endpoint | Purpose |
 |--------|----------|----------|
@@ -297,10 +295,6 @@ Build-time gating:
 | POST | `/api/display/wake` | Force wake now |
 | POST | `/api/display/activity` | Reset idle timer; optionally wake (`?wake=1`) |
 | PUT | `/api/display/screen` | Switch runtime screen (no persist) |
-| POST | `/api/display/image` | Upload JPEG image for display (full mode - deferred decode) |
-| POST | `/api/display/image_url` | Queue HTTP/HTTPS JPEG download for display (deferred download+decode) |
-| POST | `/api/display/image/strips` | Upload JPEG image strips (memory efficient - async decode) |
-| DELETE | `/api/display/image` | Dismiss currently displayed image |
 
 See [docs/web-portal.md](docs/web-portal.md) for detailed guide.
 
