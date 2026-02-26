@@ -176,6 +176,10 @@ partition_bin_find_offsets() {
         python3 "$parser" "$partitions_bin" --nvs --format hex
         return $?
     fi
+    if [[ "$kind" == "otadata" ]]; then
+        python3 "$parser" "$partitions_bin" --otadata --format hex
+        return $?
+    fi
     return 1
 }
 
@@ -186,6 +190,7 @@ partition_csv_find_offsets() {
     local app_size=""
     local nvs_offset=""
     local nvs_size=""
+    local otadata_offset=""
 
     while IFS=',' read -r name type subtype offset size flags; do
         name=$(trim "${name:-}")
@@ -210,6 +215,12 @@ partition_csv_find_offsets() {
                 nvs_size="$size"
             fi
         fi
+
+        if [[ -z "$otadata_offset" ]]; then
+            if [[ "$name" == "otadata" || ( "$type" == "data" && "$subtype" == "ota" ) ]]; then
+                otadata_offset="$offset"
+            fi
+        fi
     done < "$csv_path"
 
     if [[ -z "$app_offset" ]]; then
@@ -221,6 +232,9 @@ partition_csv_find_offsets() {
     if [[ -n "$nvs_offset" && -n "$nvs_size" ]]; then
         echo "nvs_offset=$nvs_offset"
         echo "nvs_size=$nvs_size"
+    fi
+    if [[ -n "$otadata_offset" ]]; then
+        echo "otadata_offset=$otadata_offset"
     fi
 }
 
@@ -498,24 +512,34 @@ elif [[ "$MODE" == "full" ]]; then
     fi
 
     APP_OFFSET=$(partition_bin_find_offsets "$PARTITIONS_BIN" "app-offset" || true)
-    if [[ -z "$APP_OFFSET" ]]; then
+    OTADATA_OFFSET=$(partition_bin_find_offsets "$PARTITIONS_BIN" "otadata" || true)
+    if [[ -z "$APP_OFFSET" || -z "$OTADATA_OFFSET" ]]; then
         # Backward-compatible fallback to partition CSV.
         PARTITION_CSV=$(get_partition_csv_path "$BOARD_BUILD_PATH" "$FQBN" || true)
         PART_INFO=$(partition_csv_find_offsets "$PARTITION_CSV" || true)
-        APP_OFFSET=$(echo "$PART_INFO" | grep '^app_offset=' | cut -d'=' -f2- || true)
         if [[ -z "$APP_OFFSET" ]]; then
-            echo -e "${RED}Error: Failed to determine app offset for full flash${NC}"
-            echo "Tried: $PARTITIONS_BIN and partition CSV mapping"
-            exit 1
+            APP_OFFSET=$(echo "$PART_INFO" | grep '^app_offset=' | cut -d'=' -f2- || true)
         fi
+        if [[ -z "$OTADATA_OFFSET" ]]; then
+            OTADATA_OFFSET=$(echo "$PART_INFO" | grep '^otadata_offset=' | cut -d'=' -f2- || true)
+        fi
+    fi
+    if [[ -z "$APP_OFFSET" ]]; then
+        echo -e "${RED}Error: Failed to determine app offset for full flash${NC}"
+        echo "Tried: $PARTITIONS_BIN and partition CSV mapping"
+        exit 1
+    fi
+    # Fall back to 0xE000 (standard ESP32 layout) if otadata offset not found.
+    if [[ -z "$OTADATA_OFFSET" ]]; then
+        OTADATA_OFFSET="0xE000"
     fi
 
     BOOTLOADER_OFFSET=$(get_bootloader_offset_for_chip "$CHIP_TYPE")
-    echo -e "${YELLOW}Flashing multi-part image (preserve NVS): bootloader@${BOOTLOADER_OFFSET}, partitions@0x8000, boot_app0@0xE000, app@$APP_OFFSET...${NC}"
+    echo -e "${YELLOW}Flashing multi-part image (preserve NVS): bootloader@${BOOTLOADER_OFFSET}, partitions@0x8000, boot_app0@${OTADATA_OFFSET}, app@$APP_OFFSET...${NC}"
     flash_with_esptool "$CHIP_TYPE" "$PORT" "$ESPTOOL_CMD" "$BAUD_RATE" write-flash -z \
         "$BOOTLOADER_OFFSET" "$BOOTLOADER_BIN" \
         0x8000 "$PARTITIONS_BIN" \
-        0xE000 "$BOOT_APP0_BIN" \
+        "$OTADATA_OFFSET" "$BOOT_APP0_BIN" \
         "$APP_OFFSET" "$APP_BIN"
 elif [[ "$MODE" == "app-only" ]]; then
     APP_BIN="$BOARD_BUILD_PATH/app.ino.bin"

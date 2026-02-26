@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.54] - 2026-02-26
+
+### Fixed
+- GT911 touch: `isTouched()` returned stale cached data — screen saver wake-on-touch broken on ESP32-4848S040 (#73)
+- upload.sh `--full` mode: hardcoded `0xE000` otadata offset corrupts NVS on custom partition layouts; now dynamically resolved from partition table (#74)
+
 ## [0.0.53] - 2026-02-17
 
 ### Added
