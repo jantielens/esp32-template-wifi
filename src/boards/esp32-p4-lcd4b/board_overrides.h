@@ -106,4 +106,13 @@
 #define TOUCH_RST 23
 #define TOUCH_INT -1
 
+// ============================================================================
+// Telemetry tuning (temporary — flicker investigation)
+// ============================================================================
+// Disable ALL background telemetry tasks (CPU monitor, health-window timer,
+// tripwires) to eliminate scheduler contention with the display Present task
+// on Core 0.  /api/health still works with point-in-time values.
+#define DEVICE_TELEMETRY_BACKGROUND_TASKS 0
+#define HEALTH_HISTORY_ENABLED 0
+
 #endif // BOARD_OVERRIDES_ESP32_P4_LCD4B_H

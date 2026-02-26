@@ -204,6 +204,14 @@
 // When enabled, firmware keeps a fixed-size ring buffer for sparklines so the
 // portal can render history even when no client was connected.
 // Default: enabled.
+// Master switch for background telemetry tasks (CPU monitor, health-window
+// timer, tripwires).  Set to 0 on boards where these tasks interfere with
+// real-time display rendering.  /api/health still works — it just returns
+// point-in-time values without min/max window bands or CPU %.
+#ifndef DEVICE_TELEMETRY_BACKGROUND_TASKS
+#define DEVICE_TELEMETRY_BACKGROUND_TASKS 1
+#endif
+
 #ifndef HEALTH_HISTORY_ENABLED
 #define HEALTH_HISTORY_ENABLED 1
 #endif

@@ -162,11 +162,13 @@ void setup()
 	// (e.g., MQTT publish + web API calls).
 	device_telemetry_init();
 
+	#if DEVICE_TELEMETRY_BACKGROUND_TASKS
 	// Start CPU monitoring background task
 	device_telemetry_start_cpu_monitoring();
 
 	// Start 200ms health-window sampling (min/max fields between /api/health polls)
 	device_telemetry_start_health_window_sampling();
+	#endif
 
 	// Try to load saved configuration
 	#if HAS_DISPLAY
@@ -318,8 +320,10 @@ void loop()
 	#endif
 
 
+	#if DEVICE_TELEMETRY_BACKGROUND_TASKS
 	// Lightweight telemetry tripwires (runs from main loop only).
 	device_telemetry_check_tripwires();
+	#endif
 
 	unsigned long current_ms = millis();
 

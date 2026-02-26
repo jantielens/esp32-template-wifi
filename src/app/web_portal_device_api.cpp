@@ -193,8 +193,7 @@ void handleGetHealthHistory(AsyncWebServerRequest *request) {
 
 		#if !HEALTH_HISTORY_ENABLED
 				request->send(404, "application/json", "{\"available\":false}");
-				return;
-		#endif
+		#else
 
 		if (!health_history_available()) {
 				request->send(404, "application/json", "{\"available\":false}");
@@ -273,6 +272,8 @@ void handleGetHealthHistory(AsyncWebServerRequest *request) {
 
 		response->print("}");
 		request->send(response);
+
+		#endif // HEALTH_HISTORY_ENABLED
 }
 
 // POST /api/reboot - Reboot device without saving
