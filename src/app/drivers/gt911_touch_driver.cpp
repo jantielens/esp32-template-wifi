@@ -81,8 +81,9 @@ void GT911_TouchDriver::gt911Read() {
 }
 
 bool GT911_TouchDriver::isTouched() {
-		// Return cached state from last gt911Read() — avoids redundant I2C polling
-		// when getTouch() is called immediately after.
+		// Perform a fresh I2C read so callers outside the LVGL indev callback
+		// (e.g., screen-saver wake poll) get current hardware state.
+		gt911Read();
 		return lastTouched;
 }
 
