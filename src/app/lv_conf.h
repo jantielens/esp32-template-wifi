@@ -224,6 +224,7 @@
     #endif
 #endif
 
+#define LV_USE_ANIMIMG    0  /* Requires LV_USE_IMAGE; we don't use animated images */
 #define LV_USE_IMAGEBUTTON   0
 #define LV_USE_KEYBOARD  0
 #define LV_USE_LABEL      1
