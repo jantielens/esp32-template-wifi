@@ -105,7 +105,11 @@ void setup()
 	LOGI("SYS", "Chip: %s (Rev %d)", ESP.getChipModel(), ESP.getChipRevision());
 	LOGI("SYS", "CPU: %d MHz", ESP.getCpuFreqMHz());
 	LOGI("SYS", "Flash: %d MB", ESP.getFlashChipSize() / (1024 * 1024));
+	// On ESP32-P4 WiFi.macAddress() triggers ESP-Hosted SDIO init which may not
+	// be ready yet; the MAC is logged later upon successful WiFi connection.
+	#ifndef CONFIG_IDF_TARGET_ESP32P4
 	LOGI("SYS", "MAC: %s", WiFi.macAddress().c_str());
+	#endif
 	#if HAS_BUILTIN_LED
 	LOGI("SYS", "LED: GPIO%d (active %s)", LED_PIN, LED_ACTIVE_HIGH ? "HIGH" : "LOW");
 	#endif

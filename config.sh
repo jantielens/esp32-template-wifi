@@ -62,6 +62,7 @@ declare -A FQBN_TARGETS=(
     ["jc3636w518"]="esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB,USBMode=hwcdc,CDCOnBoot=cdc" # ESP32-S3 JC3636W518 (16MB + OPI PSRAM)
     ["esp32c3-withsensors"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb" # ESP32-C3 Super Mini + sensors sample (OTA partitions)
     ["esp32-p4-lcd4b"]="esp32:esp32:esp32p4:FlashSize=32M,PSRAM=enabled,PartitionScheme=ota_8mb_32MB" # ESP32-P4 Waveshare WIFI6-Touch-LCD-4B (720x720 MIPI-DSI + GT911 touch; 32MB + 32MB PSRAM)
+    ["jc4880p433"]="esp32:esp32:esp32p4:FlashSize=16M,PSRAM=enabled,PartitionScheme=ota_6mb_16MB,USBMode=hwcdc,CDCOnBoot=cdc" # ESP32-P4 GUITION JC4880P433 (480x800 MIPI-DSI ST7701 + GT911 touch; 16MB + 32MB PSRAM)
 )
 
 # Default board (used when only one board is configured)
