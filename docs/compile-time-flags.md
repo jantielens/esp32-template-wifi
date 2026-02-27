@@ -22,7 +22,7 @@ This document is a template. Sections marked with `COMPILE_FLAG_REPORT` markers 
 ## Flags (generated)
 
 <!-- BEGIN COMPILE_FLAG_REPORT:FLAGS -->
-Total flags: 159
+Total flags: 160
 
 ### Features (HAS_*)
 
@@ -152,6 +152,7 @@ Total flags: 159
 - **DISPLAY_DRIVER_ILI9341_2** default: `(no default)` — Use the ILI9341_2 controller setup in TFT_eSPI.
 - **DISPLAY_INVERSION_ON** default: `(no default)` — Enable display inversion (panel-specific).
 - **DISPLAY_NEEDS_GAMMA_FIX** default: `(no default)` — Apply gamma correction fix for this panel variant.
+- **DISPLAY_PANEL** default: `(no default)` — Panel IC name string (used by tools/generate-board-driver-table.py for the board→driver table).
 - **HEALTH_HISTORY_ENABLED** default: `1` — Enable device-side health history ring buffer for charting in the web portal
 - **HEALTH_HISTORY_SAMPLES** default: `((HEALTH_HISTORY_SECONDS * 1000) / HEALTH_HISTORY_PERIOD_MS)` — Derived number of samples.
 - **HEALTH_HISTORY_SECONDS** default: `300` — How much client-side history (sparklines) to keep.
@@ -243,6 +244,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/display_manager.cpp
   - src/app/drivers/arduino_gfx_driver.cpp
   - src/app/drivers/arduino_gfx_st77916_driver.cpp
+  - src/app/drivers/mipi_dsi_driver.cpp
   - src/app/drivers/st7701_rgb_driver.cpp
   - src/app/drivers/tft_espi_driver.cpp
 - **HAS_BLE**
@@ -362,6 +364,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
 - **LCD_BL_PIN**
   - src/app/drivers/arduino_gfx_driver.cpp
   - src/app/drivers/arduino_gfx_st77916_driver.cpp
+  - src/app/drivers/mipi_dsi_driver.cpp
   - src/app/drivers/st7701_rgb_driver.cpp
 - **LCD_CS_PIN**
   - src/app/drivers/st7701_rgb_driver.cpp
@@ -372,6 +375,8 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/drivers/arduino_gfx_st77916_driver.cpp
 - **LCD_QSPI_RST**
   - src/app/drivers/arduino_gfx_st77916_driver.cpp
+- **LCD_RST_PIN**
+  - src/app/drivers/mipi_dsi_driver.cpp
 - **LCD_SCK_PIN**
   - src/app/drivers/st7701_rgb_driver.cpp
 - **LD2410_OUT_DEBOUNCE_MS**
@@ -457,6 +462,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
 - **TFT_BACKLIGHT_ON**
   - src/app/drivers/arduino_gfx_driver.cpp
   - src/app/drivers/arduino_gfx_st77916_driver.cpp
+  - src/app/drivers/mipi_dsi_driver.cpp
   - src/app/drivers/st7701_rgb_driver.cpp
   - src/app/drivers/tft_espi_driver.cpp
 - **TFT_BACKLIGHT_PWM_CHANNEL**

@@ -23,6 +23,7 @@
 // Driver Selection (HAL)
 // ============================================================================
 #define DISPLAY_DRIVER DISPLAY_DRIVER_ST7701_DSI
+// Panel IC name string (used by tools/generate-board-driver-table.py for the board→driver table).
 #define DISPLAY_PANEL "ST7701"
 #define TOUCH_DRIVER TOUCH_DRIVER_GT911
 
