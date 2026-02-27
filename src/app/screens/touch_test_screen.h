@@ -28,8 +28,7 @@ class TouchTestScreen : public Screen {
 private:
 		lv_obj_t* screen;
 		lv_obj_t* canvas;
-		lv_color_t* canvasBuf;  // PSRAM-allocated, owned by this screen
-
+	uint8_t* canvasBuf;  // PSRAM-allocated RGB565 buffer, owned by this screen
 		// Header label (screen name + resolution)
 		lv_obj_t* headerLabel;
 

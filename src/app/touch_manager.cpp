@@ -44,8 +44,8 @@ TouchManager::~TouchManager() {
 		}
 }
 
-void TouchManager::readCallback(lv_indev_drv_t* drv, lv_indev_data_t* data) {
-		TouchManager* manager = (TouchManager*)drv->user_data;
+void TouchManager::readCallback(lv_indev_t* indev, lv_indev_data_t* data) {
+		TouchManager* manager = (TouchManager*)lv_indev_get_user_data(indev);
 
 		// Suppress LVGL touch input for a short grace window (e.g., wake-tap swallow).
 		const uint32_t now = millis();
@@ -133,11 +133,13 @@ bool TouchManager::tryRegisterWithLVGL() {
 				return false;
 		}
 
-		lv_indev_drv_init(&indev_drv);
-		indev_drv.type = LV_INDEV_TYPE_POINTER;
-		indev_drv.read_cb = TouchManager::readCallback;
-		indev_drv.user_data = this;
-		indev = lv_indev_drv_register(&indev_drv);
+		// v9 indev API: create → set type → set read_cb → set user_data
+		indev = lv_indev_create();
+		if (indev) {
+				lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
+				lv_indev_set_read_cb(indev, TouchManager::readCallback);
+				lv_indev_set_user_data(indev, this);
+		}
 
 		#if HAS_DISPLAY
 		display_manager_unlock();

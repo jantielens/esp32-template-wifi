@@ -9,6 +9,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.56] - 2026-02-27
+
+### Added
+- LVGL v8.4.0 → v9.5.0 upgrade across all boards
+- DMA2D async flush for ESP32-P4 DSI driver (hardware-accelerated framebuffer copy replaces CPU memcpy)
+- TouchTestScreen ported to LVGL v9 Canvas API (layer-based drawing: `lv_canvas_init_layer` / `lv_draw_rect` / `lv_canvas_finish_layer`)
+- Canvas memory fallback: tries PSRAM first, falls back to internal RAM for non-PSRAM boards (e.g., CYD v2)
+- On-screen error message when canvas allocation fails on memory-constrained devices
+- PPA (Pixel Processing Accelerator) support gated on `SOC_PPA_SUPPORTED` for cross-board compatibility
+- `IRAM_ATTR` for LVGL fast memory gated to ESP32-P4 and ESP32-S3 only (prevents IRAM overflow on classic ESP32)
+- `LV_USE_CANVAS` conditionally enabled only when `HAS_TOUCH` is set
+- TouchTestScreen compilation guarded by `HAS_TOUCH && LV_USE_CANVAS` for clean compile-out
+
+### Changed
+- All LVGL API calls migrated to v9: `lv_display_*`, `lv_screen_load`, `lv_obj_delete`, `lv_indev_active`, `LV_COLOR_FORMAT_RGB565`, etc.
+- Display manager uses v9 `lv_display_create()` / `lv_display_set_buffers()` / `lv_display_set_flush_cb()`
+- Draw buffers use `heap_caps_aligned_alloc()` with 64-byte alignment for PPA/DMA compatibility
+- Touch manager uses v9 `lv_indev_create()` / `lv_indev_set_read_cb()`
+- Flush callback passes v9 stride info to drivers via `flushSrcStride`
+- PNG asset generator updated for LVGL v9 image descriptor format (`lv_image_dsc_t`, `LV_IMAGE_HEADER_MAGIC`)
+- `lv_conf.h` restructured: consolidated draw/rendering, PPA, and widget sections with cross-board conditional compilation
+- ESP32-P4 DSI driver: `pushColors()` uses `esp_lcd_panel_draw_bitmap()` with DMA2D instead of manual memcpy + cache writeback
+
+### Fixed
+- PPA build error on non-P4 boards: `LV_USE_PPA` was unconditionally set to 1
+- IRAM overflow on classic ESP32 (CYD v2): `LV_ATTRIBUTE_FAST_MEM IRAM_ATTR` exceeded `iram0_0_seg` by 16KB
+- `CONFIG_LV_DRAW_BUF_ALIGN` bridge was defined before `LV_USE_PPA`, making it ineffective on ESP32-P4
+- TouchTestScreen canvas allocation failure on non-PSRAM boards (PSRAM-only `heap_caps_malloc`)
+
+### Removed
+- ST7789V2 native SPI display driver (`st7789v2_driver.cpp/h`) and `esp32c3-waveshare-169-st7789v2` board target (hardware no longer in use)
+- Unused `ssidLabel` member from InfoScreen
+
 ## [0.0.55] - 2026-02-26
 
 ### Added

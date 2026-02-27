@@ -31,7 +31,6 @@ python3 tools/generate-board-driver-table.py --update-drivers-readme
 | cyd-v2 | TFT_ESPI | ILI9341 | SPI | 320×240 | 1 | XPT2046 | inversion on, gamma fix |
 | esp32-4848S040 | ST7701_RGB | ST7701 | SPI | 480×480 | 0 | GT911 |  |
 | esp32-p4-lcd4b | ST7703_DSI | ST7703 | DSI | 720×720 | 0 | GT911 |  |
-| esp32c3-waveshare-169-st7789v2 | ST7789V2 | ST7789V2 | SPI | 240×280 | 1 | none |  |
 | esp32c3-withsensors | ? | ? | ? | ?×? | ? | ? |  |
 | jc3248w535 | ARDUINO_GFX | AXS15231B | QSPI | 320×480 | 1 | AXS15231B |  |
 | jc3636w518 | ARDUINO_GFX_ST77916 | ST77916 | QSPI | 360×360 | 0 | CST816S |  |
@@ -51,7 +50,7 @@ Driver filenames are named by the "primary identity" of the implementation:
 - **Library-backend wrappers** are named after the library/backend (because they can support many panels/controllers via configuration):
 	- Examples: `tft_espi_driver.*`, `arduino_gfx_driver.*`
 - **Chip/controller-specific drivers** are named after the controller/panel (because they are tightly coupled to that hardware):
-	- Examples: `st7789v2_driver.*`, `xpt2046_driver.*`, `axs15231b_touch_driver.*`
+	- Examples: `xpt2046_driver.*`, `axs15231b_touch_driver.*`
 - **Hybrid implementations** may include both backend + panel/controller when the implementation is intentionally panel-specific within a backend:
 	- Example: `arduino_gfx_st77916_driver.*`
 

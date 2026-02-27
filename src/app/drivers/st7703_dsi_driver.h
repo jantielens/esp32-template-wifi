@@ -27,7 +27,10 @@
  *   6. esp_lcd_panel_init()        — starts continuous DMA refresh from PSRAM FB
  *   7. esp_lcd_dpi_panel_get_frame_buffer() — LVGL writes pixels here
  * 
- * LVGL flush path: setAddrWindow → pushColors → memcpy to FB → esp_cache_msync
+ * LVGL v9 flush path:
+ *   setAddrWindow → pushColors → esp_lcd_panel_draw_bitmap()
+ *   → DMA2D hardware async copy → on_color_trans_done ISR callback
+ *   → lv_display_flush_ready() (decouples CPU from pixel copy)
  * 
  * Reference: Waveshare ESP32-P4-WIFI6-Touch-LCD-4B (720×720 IPS MIPI-DSI panel)
  */
@@ -71,6 +74,9 @@ private:
     int16_t flushX, flushY;
     uint16_t flushW, flushH;
     
+    // LVGL display pointer (needed for DMA2D completion callback)
+    lv_display_t* lvglDisplay;
+    
 public:
     ST7703_DSI_Driver();
     ~ST7703_DSI_Driver() override;
@@ -89,6 +95,11 @@ public:
     void endWrite() override;
     void setAddrWindow(int16_t x, int16_t y, uint16_t w, uint16_t h) override;
     void pushColors(uint16_t* data, uint32_t len, bool swap_bytes = true) override;
+    
+    // DMA2D async flush: draw_bitmap returns before copy completes;
+    // on_color_trans_done callback signals lv_display_flush_ready().
+    void configureLVGL(lv_display_t* disp, uint8_t rotation) override;
+    bool asyncFlush() const override;
 };
 
 #endif // ST7703_DSI_DRIVER_H

@@ -21,7 +21,7 @@ ESP32 Arduino development template using `arduino-cli` for headless builds. Desi
   - `touch_manager.cpp/h` - Touch input registration and calibration
   - `display_drivers.cpp` - Sketch-root “translation unit” that conditionally includes exactly one selected display driver `.cpp`
   - `touch_drivers.cpp` - Sketch-root “translation unit” that conditionally includes exactly one selected touch driver `.cpp`
-  - `drivers/` - Driver implementations (TFT_eSPI, ST7789V2, Arduino_GFX, ST77916, ST7701, ST7703_DSI, XPT2046, AXS15231B, CST816S, GT911)
+  - `drivers/` - Driver implementations (TFT_eSPI, Arduino_GFX, ST77916, ST7701, ST7703_DSI, XPT2046, AXS15231B, CST816S, GT911)
   - `screens/` - Screen base class and implementations (splash, info, test, touch test)
   - Conditional compilation: Only selected drivers are compiled via `display_drivers.cpp` / `touch_drivers.cpp` (Arduino doesn’t auto-compile subdir `.cpp`)
 - **Power + Transport Subsystem**: Power modes, BLE/MQTT transport selection, and duty-cycle runtime
@@ -42,7 +42,6 @@ ESP32 Arduino development template using `arduino-cli` for headless builds. Desi
 - **Board Targets**: Multi-board support via `FQBN_TARGETS` associative array in `config.sh`
   - Board name → FQBN mapping allows multiple board variants with same FQBN
   - `["esp32-nodisplay"]="esp32:esp32:esp32"` → `build/esp32-nodisplay/` (ESP32 Dev Module, no display)
-  - `["esp32c3-waveshare-169-st7789v2"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"` → `build/esp32c3-waveshare-169-st7789v2/` (ESP32-C3 Super Mini + Waveshare 1.69" ST7789V2 240x280)
   - `["esp32c6"]="esp32:esp32:esp32c6:CDCOnBoot=cdc"` → `build/esp32c6/` (ESP32-C6 Dev Module)
   - `["cyd-v2"]="esp32:esp32:esp32"` → `build/cyd-v2/` (CYD v2 - same FQBN as esp32, different config)
   - `["esp32-p4-lcd4b"]="esp32:esp32:esp32p4:FlashSize=32M,PSRAM=enabled,PartitionScheme=ota_8mb_32MB"` → `build/esp32-p4-lcd4b/` (Waveshare ESP32-P4-WIFI6-Touch-LCD-4B, 720×720 MIPI-DSI + GT911 touch, 32MB Flash + 32MB PSRAM)
@@ -61,19 +60,19 @@ ESP32 Arduino development template using `arduino-cli` for headless builds. Desi
 
 # Or build specific board
 ./build.sh esp32-nodisplay                   # Compile for ESP32 Dev Module (no display)
-./build.sh esp32c3-waveshare-169-st7789v2    # Compile for ESP32-C3 Super Mini + Waveshare 1.69" ST7789V2
+./build.sh cyd-v2                            # Compile for CYD v2 display board
 ./build.sh esp32c6      # Compile for ESP32-C6 Dev Module
 
 # Upload (board name required when multiple boards configured)
 ./upload.sh esp32-nodisplay                   # Auto-detects /dev/ttyUSB0 or /dev/ttyACM0
-./upload.sh esp32c3-waveshare-169-st7789v2    # Auto-detects /dev/ttyUSB0 or /dev/ttyACM0
+./upload.sh cyd-v2                            # Auto-detects /dev/ttyUSB0 or /dev/ttyACM0
 
 # Monitor
 ./monitor.sh            # Serial monitor at 115200 baud
 
 # Convenience scripts
 ./bum.sh esp32-nodisplay                   # Build + Upload + Monitor
-./um.sh esp32c3-waveshare-169-st7789v2    # Upload + Monitor
+./um.sh cyd-v2                             # Upload + Monitor
 ```
 
 All scripts use absolute paths via `SCRIPT_DIR` resolution - they work from any directory.
@@ -191,7 +190,6 @@ See `docs/wsl-development.md` for complete USB/IP setup guide.
 - `src/app/display_drivers.cpp` - Display driver compilation unit (selected driver `.cpp` includes live here)
 - `src/app/touch_drivers.cpp` - Touch driver compilation unit (selected driver `.cpp` includes live here)
 - `src/app/drivers/tft_espi_driver.cpp/h` - TFT_eSPI display driver (hardware rotation)
-- `src/app/drivers/st7789v2_driver.cpp/h` - ST7789V2 native SPI driver (software rotation)
 - `src/app/drivers/xpt2046_driver.cpp/h` - XPT2046 resistive touch driver
 - `src/app/drivers/arduino_gfx_driver.cpp/h` - Arduino_GFX display backend (AXS15231B QSPI)
 - `src/app/drivers/arduino_gfx_st77916_driver.cpp/h` - Arduino_GFX ST77916 QSPI display driver (JC3636W518)

@@ -116,7 +116,7 @@ esp32-template-wifi/
 ├── bin/                           # Local arduino-cli installation
 ├── build/                         # Compiled firmware binaries
 │   ├── esp32-nodisplay/           # ESP32 Dev Module builds (no display)
-│   └── esp32c3-waveshare-169-st7789v2/  # ESP32-C3 + Waveshare 1.69\" ST7789V2 builds
+│   └── cyd-v2/                    # CYD v2 display board builds
 ├── docs/                          # Documentation
 │   └── *.md                        # Guides (scripts, web portal, sensors, etc.)
 ├── src/
@@ -325,7 +325,6 @@ The project supports multiple ESP32 board variants configured in `config.sh` (or
 # Default configuration includes:
 declare -A FQBN_TARGETS=(
   ["esp32-nodisplay"]="esp32:esp32:esp32"  # ESP32 Dev Module (no display)
-  ["esp32c3-waveshare-169-st7789v2"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"  # ESP32-C3 + Waveshare 1.69\" ST7789V2
   ["esp32c3_ota_1_9mb"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb"  # ESP32-C3 Super Mini (custom partitions)
   ["cyd-v2"]="esp32:esp32:esp32"  # CYD v2 (same FQBN, different board_overrides.h)
 )
@@ -352,7 +351,7 @@ This template includes an optional custom partition table to increase OTA app pa
 
 **Board Override Macros & Includes:**
 - If `src/boards/<board>/` exists, `build.sh` adds it to the include path and defines:
-  - `BOARD_<BOARDNAME>` (uppercased, e.g., `BOARD_ESP32C3_WAVESHARE_169_ST7789V2`)
+  - `BOARD_<BOARDNAME>` (uppercased, e.g., `BOARD_CYD_V2`)
   - `BOARD_HAS_OVERRIDE` (allows `src/app/board_config.h` to include `board_overrides.h`)
 - These flags are applied to both C++ and C compilation units (LVGL is built as C), so LVGL config can also react to board overrides.
 - No changes needed in `app.ino`; overrides are pulled automatically.
@@ -364,11 +363,11 @@ This template includes an optional custom partition table to increase OTA app pa
 
 # Build specific board
 ./build.sh esp32-nodisplay
-./build.sh esp32c3-waveshare-169-st7789v2
+./build.sh cyd-v2
 
 # Upload to specific board
 ./upload.sh esp32-nodisplay
-./upload.sh esp32c3-waveshare-169-st7789v2 /dev/ttyACM0  # With explicit port
+./upload.sh cyd-v2 /dev/ttyACM0  # With explicit port
 ```
 
 ### Board-Specific Configuration

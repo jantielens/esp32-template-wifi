@@ -165,11 +165,11 @@ void loop() {
 This project selects display backends via a single selector macro in `board_overrides.h`:
 
 ```cpp
-// Board A override (example: native ST7789V2 SPI)
+// Board A override (example: Arduino_GFX QSPI)
 #define HAS_DISPLAY true
-#define DISPLAY_DRIVER DISPLAY_DRIVER_ST7789V2
-#define DISPLAY_WIDTH 240
-#define DISPLAY_HEIGHT 280
+#define DISPLAY_DRIVER DISPLAY_DRIVER_ARDUINO_GFX
+#define DISPLAY_WIDTH 320
+#define DISPLAY_HEIGHT 480
 
 // Board B override (example: TFT_eSPI backend, controller configured separately)
 #define HAS_DISPLAY true
@@ -185,8 +185,8 @@ If you need compile-time backend-specific logic, use the selector value:
 #include "board_config.h"
 
 #if HAS_DISPLAY
-  #if DISPLAY_DRIVER == DISPLAY_DRIVER_ST7789V2
-    // Native ST7789V2-specific compile-time tweaks
+  #if DISPLAY_DRIVER == DISPLAY_DRIVER_ARDUINO_GFX
+    // Arduino_GFX-specific compile-time tweaks
   #elif DISPLAY_DRIVER == DISPLAY_DRIVER_TFT_ESPI
     // TFT_eSPI-specific compile-time tweaks
   #endif
@@ -198,7 +198,7 @@ Driver implementations are conditionally compiled via the sketch-root translatio
 **Build Detection**: The build script automatically:
 1. Checks if `src/boards/[board-name]/` directory exists
 2. Adds it to the compiler include path with `-I` flag (for both C++ and C compilation units)
-3. Defines `BOARD_<BOARDNAME>` (uppercased, e.g., `BOARD_ESP32C3_WAVESHARE_169_ST7789V2`) and `BOARD_HAS_OVERRIDE=1` (for both C++ and C compilation units)
+3. Defines `BOARD_<BOARDNAME>` (uppercased, e.g., `BOARD_CYD_V2`) and `BOARD_HAS_OVERRIDE=1` (for both C++ and C compilation units)
 4. `src/app/board_config.h` includes `board_overrides.h` first (Phase 1)
 5. Default values are defined with `#ifndef` guards so overrides take precedence (Phase 2)
 6. If no override directory exists, uses defaults only
@@ -221,7 +221,7 @@ Driver implementations are conditionally compiled via the sketch-root translatio
 **Usage Examples:**
 ```bash
 BOARD_PROFILE=psram ./build.sh esp32-nodisplay
-PROFILE=16m ./build.sh esp32c3-waveshare-169-st7789v2
+PROFILE=16m ./build.sh esp32c3-withsensors
 ```
 
 **Example Implementation:**
@@ -238,7 +238,7 @@ get_build_props_for_board() {
             echo "--build-property"
             echo "compiler.cpp.extra_flags=-mfix-esp32-psram-cache-issue"
             ;;
-      esp32c3-waveshare-169-st7789v2:16m)
+      esp32c3-withsensors:16m)
             echo "--build-property"
             echo "build.flash_size=16MB"
             ;;
@@ -414,7 +414,7 @@ git push origin v0.0.5
 ```
 
 **What happens automatically**:
-- GitHub Actions builds firmware for all boards (e.g., esp32-nodisplay, esp32c3-waveshare-169-st7789v2, cyd-v2)
+- GitHub Actions builds firmware for all boards (e.g., esp32-nodisplay, cyd-v2, jc3636w518)
 - Extracts changelog section for v0.0.5
 - Creates GitHub Release with:
   - `esp32-template-esp32-nodisplay-v0.0.5.bin` (app-only)

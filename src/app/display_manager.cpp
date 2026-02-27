@@ -12,8 +12,6 @@
 // Driver implementations are compiled via src/app/display_drivers.cpp.
 #if DISPLAY_DRIVER == DISPLAY_DRIVER_TFT_ESPI
 #include "drivers/tft_espi_driver.h"
-#elif DISPLAY_DRIVER == DISPLAY_DRIVER_ST7789V2
-#include "drivers/st7789v2_driver.h"
 #elif DISPLAY_DRIVER == DISPLAY_DRIVER_ARDUINO_GFX
 #include "drivers/arduino_gfx_driver.h"
 #elif DISPLAY_DRIVER == DISPLAY_DRIVER_ARDUINO_GFX_ST77916
@@ -38,17 +36,15 @@ static uint16_t g_perf_frames_in_window = 0;
 DisplayManager* displayManager = nullptr;
 
 DisplayManager::DisplayManager(DeviceConfig* cfg) 
-		: driver(nullptr), config(cfg), currentScreen(nullptr), previousScreen(nullptr), pendingScreen(nullptr), 
+		: driver(nullptr), display(nullptr), config(cfg), currentScreen(nullptr), previousScreen(nullptr), pendingScreen(nullptr), 
 			infoScreen(cfg, this), testScreen(this), fpsScreen(this),
 							lvglTaskHandle(nullptr), lvglTaskAlloc{}, lvglMutex(nullptr),
 						presentTaskHandle(nullptr), presentTaskAlloc{}, presentSem(nullptr), sharedLvTimerUs(0),
-						screenCount(0), buf(nullptr), flushPending(false), pendingSplashStatusSet(false) {
+						screenCount(0), buf(nullptr), buf2(nullptr), flushPending(false), pendingSplashStatusSet(false) {
 				pendingSplashStatus[0] = '\0';
 		// Instantiate selected display driver
 		#if DISPLAY_DRIVER == DISPLAY_DRIVER_TFT_ESPI
 		driver = new TFT_eSPI_Driver();
-		#elif DISPLAY_DRIVER == DISPLAY_DRIVER_ST7789V2
-		driver = new ST7789V2_Driver();
 		#elif DISPLAY_DRIVER == DISPLAY_DRIVER_ARDUINO_GFX
 		driver = new Arduino_GFX_Driver();
 		#elif DISPLAY_DRIVER == DISPLAY_DRIVER_ARDUINO_GFX_ST77916
@@ -69,7 +65,7 @@ DisplayManager::DisplayManager(DeviceConfig* cfg)
 		availableScreens[1] = {"test", "Display Test", &testScreen};
 		availableScreens[2] = {"fps", "FPS Benchmark", &fpsScreen};
 		screenCount = 3;
-		#if HAS_TOUCH
+		#if HAS_TOUCH && LV_USE_CANVAS
 		availableScreens[screenCount++] = {"touch_test", "Touch Test", &touchTestScreen};
 		#endif
 }
@@ -99,7 +95,7 @@ DisplayManager::~DisplayManager() {
 		infoScreen.destroy();
 		testScreen.destroy();
 		fpsScreen.destroy();
-		#if HAS_TOUCH
+		#if HAS_TOUCH && LV_USE_CANVAS
 		touchTestScreen.destroy();
 		#endif
 		
@@ -115,10 +111,14 @@ DisplayManager::~DisplayManager() {
 				lvglMutex = nullptr;
 		}
 		
-		// Free LVGL buffer
+		// Free LVGL buffers
 		if (buf) {
 				heap_caps_free(buf);
 				buf = nullptr;
+		}
+		if (buf2) {
+				heap_caps_free(buf2);
+				buf2 = nullptr;
 		}
 }
 
@@ -140,29 +140,35 @@ const char* DisplayManager::getScreenIdForInstance(const Screen* screen) const {
 		return nullptr;
 }
 
-// LVGL flush callback
-void DisplayManager::flushCallback(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p) {
-		DisplayManager* mgr = (DisplayManager*)disp->user_data;
+// LVGL v9 flush callback
+void DisplayManager::flushCallback(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map) {
+		DisplayManager* mgr = (DisplayManager*)lv_display_get_user_data(disp);
 
 		uint32_t w = (area->x2 - area->x1 + 1);
 		uint32_t h = (area->y2 - area->y1 + 1);
 		
+		// v9 stride: rows in px_map may be padded for cache-line alignment.
+		// Tell the driver so it can advance the source pointer correctly.
+		uint32_t stride = lv_draw_buf_width_to_stride(w, lv_display_get_color_format(disp));
+		mgr->driver->flushSrcStride = stride;
+		
 		// Push pixels to display via driver HAL.
-		// swap_bytes differs: framebuffer drivers already have correct byte order,
-		// direct SPI drivers need the swap.
 		bool swap = (mgr->driver->renderMode() != DisplayDriver::RenderMode::Buffered);
 		mgr->driver->startWrite();
 		mgr->driver->setAddrWindow(area->x1, area->y1, w, h);
-		mgr->driver->pushColors((uint16_t *)&color_p->full, w * h, swap);
+		mgr->driver->pushColors((uint16_t *)px_map, w * h, swap);
 		mgr->driver->endWrite();
 
 		// Signal that the driver may need a post-render present() step.
-		// For Direct render-mode drivers this is harmless (present() is a no-op).
 		if (mgr) {
 				mgr->flushPending = true;
 		}
 		
-		lv_disp_flush_ready(disp);
+		// For async drivers (DMA2D), flush_ready is called from the DMA
+		// completion callback.  For sync drivers, signal it here.
+		if (!mgr->driver->asyncFlush()) {
+				lv_display_flush_ready(disp);
+		}
 }
 
 bool DisplayManager::isInLvglTask() const {
@@ -279,6 +285,8 @@ void DisplayManager::lvglTask(void* pvParameter) {
 								const uint32_t elapsed = now_ms - g_perf_window_start_ms;
 								if (elapsed >= 1000) {
 										const uint16_t fps = g_perf_frames_in_window;
+										
+
 										portENTER_CRITICAL(&g_perf_mux);
 										g_perf.fps = fps;
 										g_perf.lv_timer_us = lv_timer_us;
@@ -390,77 +398,85 @@ void DisplayManager::initHardware() {
 }
 
 void DisplayManager::initLVGL() {
-		LOGI("Display", "LVGL init start");
+		LOGI("Display", "LVGL v9 init start");
 		
 		lv_init();
+
+		// Register tick callback (replaces v8 LV_TICK_CUSTOM macro)
+		lv_tick_set_cb([]() -> uint32_t { return (uint32_t)millis(); });
 		
-		// Allocate LVGL draw buffer.
-		// Some QSPI panels/drivers require internal RAM for flush reliability.
+		// Create display object (v9 API: resolution set at creation)
+		display = lv_display_create(driver->width(), driver->height());
+		if (!display) {
+				LOGE("Display", "Failed to create lv_display");
+				return;
+		}
+		
+		// Set flush callback and user data
+		lv_display_set_flush_cb(display, DisplayManager::flushCallback);
+		lv_display_set_user_data(display, this);
+		
+		// Allocate LVGL draw buffer(s).
+		// v9 uses raw byte buffers; size = pixels × bytes_per_pixel (2 for RGB565).
+		// Buffers must be aligned to LV_DRAW_BUF_ALIGN (64 bytes on P4) for PPA DMA.
+		const size_t buf_size_bytes = LVGL_BUFFER_SIZE * sizeof(uint16_t);
+		const size_t buf_align = LV_DRAW_BUF_ALIGN;
+		
 		if (LVGL_BUFFER_PREFER_INTERNAL) {
-				buf = (lv_color_t*)heap_caps_malloc(LVGL_BUFFER_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+				buf = (uint8_t*)heap_caps_aligned_alloc(buf_align, buf_size_bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
 				if (!buf) {
 						LOGW("Display", "Internal RAM alloc failed, trying PSRAM...");
-						buf = (lv_color_t*)heap_caps_malloc(LVGL_BUFFER_SIZE * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
+						buf = (uint8_t*)heap_caps_aligned_alloc(buf_align, buf_size_bytes, MALLOC_CAP_SPIRAM);
 				}
 		} else {
-				// Default: PSRAM first, fallback to internal.
-				buf = (lv_color_t*)heap_caps_malloc(LVGL_BUFFER_SIZE * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
+				buf = (uint8_t*)heap_caps_aligned_alloc(buf_align, buf_size_bytes, MALLOC_CAP_SPIRAM);
 				if (!buf) {
 						LOGW("Display", "PSRAM alloc failed, trying internal RAM...");
-						buf = (lv_color_t*)heap_caps_malloc(LVGL_BUFFER_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+						buf = (uint8_t*)heap_caps_aligned_alloc(buf_align, buf_size_bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
 				}
 		}
 		if (!buf) {
 				LOGE("Display", "Failed to allocate LVGL buffer");
 				return;
 		}
-		LOGI("Display", "Buffer allocated: %d bytes (%d pixels)", LVGL_BUFFER_SIZE * sizeof(lv_color_t), LVGL_BUFFER_SIZE);
+		LOGI("Display", "Buffer allocated: %d bytes (%d pixels, align=%d)", buf_size_bytes, LVGL_BUFFER_SIZE, buf_align);
 		
 		// Allocate second buffer for double-buffering if configured
-		lv_color_t* buf2 = NULL;
+		buf2 = NULL;
 		#if defined(LVGL_DRAW_BUF_COUNT) && LVGL_DRAW_BUF_COUNT == 2
 		if (LVGL_BUFFER_PREFER_INTERNAL) {
-				buf2 = (lv_color_t*)heap_caps_malloc(LVGL_BUFFER_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+				buf2 = (uint8_t*)heap_caps_aligned_alloc(buf_align, buf_size_bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
 		} else {
-				buf2 = (lv_color_t*)heap_caps_malloc(LVGL_BUFFER_SIZE * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
+				buf2 = (uint8_t*)heap_caps_aligned_alloc(buf_align, buf_size_bytes, MALLOC_CAP_SPIRAM);
 		}
 		if (buf2) {
-				LOGI("Display", "Second buffer allocated for double-buffering: %d bytes", LVGL_BUFFER_SIZE * sizeof(lv_color_t));
+				LOGI("Display", "Second buffer allocated for double-buffering: %d bytes", buf_size_bytes);
 		} else {
 				LOGW("Display", "Failed to allocate second buffer - using single-buffering");
 		}
 		#endif
 		
-		lv_disp_draw_buf_init(&draw_buf, buf, buf2, LVGL_BUFFER_SIZE);
+		// Set buffers on display (v9 API)
+		lv_display_set_buffers(display, buf, buf2, buf_size_bytes, LV_DISPLAY_RENDER_MODE_PARTIAL);
+		
+		// Let driver set up hardware-specific LVGL configuration
+		driver->configureLVGL(display, DISPLAY_ROTATION);
 		
 		// Initialize default theme (dark mode with custom primary color)
+		// v9: lv_theme_default_init takes lv_display_t* (not NULL)
 		lv_theme_t* theme = lv_theme_default_init(
-				NULL,                           // Display (use default)
+				display,                        // Display
 				lv_color_hex(0x3399FF),        // Primary color (light blue)
 				lv_color_hex(0x303030),        // Secondary color (dark gray)
 				true,                           // Dark mode
 				LV_FONT_DEFAULT                // Default font
 		);
-		lv_disp_set_theme(NULL, theme);
+		lv_display_set_theme(display, theme);
 		LOGI("Display", "Theme: Default dark mode initialized");
 		
-		// Set up display driver
-		lv_disp_drv_init(&disp_drv);
-		disp_drv.hor_res = driver->width();
-		disp_drv.ver_res = driver->height();
-		disp_drv.flush_cb = DisplayManager::flushCallback;
-		disp_drv.draw_buf = &draw_buf;
-		disp_drv.user_data = this;  // Pass instance for callback
-		
-		// Let driver set up hardware-specific LVGL configuration
-		driver->configureLVGL(&disp_drv, DISPLAY_ROTATION);
-		
-		lv_disp_drv_register(&disp_drv);
-		
 		// Override LVGL refresh period if board specifies a custom value.
-		// LVGL 8.4 default is 30 ms; display-heavy boards benefit from 15 ms.
 		#ifdef LVGL_REFR_PERIOD_MS
-		lv_timer_set_period(_lv_disp_get_refr_timer(NULL), LVGL_REFR_PERIOD_MS);
+		lv_timer_set_period(lv_display_get_refr_timer(display), LVGL_REFR_PERIOD_MS);
 		LOGI("Display", "Refresh period: %d ms", LVGL_REFR_PERIOD_MS);
 		#endif
 		
@@ -472,7 +488,7 @@ void DisplayManager::initLVGL() {
 				 "single-buffered"
 				 #endif
 		);
-		LOGI("Display", "LVGL init complete");
+		LOGI("Display", "LVGL v9 init complete");
 }
 
 void DisplayManager::init() {
@@ -489,7 +505,7 @@ void DisplayManager::init() {
 		infoScreen.create();
 	testScreen.create();
 		fpsScreen.create();
-		#if HAS_TOUCH
+		#if HAS_TOUCH && LV_USE_CANVAS
 		touchTestScreen.create();
 		#endif
 
@@ -502,15 +518,15 @@ void DisplayManager::init() {
 		// On single-core: runs on Core 0 (time-sliced with Arduino loop)
 		// Stack allocated in PSRAM when available to save internal RAM (~8 KB).
 		#if CONFIG_FREERTOS_UNICORE
-	if (!rtos_create_task_psram_stack(lvglTask, "LVGL", 8192, this, 1, &lvglTaskHandle, &lvglTaskAlloc)) {
-				xTaskCreate(lvglTask, "LVGL", 8192, this, 1, &lvglTaskHandle);
+	if (!rtos_create_task_psram_stack(lvglTask, "LVGL", 8192, this, LVGL_TASK_PRIORITY, &lvglTaskHandle, &lvglTaskAlloc)) {
+				xTaskCreate(lvglTask, "LVGL", 8192, this, LVGL_TASK_PRIORITY, &lvglTaskHandle);
 				LOGI("Display", "Rendering task created (single-core, internal stack)");
 		} else {
 				LOGI("Display", "Rendering task created (single-core, PSRAM stack)");
 		}
 		#else
-		if (!rtos_create_task_psram_stack_pinned(lvglTask, "LVGL", 8192, this, 1, &lvglTaskHandle, &lvglTaskAlloc, LVGL_TASK_CORE)) {
-				xTaskCreatePinnedToCore(lvglTask, "LVGL", 8192, this, 1, &lvglTaskHandle, LVGL_TASK_CORE);
+		if (!rtos_create_task_psram_stack_pinned(lvglTask, "LVGL", 8192, this, LVGL_TASK_PRIORITY, &lvglTaskHandle, &lvglTaskAlloc, LVGL_TASK_CORE)) {
+				xTaskCreatePinnedToCore(lvglTask, "LVGL", 8192, this, LVGL_TASK_PRIORITY, &lvglTaskHandle, LVGL_TASK_CORE);
 				LOGI("Display", "Rendering task created (Core %d, internal stack)", LVGL_TASK_CORE);
 		} else {
 				LOGI("Display", "Rendering task created (Core %d, PSRAM stack)", LVGL_TASK_CORE);
@@ -674,6 +690,16 @@ const ScreenInfo* display_manager_get_available_screens(size_t* count) {
 		}
 		if (count) *count = 0;
 		return nullptr;
+}
+
+int DisplayManager::getActiveWidth() const {
+		if (display) return lv_display_get_horizontal_resolution(display);
+		return driver ? driver->width() : 0;
+}
+
+int DisplayManager::getActiveHeight() const {
+		if (display) return lv_display_get_vertical_resolution(display);
+		return driver ? driver->height() : 0;
 }
 
 void display_manager_set_backlight_brightness(uint8_t brightness) {

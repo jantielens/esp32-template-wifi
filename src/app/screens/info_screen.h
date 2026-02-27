@@ -25,7 +25,7 @@ private:
 		// Labels (updated in real-time)
 		lv_obj_t* deviceNameLabel;
 		lv_obj_t* mdnsLabel;
-		lv_obj_t* ssidLabel;
+
 		lv_obj_t* ipLabel;
 		lv_obj_t* versionLabel;
 		lv_obj_t* uptimeLabel;

@@ -24,8 +24,8 @@ void TouchTestScreen::create() {
 		LOGI("TouchTest", "Create start");
 		
 		// Query logical (post-rotation) dimensions from LVGL.
-		canvasWidth  = (uint16_t)lv_disp_get_hor_res(NULL);
-		canvasHeight = (uint16_t)lv_disp_get_ver_res(NULL);
+		canvasWidth  = (uint16_t)lv_display_get_horizontal_resolution(NULL);
+		canvasHeight = (uint16_t)lv_display_get_vertical_resolution(NULL);
 		
 		// Adaptive brush size: ~0.8% of the smaller display dimension, clamped 2-6px
 		uint16_t minDim = canvasWidth < canvasHeight ? canvasWidth : canvasHeight;
@@ -54,7 +54,7 @@ void TouchTestScreen::create() {
 
 void TouchTestScreen::destroy() {
 		if (canvas) {
-				lv_obj_del(canvas);
+				lv_obj_delete(canvas);
 				canvas = nullptr;
 		}
 		if (canvasBuf) {
@@ -62,7 +62,7 @@ void TouchTestScreen::destroy() {
 				canvasBuf = nullptr;
 		}
 		if (screen) {
-				lv_obj_del(screen);
+				lv_obj_delete(screen);
 				screen = nullptr;
 				headerLabel = nullptr;
 		}
@@ -73,25 +73,41 @@ void TouchTestScreen::show() {
 
 		// Allocate canvas buffer in PSRAM (only while this screen is active)
 		if (!canvasBuf) {
-				size_t bufSize = (size_t)canvasWidth * canvasHeight * sizeof(lv_color_t);
-				canvasBuf = (lv_color_t*)heap_caps_malloc(bufSize, MALLOC_CAP_SPIRAM);
+				size_t bufSize = LV_CANVAS_BUF_SIZE(canvasWidth, canvasHeight, 16, 1);
+				// Try PSRAM first, fall back to internal RAM (e.g. CYD v2 has no PSRAM)
+				canvasBuf = (uint8_t*)heap_caps_malloc(bufSize, MALLOC_CAP_SPIRAM);
 				if (!canvasBuf) {
-						LOGE("TouchTest", "Failed to allocate canvas (%u bytes PSRAM)", (unsigned)bufSize);
-						// Show screen anyway (just won't draw)
-						lv_scr_load(screen);
+						canvasBuf = (uint8_t*)heap_caps_malloc(bufSize, MALLOC_CAP_DEFAULT);
+				}
+				if (!canvasBuf) {
+						LOGE("TouchTest", "Failed to allocate canvas (%u bytes)", (unsigned)bufSize);
+						// Show error on screen so the user knows why touch test is unavailable
+						lv_label_set_text(headerLabel, "");
+						lv_obj_align(headerLabel, LV_ALIGN_CENTER, 0, 0);
+						lv_label_set_text_fmt(headerLabel,
+								"Touch Test Unavailable\n\n"
+								"Not enough memory to allocate\n"
+								"canvas buffer (%u KB required).\n\n"
+								"This board may lack PSRAM.",
+								(unsigned)(bufSize / 1024));
+						lv_obj_set_style_text_color(headerLabel, lv_color_make(200, 80, 80), 0);
+						lv_obj_set_style_text_align(headerLabel, LV_TEXT_ALIGN_CENTER, 0);
+						lv_screen_load(screen);
 						return;
 				}
-				LOGI("TouchTest", "Canvas buffer allocated: %u KB PSRAM", (unsigned)(bufSize / 1024));
+				LOGI("TouchTest", "Canvas buffer allocated: %u KB %s",
+						 (unsigned)(bufSize / 1024),
+						 heap_caps_get_free_size(MALLOC_CAP_SPIRAM) > 0 ? "PSRAM" : "internal");
 		}
 
 		// Create or re-create the canvas widget
 		if (canvas) {
-				lv_obj_del(canvas);
+				lv_obj_delete(canvas);
 				canvas = nullptr;
 		}
 
 		canvas = lv_canvas_create(screen);
-		lv_canvas_set_buffer(canvas, canvasBuf, canvasWidth, canvasHeight, LV_IMG_CF_TRUE_COLOR);
+		lv_canvas_set_buffer(canvas, canvasBuf, canvasWidth, canvasHeight, LV_COLOR_FORMAT_RGB565);
 		lv_obj_align(canvas, LV_ALIGN_CENTER, 0, 0);
 
 		// Clear canvas to black
@@ -103,7 +119,7 @@ void TouchTestScreen::show() {
 		lv_obj_add_event_cb(canvas, touchEventCallback, LV_EVENT_RELEASED, this);
 
 		// Move header label to front (above canvas)
-		lv_obj_move_foreground(headerLabel);
+		lv_obj_move_to_index(headerLabel, -1);
 
 		// Reset touch tracking
 		prevTouchValid = false;
@@ -112,7 +128,7 @@ void TouchTestScreen::show() {
 		// from the previous screen (ghost dot prevention).
 		touch_manager_suppress_lvgl_input(200);
 
-		lv_scr_load(screen);
+		lv_screen_load(screen);
 
 		// Log canvas geometry for diagnostics
 		lv_area_t ca;
@@ -126,7 +142,7 @@ void TouchTestScreen::hide() {
 
 		// Free canvas and PSRAM buffer when leaving (zero cost while inactive)
 		if (canvas) {
-				lv_obj_del(canvas);
+				lv_obj_delete(canvas);
 				canvas = nullptr;
 		}
 		if (canvasBuf) {
@@ -165,12 +181,17 @@ void TouchTestScreen::drawDot(int16_t cx, int16_t cy, lv_color_t color, uint8_t 
 		if (x2 >= canvasWidth) x2 = canvasWidth - 1;
 		if (y2 >= canvasHeight) y2 = canvasHeight - 1;
 
-		lv_canvas_draw_rect(canvas, x1, y1, x2 - x1 + 1, y2 - y1 + 1, &rect_dsc);
+		lv_layer_t layer;
+		lv_canvas_init_layer(canvas, &layer);
+		lv_area_t coords = {x1, y1, x2, y2};
+		lv_draw_rect(&layer, &rect_dsc, &coords);
+		lv_canvas_finish_layer(canvas, &layer);
 }
 
 void TouchTestScreen::drawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
 		// Interpolate white dots between two touch points so fast movements don't leave gaps.
 		// Uses a thinner brush so the red touch-point dots remain visible on top.
+		if (!canvas) return;
 		uint8_t lineRadius = (brushRadius > 1) ? brushRadius - 1 : 1;
 
 		int16_t dx = x1 - x0;
@@ -181,12 +202,36 @@ void TouchTestScreen::drawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
 		if (step < 1) step = 1;
 
 		if (dist > step) {
+				// Batch all interpolated dots into a single layer session for performance
+				lv_layer_t layer;
+				lv_canvas_init_layer(canvas, &layer);
+
+				lv_draw_rect_dsc_t rect_dsc;
+				lv_draw_rect_dsc_init(&rect_dsc);
+				rect_dsc.bg_color = lv_color_white();
+				rect_dsc.bg_opa = LV_OPA_COVER;
+				rect_dsc.radius = lineRadius;
+				rect_dsc.border_width = 0;
+
 				int16_t steps = dist / step;
 				for (int16_t i = 1; i < steps; i++) {  // skip endpoints (dots drawn separately)
 						int16_t x = x0 + (int16_t)((int32_t)dx * i / steps);
 						int16_t y = y0 + (int16_t)((int32_t)dy * i / steps);
-						drawDot(x, y, lv_color_white(), lineRadius);
+
+						int16_t lx1 = x - lineRadius;
+						int16_t ly1 = y - lineRadius;
+						int16_t lx2 = x + lineRadius;
+						int16_t ly2 = y + lineRadius;
+						if (lx1 < 0) lx1 = 0;
+						if (ly1 < 0) ly1 = 0;
+						if (lx2 >= canvasWidth) lx2 = canvasWidth - 1;
+						if (ly2 >= canvasHeight) ly2 = canvasHeight - 1;
+
+						lv_area_t coords = {lx1, ly1, lx2, ly2};
+						lv_draw_rect(&layer, &rect_dsc, &coords);
 				}
+
+				lv_canvas_finish_layer(canvas, &layer);
 		}
 }
 
@@ -206,7 +251,7 @@ void TouchTestScreen::touchEventCallback(lv_event_t* e) {
 		}
 
 		// LV_EVENT_PRESSING — finger is down and moving
-		lv_indev_t* indev = lv_indev_get_act();
+		lv_indev_t* indev = lv_indev_active();
 		if (!indev) return;
 
 		lv_point_t point;

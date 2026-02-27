@@ -22,7 +22,7 @@ This document is a template. Sections marked with `COMPILE_FLAG_REPORT` markers 
 ## Flags (generated)
 
 <!-- BEGIN COMPILE_FLAG_REPORT:FLAGS -->
-Total flags: 149
+Total flags: 151
 
 ### Features (HAS_*)
 
@@ -39,7 +39,7 @@ Total flags: 149
 
 ### Selectors (*_DRIVER)
 
-- **DISPLAY_DRIVER** default: `DISPLAY_DRIVER_TFT_ESPI` (values: DISPLAY_DRIVER_ARDUINO_GFX, DISPLAY_DRIVER_ARDUINO_GFX_ST77916, DISPLAY_DRIVER_ST7701_RGB, DISPLAY_DRIVER_ST7703_DSI, DISPLAY_DRIVER_ST7789V2, DISPLAY_DRIVER_TFT_ESPI) — Select the display HAL backend (one of the DISPLAY_DRIVER_* constants).
+- **DISPLAY_DRIVER** default: `DISPLAY_DRIVER_TFT_ESPI` (values: DISPLAY_DRIVER_ARDUINO_GFX, DISPLAY_DRIVER_ARDUINO_GFX_ST77916, DISPLAY_DRIVER_ST7701_RGB, DISPLAY_DRIVER_ST7703_DSI, DISPLAY_DRIVER_TFT_ESPI) — Select the display HAL backend (one of the DISPLAY_DRIVER_* constants).
 - **ILI9341_2_DRIVER** default: `(no default)` — These macros are consumed by the TFT_eSPI library itself.
 - **TOUCH_DRIVER** default: `TOUCH_DRIVER_XPT2046` (values: TOUCH_DRIVER_AXS15231B_I2C, TOUCH_DRIVER_CST816S_WIRE, TOUCH_DRIVER_GT911, TOUCH_DRIVER_XPT2046) — Select the touch HAL backend (one of the TOUCH_DRIVER_* constants).
 
@@ -57,9 +57,8 @@ Total flags: 149
 - **LCD_B2_PIN** default: `(no default)` — RGB Blue 2 pin.
 - **LCD_B3_PIN** default: `(no default)` — RGB Blue 3 pin.
 - **LCD_B4_PIN** default: `(no default)` — RGB Blue 4 pin.
-- **LCD_BL_PIN** default: `(no default)` — LCD backlight pin.
-- **LCD_CS_PIN** default: `(no default)` — LCD SPI CS pin.
-- **LCD_DC_PIN** default: `(no default)` — LCD SPI DC pin.
+- **LCD_BL_PIN** default: `(no default)` — Backlight control pin.
+- **LCD_CS_PIN** default: `(no default)` — SPI CS pin (ST7701 commands).
 - **LCD_DE_PIN** default: `(no default)` — RGB DE pin.
 - **LCD_G0_PIN** default: `(no default)` — RGB Green 0 pin.
 - **LCD_G1_PIN** default: `(no default)` — RGB Green 1 pin.
@@ -68,7 +67,7 @@ Total flags: 149
 - **LCD_G4_PIN** default: `(no default)` — RGB Green 4 pin.
 - **LCD_G5_PIN** default: `(no default)` — RGB Green 5 pin.
 - **LCD_HSYNC_PIN** default: `(no default)` — RGB HSYNC pin.
-- **LCD_MOSI_PIN** default: `(no default)` — LCD SPI MOSI pin.
+- **LCD_MOSI_PIN** default: `(no default)` — SPI MOSI pin (ST7701 commands).
 - **LCD_PCLK_PIN** default: `(no default)` — RGB PCLK pin.
 - **LCD_QSPI_CS** default: `(no default)` — QSPI chip select pin.
 - **LCD_QSPI_D0** default: `(no default)` — QSPI data line 0 pin.
@@ -83,8 +82,8 @@ Total flags: 149
 - **LCD_R2_PIN** default: `(no default)` — RGB Red 2 pin.
 - **LCD_R3_PIN** default: `(no default)` — RGB Red 3 pin.
 - **LCD_R4_PIN** default: `(no default)` — RGB Red 4 pin.
-- **LCD_RST_PIN** default: `(no default)` — LCD reset pin.
-- **LCD_SCK_PIN** default: `(no default)` — LCD SPI SCK pin.
+- **LCD_RST_PIN** default: `(no default)` — Panel Reset
+- **LCD_SCK_PIN** default: `(no default)` — SPI SCK pin (ST7701 commands).
 - **LCD_VSYNC_PIN** default: `(no default)` — RGB VSYNC pin.
 - **LD2410_OUT_PIN** default: `-1` — LD2410 OUT pin (presence). Use -1 to disable.
 - **LED_PIN** default: `2` — GPIO for the built-in LED (only used when HAS_BUILTIN_LED is true).
@@ -147,11 +146,12 @@ Total flags: 149
 - **CONFIG_BT_NIMBLE_ROLE_OBSERVER** default: `(no default)` — NimBLE role: observer
 - **CONFIG_BT_NIMBLE_ROLE_PERIPHERAL** default: `(no default)` — NimBLE role: peripheral (required)
 - **CONFIG_NIMBLE_CPP_LOG_LEVEL** default: `(no default)` — NimBLE C++ wrapper log level
+- **DEVICE_TELEMETRY_BACKGROUND_TASKS** default: `1` — point-in-time values without min/max window bands or CPU %.
 - **DISPLAY_COLOR_ORDER_BGR** default: `(no default)` — Panel uses BGR byte order.
 - **DISPLAY_DRIVER_ILI9341_2** default: `(no default)` — Use the ILI9341_2 controller setup in TFT_eSPI.
 - **DISPLAY_INVERSION_ON** default: `(no default)` — Enable display inversion (panel-specific).
 - **DISPLAY_NEEDS_GAMMA_FIX** default: `(no default)` — Apply gamma correction fix for this panel variant.
-- **HEALTH_HISTORY_ENABLED** default: `1` — Default: enabled.
+- **HEALTH_HISTORY_ENABLED** default: `1` — Enable device-side health history ring buffer for charting in the web portal
 - **HEALTH_HISTORY_SAMPLES** default: `((HEALTH_HISTORY_SECONDS * 1000) / HEALTH_HISTORY_PERIOD_MS)` — Derived number of samples.
 - **HEALTH_HISTORY_SECONDS** default: `300` — How much client-side history (sparklines) to keep.
 - **HEALTH_POLL_INTERVAL_MS** default: `5000` — How often the web UI polls /api/health.
@@ -167,6 +167,8 @@ Total flags: 149
 - **LD2410_OUT_DEBOUNCE_MS** default: `50` — Debounce for LD2410 OUT edge changes (ms).
 - **LED_ACTIVE_HIGH** default: `true` — LED polarity: true if HIGH turns the LED on.
 - **LVGL_TASK_CORE** default: `0` — Core to pin the LVGL render task to on dual-core chips (0 or 1).
+- **LVGL_TASK_PRIORITY** default: `4` — Default 4 matches ESP-IDF BSP convention; keeps rendering above WiFi (pri 2-3).
+- **LV_USE_PERF_MONITOR_POS** default: `(no default)` — LVGL perf monitor alignment.
 - **MEMORY_TRIPWIRE_CHECK_INTERVAL_MS** default: `5000` — How often to check tripwires from the main loop.
 - **POWERON_CONFIG_BURST_ENABLED** default: `false` — Intended for boards WITHOUT a reliable user button.
 - **PROJECT_DISPLAY_NAME** default: `"ESP32 Device"` — Human-friendly project name used in the web UI and device name (can be set by build system).
@@ -201,7 +203,6 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | esp32-nodisplay |  |  |  |  |  | ✅ |  |  |  |  |
 | cyd-v2 | ✅ |  |  |  | ✅ | ✅ |  |  |  | ✅ |
-| esp32c3-waveshare-169-st7789v2 | ✅ |  | ✅ |  | ✅ | ✅ |  |  |  |  |
 | esp32-4848S040 | ✅ |  |  |  | ✅ | ✅ |  |  |  | ✅ |
 | jc3248w535 | ✅ |  |  |  | ✅ | ✅ |  |  |  | ✅ |
 | jc3636w518 | ✅ |  |  |  | ✅ | ✅ |  |  |  | ✅ |
@@ -216,7 +217,6 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
 | --- | --- | --- |
 | esp32-nodisplay | — | — |
 | cyd-v2 | DISPLAY_DRIVER_TFT_ESPI | TOUCH_DRIVER_XPT2046 |
-| esp32c3-waveshare-169-st7789v2 | DISPLAY_DRIVER_ST7789V2 | — |
 | esp32-4848S040 | DISPLAY_DRIVER_ST7701_RGB | TOUCH_DRIVER_GT911 |
 | jc3248w535 | DISPLAY_DRIVER_ARDUINO_GFX | TOUCH_DRIVER_AXS15231B_I2C |
 | jc3636w518 | DISPLAY_DRIVER_ARDUINO_GFX_ST77916 | TOUCH_DRIVER_CST816S_WIRE |
@@ -327,6 +327,9 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/board_config.h
 - **BUTTON_PIN**
   - src/app/board_config.h
+- **DEVICE_TELEMETRY_BACKGROUND_TASKS**
+  - src/app/app.ino
+  - src/app/board_config.h
 - **DISPLAY_INVERSION_ON**
   - src/app/drivers/tft_espi_driver.cpp
 - **DISPLAY_NEEDS_GAMMA_FIX**
@@ -380,6 +383,8 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
 - **LVGL_REFR_PERIOD_MS**
   - src/app/display_manager.cpp
 - **LVGL_TASK_CORE**
+  - src/app/board_config.h
+- **LVGL_TASK_PRIORITY**
   - src/app/board_config.h
 - **LVGL_TICK_PERIOD_MS**
   - src/app/board_config.h

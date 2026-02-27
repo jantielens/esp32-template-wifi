@@ -25,9 +25,9 @@ This document captures research performed while adding support for the **JC3248W
 
 ### ESP32-C3 Super Mini + ST7789 panel (240×280)
 - Display controller: **ST7789V2-class** (SPI)
-- Current approach: **Native ST7789 driver** in this repo.
+- Current approach: **Removed** (board and driver discontinued in v0.0.56).
 - Notes:
-  - This driver includes panel-specific handling (offset/color-order/performance tradeoffs).
+  - This driver was removed along with the esp32c3-waveshare-169-st7789v2 board target.
 
 ## Key Question
 

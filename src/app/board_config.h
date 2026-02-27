@@ -14,7 +14,7 @@
 // The build system will automatically detect and include board-specific overrides.
 //
 // Example board-specific override:
-//   src/boards/esp32c3-waveshare-169-st7789v2/board_overrides.h
+//   src/boards/cyd-v2/board_overrides.h
 
 // ============================================================================
 // Phase 1: Load Board-Specific Overrides
@@ -212,6 +212,7 @@
 #define DEVICE_TELEMETRY_BACKGROUND_TASKS 1
 #endif
 
+// Enable device-side health history ring buffer for charting in the web portal
 #ifndef HEALTH_HISTORY_ENABLED
 #define HEALTH_HISTORY_ENABLED 1
 #endif
@@ -256,14 +257,12 @@
 // Display driver selection
 // Available drivers:
 //   DISPLAY_DRIVER_TFT_ESPI (1) - Bodmer's TFT_eSPI (supports ILI9341, ST7789, etc.)
-//   DISPLAY_DRIVER_ST7789V2 (2) - Native ST7789V2 driver (1.69" IPS LCD 240x280)
 //   DISPLAY_DRIVER_LOVYANGFX (3) - LovyanGFX (future support)
 //   DISPLAY_DRIVER_ARDUINO_GFX (4) - Arduino_GFX (QSPI displays like AXS15231B)
 //   DISPLAY_DRIVER_ST7701_RGB (6) - Arduino_GFX ST7701 RGB panel (ESP32-4848S040)
 //   DISPLAY_DRIVER_ARDUINO_GFX_ST77916 (7) - Arduino_GFX ST77916 QSPI 360x360 (JC3636W518)
-//   DISPLAY_DRIVER_ST7703_DSI (8) - Arduino_GFX ST7703 MIPI-DSI (ESP32-P4-WIFI6-Touch-LCD-4B)
+//   DISPLAY_DRIVER_ST7703_DSI (8) - Direct ESP-IDF ST7703 MIPI-DSI (ESP32-P4-WIFI6-Touch-LCD-4B)
 #define DISPLAY_DRIVER_TFT_ESPI 1
-#define DISPLAY_DRIVER_ST7789V2 2
 #define DISPLAY_DRIVER_LOVYANGFX 3
 #define DISPLAY_DRIVER_ARDUINO_GFX 4
 #define DISPLAY_DRIVER_ST7701_RGB 6
@@ -328,6 +327,12 @@
 // Core to pin the LVGL render task to on dual-core chips (0 or 1).
 #ifndef LVGL_TASK_CORE
 #define LVGL_TASK_CORE 0
+#endif
+
+// FreeRTOS priority for the LVGL render task (1-24, higher = more CPU time).
+// Default 4 matches ESP-IDF BSP convention; keeps rendering above WiFi (pri 2-3).
+#ifndef LVGL_TASK_PRIORITY
+#define LVGL_TASK_PRIORITY 4
 #endif
 
 // ============================================================================

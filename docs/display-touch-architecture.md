@@ -26,7 +26,7 @@ The display and touch subsystem is built on four main pillars:
 4. **Manager Classes** - Centralized management of hardware, LVGL, and lifecycle
 
 **Key Technologies:**
-- **LVGL 8.4** - Embedded graphics library
+- **LVGL 9.5** - Embedded graphics library
 - **TFT_eSPI** - Default display driver (supports ILI9341, ST7789, ST7735, etc.)
 - **XPT2046_Touchscreen** - Resistive touch support
 - **FreeRTOS** - Task-based continuous rendering
@@ -59,7 +59,7 @@ The display and touch subsystem is built on four main pillars:
         ↓                               ↓
 ┌──────────────────┐          ┌──────────────────┐
 │ TFT_eSPI_Driver  │          │ XPT2046_Driver   │
-│ ST7789V2_Driver  │          │ AXS15231B_Touch  │
+│ Arduino_GFX_Drv  │          │ AXS15231B_Touch  │
 │ Arduino_GFX_Drv  │          │ CST816S_Driver   │
 │ ST7701_RGB_Driver│          │ GT911_Driver     │
 │ ST7703_DSI_Driver│          │                  │
@@ -79,7 +79,7 @@ The display and touch subsystem is built on four main pillars:
 └──────────────────┘          └──────────────────┘
         ↓                               ↓
 ┌─────────────────────────────────────────────────────┐
-│  LVGL 8.4                                           │
+│  LVGL 9.5                                           │
 │  - Widget rendering                                 │
 │  - Themes, fonts, animations                       │
 └─────────────────────────────────────────────────────┘
@@ -142,7 +142,7 @@ public:
     // Called during LVGL initialization to allow driver-specific settings
     // such as software rotation, full refresh mode, etc.
     // Default implementation: no special configuration (hardware handles rotation)
-    virtual void configureLVGL(lv_disp_drv_t* drv, uint8_t rotation) {
+    virtual void configureLVGL(lv_display_t* disp, uint8_t rotation) {
         // Override if driver needs software rotation or other LVGL tweaks
     }
 };
@@ -160,32 +160,20 @@ Arduino only compiles `.cpp` files in the sketch root directory. Driver implemen
 The `configureLVGL()` method allows drivers to customize LVGL behavior without modifying DisplayManager code:
 
 **Use Cases:**
-- **Software rotation** - When panel hardware doesn't support rotation via registers (e.g., ST7789V2)
+- **Software rotation** - When panel hardware doesn't support rotation via registers
 - **Full refresh mode** - For e-paper displays that need full-screen updates
 - **Direct mode** - For high-FPS applications bypassing buffering
 - **Custom DPI** - For panels with non-standard pixel density
+- **DMA2D async flush** - Register completion callback for hardware-accelerated framebuffer copy (e.g., ESP32-P4)
 
-**Example: ST7789V2 Software Rotation**
+**Example: ST7703 DSI DMA2D Callback Registration**
 ```cpp
-void ST7789V2_Driver::configureLVGL(lv_disp_drv_t* drv, uint8_t rotation) {
-    // ST7789V2 panel stays in portrait mode (240x280)
-    // LVGL handles rotation via software rendering (more efficient than register updates)
-    switch (rotation) {
-        case 1:  // 90° (landscape)
-            drv->sw_rotate = 1;
-            drv->rotated = LV_DISP_ROT_90;
-            break;
-        case 2:  // 180° (portrait inverted)
-            drv->sw_rotate = 1;
-            drv->rotated = LV_DISP_ROT_180;
-            break;
-        case 3:  // 270° (landscape inverted)
-            drv->sw_rotate = 1;
-            drv->rotated = LV_DISP_ROT_270;
-            break;
-        default:  // 0° (portrait) - no rotation
-            break;
-    }
+void ST7703_DSI_Driver::configureLVGL(lv_display_t* disp, uint8_t rotation) {
+    // Register DMA2D completion callback so LVGL knows the draw buffer
+    // can be recycled once the hardware copy finishes.
+    esp_lcd_dpi_panel_event_callbacks_t cbs = {};
+    cbs.on_color_trans_done = onColorTransDone;
+    ESP_ERROR_CHECK(esp_lcd_dpi_panel_register_event_callbacks(panel_handle, &cbs, disp));
 }
 ```
 
@@ -199,15 +187,19 @@ void ST7789V2_Driver::configureLVGL(lv_disp_drv_t* drv, uint8_t rotation) {
 **DisplayManager Integration:**
 ```cpp
 void DisplayManager::initLVGL() {
-    lv_disp_drv_init(&disp_drv);
-    disp_drv.hor_res = driver->width();   // Post-rotation logical width
-    disp_drv.ver_res = driver->height();  // Post-rotation logical height
-    disp_drv.flush_cb = DisplayManager::flushCallback;
+    lv_init();
+    lv_tick_set_cb([]() -> uint32_t { return (uint32_t)millis(); });
+    
+    display = lv_display_create(driver->width(), driver->height());
+    lv_display_set_flush_cb(display, DisplayManager::flushCallback);
+    lv_display_set_user_data(display, this);
+    
+    // Allocate aligned draw buffer(s)
+    buf = (uint8_t*)heap_caps_aligned_alloc(LV_DRAW_BUF_ALIGN, buf_size_bytes, ...);
+    lv_display_set_buffers(display, buf, buf2, buf_size_bytes, LV_DISPLAY_RENDER_MODE_PARTIAL);
     
     // Call driver's LVGL configuration hook
-    driver->configureLVGL(&disp_drv, DISPLAY_ROTATION);
-    
-    lv_disp_drv_register(&disp_drv);
+    driver->configureLVGL(display, DISPLAY_ROTATION);
 }
 ```
 
@@ -298,7 +290,6 @@ In `board_config.h` or `board_overrides.h`:
 ```cpp
 // Available drivers
 #define DISPLAY_DRIVER_TFT_ESPI 1
-#define DISPLAY_DRIVER_ST7789V2 2
 #define DISPLAY_DRIVER_LOVYANGFX 3
 #define DISPLAY_DRIVER_ARDUINO_GFX 4
 
@@ -643,13 +634,9 @@ public:
         // Board-specific fixes (inversion, gamma, etc.)
     }
     
-    void configureLVGL(lv_disp_drv_t* drv, uint8_t rotation) override {
-        // Override to customize LVGL behavior (e.g., software rotation)
-        // Example: ST7789V2 uses software rotation for landscape mode
-        if (rotation == 1) {
-            drv->sw_rotate = 1;
-            drv->rotated = LV_DISP_ROT_90;
-        }
+    void configureLVGL(lv_display_t* disp, uint8_t rotation) override {
+        // Override to customize LVGL behavior
+        // Example: register DMA2D completion callback for async flush
         // Default: hardware handles rotation via setRotation()
     }
     
@@ -1111,7 +1098,6 @@ src/app/
 ├── lv_conf.h                     # LVGL configuration
 ├── drivers/
 │   ├── tft_espi_driver.h/cpp             # TFT_eSPI display
-│   ├── st7789v2_driver.h/cpp             # ST7789V2 native SPI display
 │   ├── arduino_gfx_driver.h/cpp          # Arduino_GFX QSPI display (AXS15231B)
 │   ├── arduino_gfx_st77916_driver.h/cpp  # Arduino_GFX ST77916 QSPI display
 │   ├── st7701_rgb_driver.h/cpp           # ST7701 RGB panel display

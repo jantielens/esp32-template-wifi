@@ -8,7 +8,7 @@
  * 
  * Replaces what Arduino_GFX's Arduino_ESP32DSIPanel + Arduino_DSI_Display did:
  *   - DSI bus, DBI IO, DPI panel creation → direct esp_lcd_* calls
- *   - draw16bitRGBBitmap()               → memcpy + esp_cache_msync
+ *   - esp_lcd_panel_draw_bitmap()        → DMA2D async copy (cache mgmt internal)
  *   - Panel reset                        → manual GPIO toggle
  * 
  * DSI timing parameters (from verified hardware testing on Waveshare P4 board):
@@ -85,10 +85,21 @@ static const st7703_init_cmd_t st7703_init_operations[] = {
 // ST7703_DSI_Driver HAL Implementation
 // ============================================================================
 
+// DMA2D completion callback — called from ISR when draw_bitmap finishes
+// copying the LVGL buffer into the DPI framebuffer.  Signals LVGL that
+// the draw buffer can be recycled.
+static bool IRAM_ATTR onColorTransDone(esp_lcd_panel_handle_t panel,
+                                       esp_lcd_dpi_panel_event_data_t* edata,
+                                       void* user_ctx) {
+    lv_display_t* disp = (lv_display_t*)user_ctx;
+    lv_display_flush_ready(disp);
+    return false;
+}
+
 ST7703_DSI_Driver::ST7703_DSI_Driver()
     : framebuffer(nullptr), panel_handle(nullptr), currentBrightness(100),
       displayWidth(DISPLAY_WIDTH), displayHeight(DISPLAY_HEIGHT), displayRotation(DISPLAY_ROTATION),
-      backlightOn(false), flushX(0), flushY(0), flushW(0), flushH(0) {
+      backlightOn(false), flushX(0), flushY(0), flushW(0), flushH(0), lvglDisplay(nullptr) {
 }
 
 ST7703_DSI_Driver::~ST7703_DSI_Driver() {
@@ -322,11 +333,11 @@ void ST7703_DSI_Driver::applyDisplayFixes() {
 }
 
 void ST7703_DSI_Driver::startWrite() {
-    // Not needed — draw16bitRGBBitmap handles everything
+    // No-op: esp_lcd_panel_draw_bitmap() in pushColors() handles everything
 }
 
 void ST7703_DSI_Driver::endWrite() {
-    // Not needed — draw16bitRGBBitmap handles everything
+    // No-op: esp_lcd_panel_draw_bitmap() in pushColors() handles everything
 }
 
 void ST7703_DSI_Driver::setAddrWindow(int16_t x, int16_t y, uint16_t w, uint16_t h) {
@@ -338,27 +349,30 @@ void ST7703_DSI_Driver::setAddrWindow(int16_t x, int16_t y, uint16_t w, uint16_t
 }
 
 void ST7703_DSI_Driver::pushColors(uint16_t* data, uint32_t len, bool swap_bytes) {
-    // Direct memcpy to PSRAM framebuffer + cache writeback.
-    // Replaces Arduino_GFX draw16bitRGBBitmap() with identical logic:
-    //   1. Copy pixels from LVGL buffer → PSRAM framebuffer (row by row)
-    //   2. esp_cache_msync() to flush dirty cache lines so DPI DMA sees new pixels
-    if (!framebuffer || !data || flushW == 0 || flushH == 0) {
+    if (!panel_handle || !data || flushW == 0 || flushH == 0) {
         return;
     }
 
-    // Row-by-row copy to framebuffer (rotation 0, no offset)
-    uint16_t* dst = framebuffer + ((int32_t)flushY * displayWidth) + flushX;
-    uint16_t* src = data;
-    for (uint16_t row = 0; row < flushH; row++) {
-        memcpy(dst, src, flushW * sizeof(uint16_t));
-        dst += displayWidth;
-        src += flushW;
-    }
+    // Use esp_lcd_panel_draw_bitmap() which, with use_dma2d=true, offloads
+    // the framebuffer copy to the hardware 2D-DMA engine.  Cache writeback
+    // is handled internally.  Coordinates: inclusive start, exclusive end.
+    esp_lcd_panel_draw_bitmap(panel_handle,
+                              flushX, flushY,
+                              flushX + flushW, flushY + flushH,
+                              data);
+}
 
-    // Writeback dirty cache lines covering the affected framebuffer region.
-    // Range: from first pixel of first row to last pixel of last row.
-    uint16_t* cacheStart = framebuffer + ((int32_t)flushY * displayWidth) + flushX;
-    size_t cacheSize = ((size_t)displayWidth * (flushH - 1) + flushW) * sizeof(uint16_t);
-    esp_cache_msync(cacheStart, cacheSize,
-                    ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
+void ST7703_DSI_Driver::configureLVGL(lv_display_t* disp, uint8_t rotation) {
+    lvglDisplay = disp;
+
+    // Register DMA2D completion callback so LVGL knows the draw buffer
+    // can be recycled once the hardware copy finishes.
+    esp_lcd_dpi_panel_event_callbacks_t cbs = {};
+    cbs.on_color_trans_done = onColorTransDone;
+    ESP_ERROR_CHECK(esp_lcd_dpi_panel_register_event_callbacks(panel_handle, &cbs, disp));
+    LOGI("ST7703", "DMA2D flush callback registered");
+}
+
+bool ST7703_DSI_Driver::asyncFlush() const {
+    return true;
 }

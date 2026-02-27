@@ -31,7 +31,7 @@ def _infer_panel_from_path(include_path: str) -> Optional[str]:
 
     Examples:
     - drivers/arduino_gfx_st77916_driver.cpp -> ST77916
-    - drivers/st7789v2_driver.cpp -> ST7789V2
+    - drivers/st7703_dsi_driver.cpp -> ST7703
     """
 
     stem = Path(include_path).stem
@@ -177,10 +177,6 @@ def _detect_panel(
     # TFT_eSPI boards often declare a controller selection macro.
     if "DISPLAY_DRIVER_ILI9341_2" in defines:
         return "ILI9341"
-
-    # Native ST7789V2 driver is inherently tied to the controller.
-    if display_backend_token == "DISPLAY_DRIVER_ST7789V2":
-        return "ST7789V2"
 
     # If we can infer from the selected driver file, do so.
     cpp_path = display_driver_cpp_by_token.get(display_backend_token)

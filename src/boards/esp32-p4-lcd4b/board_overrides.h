@@ -32,15 +32,11 @@
 #define DISPLAY_HEIGHT 720
 #define DISPLAY_ROTATION 0
 
-// LVGL draw buffer in internal SRAM: 40 lines × single buffer → ~56 KB.
-// Internal RAM eliminates PSRAM L2 cache contention during LVGL rendering,
-// reducing cyan flicker caused by DMA/cache competition on the DSI bus.
-// ESP32-P4 has ~500 KB internal SRAM — 56 KB is well within budget.
-// Double buffering was tested and REJECTED — synchronous CPU memcpy flush
-// causes L2 cache thrashing with PSRAM, dropping FPS from 30 → 20.
-// See docs/esp32-p4-display-performance.md for full test results.
-#define LVGL_BUFFER_PREFER_INTERNAL true
-#define LVGL_BUFFER_SIZE (DISPLAY_WIDTH * 40)
+// LVGL draw buffer: single buffer in PSRAM.
+// With DMA2D flush, PSRAM buffer is fine — the hardware DMA engine handles
+// the copy to the framebuffer without CPU involvement.
+#define LVGL_BUFFER_PREFER_INTERNAL false
+#define LVGL_BUFFER_SIZE (DISPLAY_WIDTH * 80)
 
 // LVGL refresh period — 15 ms (~66 fps target) to match IDF reference projects.
 // Default LVGL 8.4 is 30 ms (~33 fps). Panel hardware supports ~59 fps.

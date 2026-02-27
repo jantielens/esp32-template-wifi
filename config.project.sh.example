@@ -31,7 +31,7 @@ PROJECT_DISPLAY_NAME="My IoT Device"
 #
 # Examples:
 #   ["esp32-nodisplay"]="esp32:esp32:esp32"                                       # Classic ESP32 dev module (no display)
-#   ["esp32c3-waveshare-169-st7789v2"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"  # ESP32-C3 Super Mini + Waveshare 1.69\" ST7789V2
+
 #   ["esp32c3_ota_1_9mb"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb"    # ESP32-C3 w/ custom partitions (example)
 #   ["esp32c6"]="esp32:esp32:esp32c6:CDCOnBoot=cdc"                              # ESP32-C6 (USB CDC)
 #   ["cyd-v2"]="esp32:esp32:esp32"                                                # CYD display v2 (same FQBN as classic ESP32)

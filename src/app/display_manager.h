@@ -10,7 +10,7 @@
 #include "screens/test_screen.h"
 #include "screens/fps_screen.h"
 
-#if HAS_TOUCH
+#if HAS_TOUCH && LV_USE_CANVAS
 #include "screens/touch_test_screen.h"
 #endif
 
@@ -52,9 +52,9 @@ class DisplayManager {
 private:
 		// Hardware (display driver abstraction)
 		DisplayDriver* driver;
-		lv_disp_draw_buf_t draw_buf;
-		lv_color_t* buf;  // Dynamically allocated LVGL buffer
-		lv_disp_drv_t disp_drv;
+		lv_display_t* display;    // v9 display object
+		uint8_t* buf;             // Dynamically allocated LVGL draw buffer
+		uint8_t* buf2;            // Optional second draw buffer (double-buffering)
 		
 		// Configuration reference
 		DeviceConfig* config;
@@ -92,7 +92,7 @@ private:
 		TestScreen testScreen;
 		FpsScreen fpsScreen;
 		
-		#if HAS_TOUCH
+		#if HAS_TOUCH && LV_USE_CANVAS
 		TouchTestScreen touchTestScreen;
 		#endif
 		
@@ -112,7 +112,7 @@ private:
 		void initLVGL();
 		
 		// LVGL flush callback (static, accesses instance via user_data)
-		static void flushCallback(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p);
+		static void flushCallback(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map);
 
 		// Buffered render-mode drivers (e.g., Arduino_GFX canvas) need an explicit
 		// present() step, but only after LVGL has actually rendered something.
@@ -158,10 +158,8 @@ public:
 
 		// Active LVGL logical resolution (post driver->configureLVGL()).
 		// Prefer using these instead of calling LVGL APIs from non-LVGL tasks.
-		int getActiveWidth() const { return (int)disp_drv.hor_res; }
-		int getActiveHeight() const { return (int)disp_drv.ver_res; }
-		
-		// Access to splash screen for status updates
+	int getActiveWidth() const;
+	int getActiveHeight() const;
 		SplashScreen* getSplash() { return &splashScreen; }
 		
 		// Access to display driver (for touch integration)
