@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.57] - 2026-02-27
+
+### Added
+- MIPI-DSI base class (`MipiDsiDriver`) — shared implementation for all ESP32-P4 DSI panels: DSI bus init, DBI command channel, DPI panel with DMA2D async flush, backlight PWM, vendor command sending, and LVGL integration
+- GUITION JC4880P433 (ST7701S) now uses direct ESP-IDF DSI driver (was Arduino_GFX wrapper): ~2× FPS improvement (25 → 44 fps)
+- Per-panel `disable_lp` flag in `MipiDsiTimingConfig`: ST7703 needs `true` (continuous HS mode), ST7701S needs `false` (LP during blanking)
+- `DISPLAY_PANEL` define added to DSI board overrides for generated driver table
+
+### Changed
+- ST7703 DSI driver refactored from standalone ~400-line implementation to thin ~80-line subclass of `MipiDsiDriver`
+- ST7701 DSI driver refactored from Arduino_GFX wrapper to thin ~80-line subclass of `MipiDsiDriver` (vendor init commands extracted from Arduino_GFX source)
+- `display_drivers.cpp` now includes `mipi_dsi_driver.cpp` before each DSI subclass
+
+### Fixed
+- Horizontal jitter (~15px content shifting) on JC4880P433: caused by `disable_lp=true` being hardcoded — ST7701S expects LP signaling during blanking intervals
+- Stale log message in DSI init: `disable_lp=true` was hardcoded in log string instead of reflecting actual per-panel value
+
 ## [0.0.56] - 2026-02-27
 
 ### Added

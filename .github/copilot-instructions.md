@@ -21,7 +21,7 @@ ESP32 Arduino development template using `arduino-cli` for headless builds. Desi
   - `touch_manager.cpp/h` - Touch input registration and calibration
   - `display_drivers.cpp` - Sketch-root “translation unit” that conditionally includes exactly one selected display driver `.cpp`
   - `touch_drivers.cpp` - Sketch-root “translation unit” that conditionally includes exactly one selected touch driver `.cpp`
-  - `drivers/` - Driver implementations (TFT_eSPI, Arduino_GFX, ST77916, ST7701, ST7703_DSI, XPT2046, AXS15231B, CST816S, GT911)
+  - `drivers/` - Driver implementations (TFT_eSPI, Arduino_GFX, ST77916, ST7701_RGB, MIPI-DSI base, ST7703_DSI, ST7701_DSI, XPT2046, AXS15231B, CST816S, GT911)
   - `screens/` - Screen base class and implementations (splash, info, test, touch test)
   - Conditional compilation: Only selected drivers are compiled via `display_drivers.cpp` / `touch_drivers.cpp` (Arduino doesn’t auto-compile subdir `.cpp`)
 - **Power + Transport Subsystem**: Power modes, BLE/MQTT transport selection, and duty-cycle runtime
@@ -193,7 +193,9 @@ See `docs/wsl-development.md` for complete USB/IP setup guide.
 - `src/app/drivers/xpt2046_driver.cpp/h` - XPT2046 resistive touch driver
 - `src/app/drivers/arduino_gfx_driver.cpp/h` - Arduino_GFX display backend (AXS15231B QSPI)
 - `src/app/drivers/arduino_gfx_st77916_driver.cpp/h` - Arduino_GFX ST77916 QSPI display driver (JC3636W518)
-- `src/app/drivers/st7703_dsi_driver.cpp/h` - ST7703 MIPI-DSI display driver using direct ESP-IDF calls (ESP32-P4-WIFI6-Touch-LCD-4B)
+- `src/app/drivers/st7703_dsi_driver.cpp/h` - ST7703 MIPI-DSI display subclass (Waveshare ESP32-P4-WIFI6-Touch-LCD-4B)
+- `src/app/drivers/st7701_dsi_driver.cpp/h` - ST7701 MIPI-DSI display subclass (GUITION JC4880P433)
+- `src/app/drivers/mipi_dsi_driver.cpp/h` - Shared MIPI-DSI base class with DMA2D async flush (ESP32-P4)
 - `src/app/drivers/axs15231b_touch_driver.cpp/h` - AXS15231B touch backend wrapper
 - `src/app/drivers/axs15231b/vendor/AXS15231B_touch.cpp/h` - Vendored AXS15231B touch implementation (driver-scoped vendor code)
 - `src/app/drivers/wire_cst816s_touch_driver.cpp/h` - CST816S Wire I2C touch driver (JC3636W518)

@@ -22,7 +22,7 @@ This document is a template. Sections marked with `COMPILE_FLAG_REPORT` markers 
 ## Flags (generated)
 
 <!-- BEGIN COMPILE_FLAG_REPORT:FLAGS -->
-Total flags: 151
+Total flags: 160
 
 ### Features (HAS_*)
 
@@ -39,7 +39,7 @@ Total flags: 151
 
 ### Selectors (*_DRIVER)
 
-- **DISPLAY_DRIVER** default: `DISPLAY_DRIVER_TFT_ESPI` (values: DISPLAY_DRIVER_ARDUINO_GFX, DISPLAY_DRIVER_ARDUINO_GFX_ST77916, DISPLAY_DRIVER_ST7701_RGB, DISPLAY_DRIVER_ST7703_DSI, DISPLAY_DRIVER_TFT_ESPI) — Select the display HAL backend (one of the DISPLAY_DRIVER_* constants).
+- **DISPLAY_DRIVER** default: `DISPLAY_DRIVER_TFT_ESPI` (values: DISPLAY_DRIVER_ARDUINO_GFX, DISPLAY_DRIVER_ARDUINO_GFX_ST77916, DISPLAY_DRIVER_ST7701_DSI, DISPLAY_DRIVER_ST7701_RGB, DISPLAY_DRIVER_ST7703_DSI, DISPLAY_DRIVER_TFT_ESPI) — Select the display HAL backend (one of the DISPLAY_DRIVER_* constants).
 - **ILI9341_2_DRIVER** default: `(no default)` — These macros are consumed by the TFT_eSPI library itself.
 - **TOUCH_DRIVER** default: `TOUCH_DRIVER_XPT2046` (values: TOUCH_DRIVER_AXS15231B_I2C, TOUCH_DRIVER_CST816S_WIRE, TOUCH_DRIVER_GT911, TOUCH_DRIVER_XPT2046) — Select the touch HAL backend (one of the TOUCH_DRIVER_* constants).
 
@@ -126,6 +126,7 @@ Total flags: 151
 - **SPI_FREQUENCY** default: `(no default)` — TFT_eSPI: SPI write frequency (Hz).
 - **SPI_READ_FREQUENCY** default: `(no default)` — TFT_eSPI: SPI read frequency (Hz).
 - **SPI_TOUCH_FREQUENCY** default: `(no default)` — TFT_eSPI: SPI touch frequency (Hz).
+- **ST7701_DSI_DPI_CLK_HZ** default: `34000000L` — DPI pixel clock in Hz.
 - **ST7703_DPI_CLK_HZ** default: `38000000L` — DPI pixel clock in Hz for ST7703 MIPI-DSI panels (ESP32-P4 only).
 - **TFT_BACKLIGHT_PWM_FREQ** default: `1000` — Lower frequencies give wider dimming range but may cause audible coil whine.
 - **TFT_SPI_FREQUENCY** default: `(no default)` — TFT SPI clock frequency.
@@ -151,6 +152,7 @@ Total flags: 151
 - **DISPLAY_DRIVER_ILI9341_2** default: `(no default)` — Use the ILI9341_2 controller setup in TFT_eSPI.
 - **DISPLAY_INVERSION_ON** default: `(no default)` — Enable display inversion (panel-specific).
 - **DISPLAY_NEEDS_GAMMA_FIX** default: `(no default)` — Apply gamma correction fix for this panel variant.
+- **DISPLAY_PANEL** default: `(no default)` — Panel IC name string (used by tools/generate-board-driver-table.py for the board→driver table).
 - **HEALTH_HISTORY_ENABLED** default: `1` — Enable device-side health history ring buffer for charting in the web portal
 - **HEALTH_HISTORY_SAMPLES** default: `((HEALTH_HISTORY_SECONDS * 1000) / HEALTH_HISTORY_PERIOD_MS)` — Derived number of samples.
 - **HEALTH_HISTORY_SECONDS** default: `300` — How much client-side history (sparklines) to keep.
@@ -172,6 +174,13 @@ Total flags: 151
 - **MEMORY_TRIPWIRE_CHECK_INTERVAL_MS** default: `5000` — How often to check tripwires from the main loop.
 - **POWERON_CONFIG_BURST_ENABLED** default: `false` — Intended for boards WITHOUT a reliable user button.
 - **PROJECT_DISPLAY_NAME** default: `"ESP32 Device"` — Human-friendly project name used in the web UI and device name (can be set by build system).
+- **ST7701_DSI_HSYNC_BACK_PORCH** default: `42` — HSYNC back porch in pixel clocks.
+- **ST7701_DSI_HSYNC_FRONT_PORCH** default: `42` — HSYNC front porch in pixel clocks.
+- **ST7701_DSI_HSYNC_PULSE_WIDTH** default: `12` — HSYNC pulse width in pixel clocks.
+- **ST7701_DSI_LANE_BIT_RATE** default: `500` — MIPI-DSI lane bit rate in Mbps.
+- **ST7701_DSI_VSYNC_BACK_PORCH** default: `8` — VSYNC back porch in lines.
+- **ST7701_DSI_VSYNC_FRONT_PORCH** default: `166` — VSYNC front porch in lines.
+- **ST7701_DSI_VSYNC_PULSE_WIDTH** default: `2` — VSYNC pulse width in lines.
 - **ST7703_HSYNC_BACK_PORCH** default: `50` — HSYNC back porch in pixel clocks.
 - **ST7703_HSYNC_FRONT_PORCH** default: `50` — HSYNC front porch in pixel clocks.
 - **ST7703_HSYNC_PULSE_WIDTH** default: `20` — HSYNC pulse width in pixel clocks.
@@ -208,6 +217,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
 | jc3636w518 | ✅ |  |  |  | ✅ | ✅ |  |  |  | ✅ |
 | esp32c3-withsensors |  | ✅ |  | ✅ |  | ✅ |  | ✅ |  |  |
 | esp32-p4-lcd4b | ✅ |  |  |  | ✅ | ✅ |  |  |  | ✅ |
+| jc4880p433 | ✅ |  |  |  | ✅ | ✅ |  |  |  | ✅ |
 <!-- END COMPILE_FLAG_REPORT:MATRIX_FEATURES -->
 
 ## Board Matrix: Selectors (generated)
@@ -222,6 +232,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
 | jc3636w518 | DISPLAY_DRIVER_ARDUINO_GFX_ST77916 | TOUCH_DRIVER_CST816S_WIRE |
 | esp32c3-withsensors | — | — |
 | esp32-p4-lcd4b | DISPLAY_DRIVER_ST7703_DSI | TOUCH_DRIVER_GT911 |
+| jc4880p433 | DISPLAY_DRIVER_ST7701_DSI | TOUCH_DRIVER_GT911 |
 <!-- END COMPILE_FLAG_REPORT:MATRIX_SELECTORS -->
 
 ## Usage Map (preprocessor only, generated)
@@ -233,8 +244,8 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/display_manager.cpp
   - src/app/drivers/arduino_gfx_driver.cpp
   - src/app/drivers/arduino_gfx_st77916_driver.cpp
+  - src/app/drivers/mipi_dsi_driver.cpp
   - src/app/drivers/st7701_rgb_driver.cpp
-  - src/app/drivers/st7703_dsi_driver.cpp
   - src/app/drivers/tft_espi_driver.cpp
 - **HAS_BLE**
   - src/app/app.ino
@@ -353,8 +364,8 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
 - **LCD_BL_PIN**
   - src/app/drivers/arduino_gfx_driver.cpp
   - src/app/drivers/arduino_gfx_st77916_driver.cpp
+  - src/app/drivers/mipi_dsi_driver.cpp
   - src/app/drivers/st7701_rgb_driver.cpp
-  - src/app/drivers/st7703_dsi_driver.cpp
 - **LCD_CS_PIN**
   - src/app/drivers/st7701_rgb_driver.cpp
 - **LCD_MOSI_PIN**
@@ -365,7 +376,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
 - **LCD_QSPI_RST**
   - src/app/drivers/arduino_gfx_st77916_driver.cpp
 - **LCD_RST_PIN**
-  - src/app/drivers/st7703_dsi_driver.cpp
+  - src/app/drivers/mipi_dsi_driver.cpp
 - **LCD_SCK_PIN**
   - src/app/drivers/st7701_rgb_driver.cpp
 - **LD2410_OUT_DEBOUNCE_MS**
@@ -404,6 +415,22 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/board_config.h
 - **SENSOR_I2C_SDA**
   - src/app/board_config.h
+- **ST7701_DSI_DPI_CLK_HZ**
+  - src/app/board_config.h
+- **ST7701_DSI_HSYNC_BACK_PORCH**
+  - src/app/board_config.h
+- **ST7701_DSI_HSYNC_FRONT_PORCH**
+  - src/app/board_config.h
+- **ST7701_DSI_HSYNC_PULSE_WIDTH**
+  - src/app/board_config.h
+- **ST7701_DSI_LANE_BIT_RATE**
+  - src/app/board_config.h
+- **ST7701_DSI_VSYNC_BACK_PORCH**
+  - src/app/board_config.h
+- **ST7701_DSI_VSYNC_FRONT_PORCH**
+  - src/app/board_config.h
+- **ST7701_DSI_VSYNC_PULSE_WIDTH**
+  - src/app/board_config.h
 - **ST7703_DPI_CLK_HZ**
   - src/app/board_config.h
   - src/boards/esp32-p4-lcd4b/board_overrides.h
@@ -435,8 +462,8 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
 - **TFT_BACKLIGHT_ON**
   - src/app/drivers/arduino_gfx_driver.cpp
   - src/app/drivers/arduino_gfx_st77916_driver.cpp
+  - src/app/drivers/mipi_dsi_driver.cpp
   - src/app/drivers/st7701_rgb_driver.cpp
-  - src/app/drivers/st7703_dsi_driver.cpp
   - src/app/drivers/tft_espi_driver.cpp
 - **TFT_BACKLIGHT_PWM_CHANNEL**
   - src/app/board_config.h

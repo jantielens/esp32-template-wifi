@@ -111,14 +111,30 @@ bool wifi_manager_connect(const DeviceConfig *config, bool allow_cached_bssid) {
 
 		WiFi.persistent(false);
 
+		#ifdef CONFIG_IDF_TARGET_ESP32P4
+		// ESP32-P4 uses an external ESP32-C6 co-processor over SDIO (ESP-Hosted).
+		// The SDIO link takes several seconds to establish after boot. The
+		// aggressive disconnect/WIFI_OFF cycle used for normal ESP32 chips
+		// disrupts the SDIO transport negotiation and corrupts internal state,
+		// causing subsequent WiFi.begin() to fail even though scans succeed.
+		// Instead, just set STA mode and let the hosted link come up cleanly.
+		WiFi.mode(WIFI_STA);
+		LOGI("WiFi", "Waiting for ESP-Hosted link...");
+		delay(5000);
+		#else
 		WiFi.disconnect(true);
 		delay(100);
 		WiFi.mode(WIFI_OFF);
 		delay(500);
 		WiFi.mode(WIFI_STA);
 		delay(100);
+		#endif
 
+		// ESP32-P4 ESP-Hosted: setSleep(false) is proxied over SDIO and can
+		// destabilise the hosted link during early init. Skip it on P4.
+		#ifndef CONFIG_IDF_TARGET_ESP32P4
 		WiFi.setSleep(false);
+		#endif
 		WiFi.setAutoReconnect(true);
 
 		char sanitized[CONFIG_DEVICE_NAME_MAX_LEN];
@@ -198,6 +214,42 @@ bool wifi_manager_connect(const DeviceConfig *config, bool allow_cached_bssid) {
 				LOGW("WiFi", "Cached AP failed; scanning");
 		}
 
+		#ifdef CONFIG_IDF_TARGET_ESP32P4
+		// ESP32-P4 ESP-Hosted: the C6 co-processor handles AP selection
+		// internally. Scanning + directed-connect (BSSID/channel) over SDIO
+		// causes ASSOC_LEAVE (reason 8). Use simple begin and let C6 decide.
+		// Also, auto-reconnect doesn't propagate reliably over SDIO, so we
+		// re-issue WiFi.begin() on each attempt with a clean disconnect cycle.
+		for (int attempt = 0; attempt < WIFI_MAX_ATTEMPTS; attempt++) {
+				if (attempt > 0) {
+						WiFi.disconnect(false);
+						delay(2000);
+				}
+				LOGI("WiFi", "Attempt %d/%d", attempt + 1, WIFI_MAX_ATTEMPTS);
+				WiFi.begin(config->wifi_ssid, config->wifi_password);
+
+				unsigned long timeout = WIFI_BACKOFF_BASE * (attempt + 1);
+				if (wait_for_connection(timeout)) {
+						LOGI("WiFi", "IP: %s", WiFi.localIP().toString().c_str());
+						LOGI("WiFi", "Hostname: %s", WiFi.getHostname());
+						LOGI("WiFi", "MAC: %s", WiFi.macAddress().c_str());
+						LOGI("WiFi", "Signal: %d dBm", WiFi.RSSI());
+						LOGI("WiFi", "Access: http://%s", WiFi.localIP().toString().c_str());
+						LOGI("WiFi", "Access: http://%s.local", WiFi.getHostname());
+						LOGI("WiFi", "Connected");
+						return true;
+				}
+
+				wl_status_t status = WiFi.status();
+				const char* reason =
+						(status == WL_NO_SSID_AVAIL) ? "SSID not found" :
+						(status == WL_CONNECT_FAILED) ? "Connect failed (wrong password?)" :
+						(status == WL_CONNECTION_LOST) ? "Connection lost" :
+						(status == WL_DISCONNECTED) ? "Disconnected" :
+						"Unknown";
+				LOGW("WiFi", "Status: %s (%d)", reason, status);
+		}
+		#else
 		uint8_t best_bssid[6];
 		int best_channel = 0;
 		int best_rssi = 0;
@@ -247,6 +299,7 @@ bool wifi_manager_connect(const DeviceConfig *config, bool allow_cached_bssid) {
 						LOGW("WiFi", "Status: %s (%d)", reason, status);
 				}
 		}
+		#endif
 
 		LOGE("WiFi", "All attempts failed");
 		return false;

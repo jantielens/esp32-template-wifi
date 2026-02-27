@@ -62,7 +62,9 @@ The display and touch subsystem is built on four main pillars:
 │ Arduino_GFX_Drv  │          │ AXS15231B_Touch  │
 │ Arduino_GFX_Drv  │          │ CST816S_Driver   │
 │ ST7701_RGB_Driver│          │ GT911_Driver     │
-│ ST7703_DSI_Driver│          │                  │
+│ MipiDsiDriver    │          │                  │
+│  ├ ST7703_DSI    │          │                  │
+│  └ ST7701_DSI    │          │                  │
 └──────────────────┘          └──────────────────┘
         ↓                               ↓
 ┌──────────────────┐          ┌──────────────────┐
@@ -166,11 +168,13 @@ The `configureLVGL()` method allows drivers to customize LVGL behavior without m
 - **Custom DPI** - For panels with non-standard pixel density
 - **DMA2D async flush** - Register completion callback for hardware-accelerated framebuffer copy (e.g., ESP32-P4)
 
-**Example: ST7703 DSI DMA2D Callback Registration**
+**Example: MIPI-DSI Base Class DMA2D Callback Registration**
+
+The `MipiDsiDriver` base class registers the DMA2D completion callback so that LVGL knows when the draw buffer can be recycled after hardware-accelerated framebuffer copy. Panel subclasses (ST7703, ST7701) inherit this automatically.
+
 ```cpp
-void ST7703_DSI_Driver::configureLVGL(lv_display_t* disp, uint8_t rotation) {
-    // Register DMA2D completion callback so LVGL knows the draw buffer
-    // can be recycled once the hardware copy finishes.
+void MipiDsiDriver::configureLVGL(lv_display_t* disp, uint8_t rotation) {
+    lvglDisplay = disp;
     esp_lcd_dpi_panel_event_callbacks_t cbs = {};
     cbs.on_color_trans_done = onColorTransDone;
     ESP_ERROR_CHECK(esp_lcd_dpi_panel_register_event_callbacks(panel_handle, &cbs, disp));
@@ -282,6 +286,45 @@ void TFT_eSPI_Driver::setBacklightBrightness(uint8_t brightness_percent) {
     #endif
 }
 ```
+
+### MIPI-DSI Driver Architecture (ESP32-P4)
+
+ESP32-P4 boards use MIPI-DSI displays via a shared base class (`MipiDsiDriver`) with thin panel-specific subclasses. This replaces per-panel full implementations with a DRY design:
+
+```
+MipiDsiDriver (base)          ← Shared: DSI bus, DBI I/O, DPI panel, DMA2D flush,
+│                                backlight PWM, vendor command sending, ISR callback
+├── ST7703_DSI_Driver          ← Waveshare P4: 24 vendor init commands + timing config
+└── ST7701_DSI_Driver          ← JC4880P433: 39 vendor init commands + timing config
+```
+
+**Base Class (`mipi_dsi_driver.h/cpp`):**
+- ESP-IDF direct calls: `esp_lcd_new_dsi_bus`, `esp_lcd_new_panel_io_dbi`, `esp_lcd_new_panel_dpi`
+- DMA2D async flush (`use_dma2d=true`) with ISR completion callback (`onColorTransDone`)
+- LDO channel 3 (2500 mV) for MIPI PHY power
+- Backlight PWM with configurable duty mapping
+- Defines `MipiDsiTimingConfig` struct for per-panel timing parameters
+
+**Subclass Override Points:**
+```cpp
+virtual const mipi_dsi_init_cmd_t* getInitCommands() const = 0;  // Vendor init table
+virtual size_t getInitCommandCount() const = 0;                   // Table size
+virtual const char* getLogTag() const = 0;                        // Log prefix
+virtual MipiDsiTimingConfig getTimingConfig() const = 0;          // Panel timing
+```
+
+**Per-Panel Timing Config:**
+
+Key timing parameters that differ between panels:
+
+| Parameter | ST7703 (Waveshare) | ST7701 (JC4880P433) |
+|---|---|---|
+| DPI clock | 38 MHz | 34 MHz |
+| Lane bit rate | 480 Mbps | 500 Mbps |
+| Resolution | 720×720 | 480×800 |
+| `disable_lp` | `true` (continuous HS) | `false` (LP during blanking) |
+
+The `disable_lp` flag is critical: ST7703 needs continuous high-speed mode to avoid cyan flicker, while ST7701S expects LP signaling during blanking intervals (setting `true` causes horizontal jitter).
 
 ### Selecting a Driver
 
@@ -520,7 +563,7 @@ public:
 - **Hardware**: GT911 multi-touch capacitive controller (up to 5 points, uses 1)
 - **Communication**: I2C (compile-time bus selection via `TOUCH_I2C_BUS`: Wire or Wire1)
 - **Optional reset**: Hardware reset via `TOUCH_RST` pin (INT pin selects I2C address)
-- **Used by**: ESP32-4848S040 (Guition ESP32-S3, ST7701 RGB 480×480), ESP32-P4-LCD4B (Waveshare, ST7703 DSI 720×720)
+- **Used by**: ESP32-4848S040 (Guition ESP32-S3, ST7701 RGB 480×480), ESP32-P4-LCD4B (Waveshare, ST7703 DSI 720×720), JC4880P433 (Guition ESP32-P4, ST7701 DSI 480×800)
 
 ### Touch Manager
 
@@ -1100,8 +1143,10 @@ src/app/
 │   ├── tft_espi_driver.h/cpp             # TFT_eSPI display
 │   ├── arduino_gfx_driver.h/cpp          # Arduino_GFX QSPI display (AXS15231B)
 │   ├── arduino_gfx_st77916_driver.h/cpp  # Arduino_GFX ST77916 QSPI display
-│   ├── st7701_rgb_driver.h/cpp           # ST7701 RGB panel display
-│   ├── st7703_dsi_driver.h/cpp           # ST7703 MIPI-DSI display (ESP32-P4)
+│   ├── st7701_rgb_driver.h/cpp           # ST7701 RGB panel display (ESP32-S3)
+│   ├── mipi_dsi_driver.h/cpp             # MIPI-DSI base class (ESP32-P4, shared by ST7703/ST7701)
+│   ├── st7703_dsi_driver.h/cpp           # ST7703 MIPI-DSI subclass (Waveshare P4)
+│   ├── st7701_dsi_driver.h/cpp           # ST7701 MIPI-DSI subclass (JC4880P433)
 │   ├── xpt2046_driver.h/cpp              # XPT2046 resistive touch
 │   ├── axs15231b_touch_driver.h/cpp      # AXS15231B capacitive touch
 │   ├── axs15231b/vendor/                 # Vendored AXS15231B I2C touch

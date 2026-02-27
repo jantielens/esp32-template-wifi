@@ -262,12 +262,14 @@
 //   DISPLAY_DRIVER_ST7701_RGB (6) - Arduino_GFX ST7701 RGB panel (ESP32-4848S040)
 //   DISPLAY_DRIVER_ARDUINO_GFX_ST77916 (7) - Arduino_GFX ST77916 QSPI 360x360 (JC3636W518)
 //   DISPLAY_DRIVER_ST7703_DSI (8) - Direct ESP-IDF ST7703 MIPI-DSI (ESP32-P4-WIFI6-Touch-LCD-4B)
+//   DISPLAY_DRIVER_ST7701_DSI (9) - Direct ESP-IDF ST7701 MIPI-DSI (JC4880P433, ESP32-P4)
 #define DISPLAY_DRIVER_TFT_ESPI 1
 #define DISPLAY_DRIVER_LOVYANGFX 3
 #define DISPLAY_DRIVER_ARDUINO_GFX 4
 #define DISPLAY_DRIVER_ST7701_RGB 6
 #define DISPLAY_DRIVER_ARDUINO_GFX_ST77916 7
 #define DISPLAY_DRIVER_ST7703_DSI 8
+#define DISPLAY_DRIVER_ST7701_DSI 9
 
 // Select the display HAL backend (one of the DISPLAY_DRIVER_* constants).
 #ifndef DISPLAY_DRIVER
@@ -309,6 +311,41 @@
 // VSYNC front porch in lines.
 #ifndef ST7703_VSYNC_FRONT_PORCH
 #define ST7703_VSYNC_FRONT_PORCH 20
+#endif
+
+// DSI timing defaults for ST7701 MIPI-DSI panels (ESP32-P4, direct ESP-IDF).
+// Values from Arduino_GFX JC4880P433 example + GUITION BSP, validated on hardware.
+// DPI pixel clock in Hz.
+#ifndef ST7701_DSI_DPI_CLK_HZ
+#define ST7701_DSI_DPI_CLK_HZ 34000000L
+#endif
+// MIPI-DSI lane bit rate in Mbps.
+#ifndef ST7701_DSI_LANE_BIT_RATE
+#define ST7701_DSI_LANE_BIT_RATE 500
+#endif
+// HSYNC pulse width in pixel clocks.
+#ifndef ST7701_DSI_HSYNC_PULSE_WIDTH
+#define ST7701_DSI_HSYNC_PULSE_WIDTH 12
+#endif
+// HSYNC back porch in pixel clocks.
+#ifndef ST7701_DSI_HSYNC_BACK_PORCH
+#define ST7701_DSI_HSYNC_BACK_PORCH 42
+#endif
+// HSYNC front porch in pixel clocks.
+#ifndef ST7701_DSI_HSYNC_FRONT_PORCH
+#define ST7701_DSI_HSYNC_FRONT_PORCH 42
+#endif
+// VSYNC pulse width in lines.
+#ifndef ST7701_DSI_VSYNC_PULSE_WIDTH
+#define ST7701_DSI_VSYNC_PULSE_WIDTH 2
+#endif
+// VSYNC back porch in lines.
+#ifndef ST7701_DSI_VSYNC_BACK_PORCH
+#define ST7701_DSI_VSYNC_BACK_PORCH 8
+#endif
+// VSYNC front porch in lines.
+#ifndef ST7701_DSI_VSYNC_FRONT_PORCH
+#define ST7701_DSI_VSYNC_FRONT_PORCH 166
 #endif
 
 // ============================================================================
