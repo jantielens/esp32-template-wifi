@@ -114,7 +114,7 @@ void TestScreen::create() {
 
 void TestScreen::destroy() {
 		if (screen) {
-				lv_obj_del(screen);
+				lv_obj_delete(screen);
 				screen = nullptr;
 				titleLabel = nullptr;
 				redBar = nullptr;
@@ -130,7 +130,7 @@ void TestScreen::destroy() {
 
 void TestScreen::show() {
 		if (screen) {
-				lv_scr_load(screen);
+				lv_screen_load(screen);
 		}
 }
 

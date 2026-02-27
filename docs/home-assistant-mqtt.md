@@ -112,8 +112,8 @@ Tip:
 ### 3) Build and flash
 
 ```bash
-./build.sh esp32c3-waveshare-169-st7789v2
-./upload.sh esp32c3-waveshare-169-st7789v2
+./build.sh esp32c3-withsensors
+./upload.sh esp32c3-withsensors
 ./monitor.sh
 ```
 

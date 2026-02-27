@@ -162,11 +162,13 @@ void setup()
 	// (e.g., MQTT publish + web API calls).
 	device_telemetry_init();
 
+	#if DEVICE_TELEMETRY_BACKGROUND_TASKS
 	// Start CPU monitoring background task
 	device_telemetry_start_cpu_monitoring();
 
 	// Start 200ms health-window sampling (min/max fields between /api/health polls)
 	device_telemetry_start_health_window_sampling();
+	#endif
 
 	// Try to load saved configuration
 	#if HAS_DISPLAY
@@ -305,11 +307,6 @@ void loop()
 	// Handle web portal (DNS for captive portal)
 	web_portal_handle();
 
-	#if HAS_IMAGE_API
-	// Process pending image uploads (deferred decoding)
-	web_portal_process_pending_images();
-	#endif
-
 	#if HAS_MQTT
 	mqtt_manager.loop();
 	#endif
@@ -323,8 +320,10 @@ void loop()
 	#endif
 
 
+	#if DEVICE_TELEMETRY_BACKGROUND_TASKS
 	// Lightweight telemetry tripwires (runs from main loop only).
 	device_telemetry_check_tripwires();
+	#endif
 
 	unsigned long current_ms = millis();
 

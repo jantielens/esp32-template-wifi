@@ -10,7 +10,7 @@
 InfoScreen::InfoScreen(DeviceConfig* deviceConfig, DisplayManager* manager) 
 		: screen(nullptr), config(deviceConfig), displayMgr(manager),
 		lastUpdateMs(0),
-		deviceNameLabel(nullptr), mdnsLabel(nullptr), ssidLabel(nullptr), ipLabel(nullptr),
+		deviceNameLabel(nullptr), mdnsLabel(nullptr), ipLabel(nullptr),
 		versionLabel(nullptr), uptimeLabel(nullptr), heapLabel(nullptr), chipLabel(nullptr) {}
 
 InfoScreen::~InfoScreen() {
@@ -94,8 +94,7 @@ void InfoScreen::create() {
 		lv_obj_align(ipLabel, LV_ALIGN_CENTER, 0, 60);
 		lv_obj_clear_flag(ipLabel, LV_OBJ_FLAG_CLICKABLE);  // Click-transparent
 		
-		// Removed label
-		ssidLabel = nullptr;
+
 		
 		// Add touch event handler - tap anywhere to go to TestScreen
 		lv_obj_add_event_cb(screen, touchEventCallback, LV_EVENT_CLICKED, this);
@@ -104,11 +103,10 @@ void InfoScreen::create() {
 
 void InfoScreen::destroy() {
 		if (screen) {
-				lv_obj_del(screen);
+				lv_obj_delete(screen);
 				screen = nullptr;
 				deviceNameLabel = nullptr;
 				mdnsLabel = nullptr;
-				ssidLabel = nullptr;
 				ipLabel = nullptr;
 				versionLabel = nullptr;
 				uptimeLabel = nullptr;
@@ -121,7 +119,7 @@ void InfoScreen::destroy() {
 
 void InfoScreen::show() {
 		if (screen) {
-				lv_scr_load(screen);
+				lv_screen_load(screen);
 		}
 }
 

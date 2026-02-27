@@ -53,9 +53,8 @@ void SplashScreen::create() {
 		lv_obj_set_style_bg_color(screen, lv_color_black(), 0);
 
 		// Logo image
-		logoImg = lv_img_create(screen);
-		lv_img_set_src(logoImg, &img_logo);
-
+	logoImg = lv_image_create(screen);
+	lv_image_set_src(logoImg, &img_logo);
 		// Status text
 		statusLabel = lv_label_create(screen);
 		lv_label_set_text(statusLabel, "Booting...");
@@ -65,7 +64,8 @@ void SplashScreen::create() {
 		lv_obj_set_style_text_color(statusLabel, lv_color_make(100, 100, 100), 0);
 
 		// Spinner to show activity
-		spinner = lv_spinner_create(screen, 1000, 60);
+	spinner = lv_spinner_create(screen);
+	lv_spinner_set_anim_params(spinner, 1000, 60);
 		lv_obj_set_size(spinner, 40, 40);
 		lv_obj_set_style_arc_color(spinner, lv_color_make(0, 150, 255), LV_PART_INDICATOR);
 		lv_obj_set_style_arc_width(spinner, 4, LV_PART_INDICATOR);
@@ -80,7 +80,7 @@ void SplashScreen::create() {
 
 void SplashScreen::destroy() {
 		if (screen) {
-				lv_obj_del(screen);
+				lv_obj_delete(screen);
 				screen = nullptr;
 				logoImg = nullptr;
 				statusLabel = nullptr;
@@ -90,7 +90,7 @@ void SplashScreen::destroy() {
 
 void SplashScreen::show() {
 		if (screen) {
-				lv_scr_load(screen);
+				lv_screen_load(screen);
 		}
 }
 

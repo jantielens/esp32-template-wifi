@@ -20,15 +20,6 @@
 // Enable touch support.
 #define HAS_TOUCH true
 
-// Enable Image Upload API on this board
-// Enable Image API on this board.
-#define HAS_IMAGE_API true
-
-// PSRAM board: allow larger full-image uploads than the global default.
-// High-entropy JPEGs at higher quality can exceed 100KB.
-// Max JPEG bytes accepted for full image uploads.
-#define IMAGE_API_MAX_SIZE_BYTES (300 * 1024)
-
 // ---------------------------------------------------------------------------
 // Driver Selection (HAL)
 // ---------------------------------------------------------------------------

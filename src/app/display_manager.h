@@ -10,13 +10,8 @@
 #include "screens/test_screen.h"
 #include "screens/fps_screen.h"
 
-#if HAS_TOUCH
+#if HAS_TOUCH && LV_USE_CANVAS
 #include "screens/touch_test_screen.h"
-#endif
-
-#if HAS_IMAGE_API
-#include "screens/direct_image_screen.h"
-#include "screens/lvgl_image_screen.h"
 #endif
 
 #include <lvgl.h>
@@ -57,9 +52,9 @@ class DisplayManager {
 private:
 		// Hardware (display driver abstraction)
 		DisplayDriver* driver;
-		lv_disp_draw_buf_t draw_buf;
-		lv_color_t* buf;  // Dynamically allocated LVGL buffer
-		lv_disp_drv_t disp_drv;
+		lv_display_t* display;    // v9 display object
+		uint8_t* buf;             // Dynamically allocated LVGL draw buffer
+		uint8_t* buf2;            // Optional second draw buffer (double-buffering)
 		
 		// Configuration reference
 		DeviceConfig* config;
@@ -97,15 +92,8 @@ private:
 		TestScreen testScreen;
 		FpsScreen fpsScreen;
 		
-		#if HAS_TOUCH
+		#if HAS_TOUCH && LV_USE_CANVAS
 		TouchTestScreen touchTestScreen;
-		#endif
-		
-		#if HAS_IMAGE_API
-		DirectImageScreen directImageScreen;
-		#if LV_USE_IMG
-		LvglImageScreen lvglImageScreen;
-		#endif
 		#endif
 		
 		// Screen registry for runtime navigation (static allocation, no heap)
@@ -124,17 +112,12 @@ private:
 		void initLVGL();
 		
 		// LVGL flush callback (static, accesses instance via user_data)
-		static void flushCallback(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p);
+		static void flushCallback(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map);
 
 		// Buffered render-mode drivers (e.g., Arduino_GFX canvas) need an explicit
 		// present() step, but only after LVGL has actually rendered something.
 		bool flushPending;
 
-		// When true, LVGL flushes must not touch the panel.
-		// This is enabled as soon as DirectImageScreen is requested so that
-		// the JPEG decoder can safely write to the display without SPI contention.
-		volatile bool directImageActive;
-		
 		// FreeRTOS task for LVGL rendering
 		static void lvglTask(void* pvParameter);
 		
@@ -152,11 +135,6 @@ public:
 		void showSplash();
 		void showInfo();
 		void showTest();
-		
-		#if HAS_IMAGE_API
-		void showDirectImage();
-		void returnToPreviousScreen();  // Return to screen before image was shown
-		#endif
 		
 		// Screen selection by ID (thread-safe, returns true if found)
 		bool showScreen(const char* screen_id);
@@ -180,21 +158,9 @@ public:
 
 		// Active LVGL logical resolution (post driver->configureLVGL()).
 		// Prefer using these instead of calling LVGL APIs from non-LVGL tasks.
-		int getActiveWidth() const { return (int)disp_drv.hor_res; }
-		int getActiveHeight() const { return (int)disp_drv.ver_res; }
-		
-		// Access to splash screen for status updates
+	int getActiveWidth() const;
+	int getActiveHeight() const;
 		SplashScreen* getSplash() { return &splashScreen; }
-		
-		#if HAS_IMAGE_API
-		// Access to direct image screen for image API
-		DirectImageScreen* getDirectImageScreen() { return &directImageScreen; }
-
-		// Access to LVGL image screen (shows images via lv_img)
-		#if LV_USE_IMG
-		LvglImageScreen* getLvglImageScreen() { return &lvglImageScreen; }
-		#endif
-		#endif
 		
 		// Access to display driver (for touch integration)
 		DisplayDriver* getDriver() { return driver; }
@@ -230,15 +196,5 @@ bool display_manager_try_lock(uint32_t timeout_ms);
 // Best-effort perf stats for diagnostics (/api/health).
 // Returns false until a first stats window has been captured.
 bool display_manager_get_perf_stats(DisplayPerfStats* out);
-
-#if HAS_IMAGE_API
-// C-style interface for image API
-void display_manager_show_direct_image();
-DirectImageScreen* display_manager_get_direct_image_screen();
-#if LV_USE_IMG
-LvglImageScreen* display_manager_get_lvgl_image_screen();
-#endif
-void display_manager_return_to_previous_screen();
-#endif
 
 #endif // DISPLAY_MANAGER_H

@@ -13,28 +13,56 @@ GT911_TouchDriver::GT911_TouchDriver()
 			lastTouched(false), lastX(0), lastY(0) {}
 
 void GT911_TouchDriver::init() {
-		LOGI("GT911", "Initializing touch on Wire1 (SDA=%d, SCL=%d, ADDR=0x%02X)",
-				TOUCH_I2C_SDA, TOUCH_I2C_SCL, TOUCH_I2C_ADDR);
+		LOGI("GT911", "Initializing touch on %s (SDA=%d, SCL=%d, ADDR=0x%02X)",
+				GT911_WIRE_NAME, TOUCH_I2C_SDA, TOUCH_I2C_SCL, TOUCH_I2C_ADDR);
 
-		// Use Wire1 (I2C bus 1) to avoid ISR contention with Core 0.
-		// The LVGL task polls touch from Core 1; Wire1.begin() here pins
-		// its ISR to the current core, keeping I2C traffic off Core 0.
-		Wire1.begin(TOUCH_I2C_SDA, TOUCH_I2C_SCL, 400000);
+		// ----------------------------------------------------------------
+		// Optional hardware reset sequence.
+		// When TOUCH_RST is connected, toggle it to ensure the GT911
+		// starts in a known state.  If TOUCH_INT is also connected, its
+		// level during the rising edge of RST selects the I2C address:
+		//   INT=LOW  → 0x5D (TOUCH_I2C_ADDR default)
+		//   INT=HIGH → 0x14 (TOUCH_I2C_ADDR_ALT)
+		// ----------------------------------------------------------------
+		#if TOUCH_RST >= 0
+		LOGI("GT911", "Hardware reset (RST=GPIO%d)", TOUCH_RST);
+		pinMode(TOUCH_RST, OUTPUT);
 
-		// Skip hardware reset — RST and INT pins are not connected on this board.
-		// The GT911 boots into normal mode by default when no reset sequence is applied.
+		#if defined(TOUCH_INT) && TOUCH_INT >= 0
+		// Drive INT to select default I2C address before releasing reset.
+		pinMode(TOUCH_INT, OUTPUT);
+		digitalWrite(TOUCH_INT, (TOUCH_I2C_ADDR == 0x5D) ? LOW : HIGH);
+		#endif
+
+		// Reset pulse: LOW ≥10 ms, then HIGH + wait for boot.
+		digitalWrite(TOUCH_RST, LOW);
+		delay(10);
+		digitalWrite(TOUCH_RST, HIGH);
+		delay(50);  // GT911 boot time
+
+		#if defined(TOUCH_INT) && TOUCH_INT >= 0
+		// Release INT to allow normal interrupt operation.
+		pinMode(TOUCH_INT, INPUT);
+		#endif
+
+		LOGI("GT911", "Reset complete");
+		#endif
+
+		// Initialize I2C bus.
+		// Bus selection (Wire/Wire1) determined at compile time via GT911_WIRE.
+		GT911_WIRE.begin(TOUCH_I2C_SDA, TOUCH_I2C_SCL, 400000);
 
 		// Probe the controller to verify communication
-		Wire1.beginTransmission(addr);
-		uint8_t err = Wire1.endTransmission();
+		GT911_WIRE.beginTransmission(addr);
+		uint8_t err = GT911_WIRE.endTransmission();
 		if (err != 0) {
 				// Try alternate address
 				#ifdef TOUCH_I2C_ADDR_ALT
 				LOGW("GT911", "Primary addr 0x%02X failed (err=%d), trying alt 0x%02X",
 						addr, err, TOUCH_I2C_ADDR_ALT);
 				addr = TOUCH_I2C_ADDR_ALT;
-				Wire1.beginTransmission(addr);
-				err = Wire1.endTransmission();
+				GT911_WIRE.beginTransmission(addr);
+				err = GT911_WIRE.endTransmission();
 				if (err != 0) {
 						LOGE("GT911", "Alt addr 0x%02X also failed (err=%d)", addr, err);
 						return;
@@ -48,8 +76,8 @@ void GT911_TouchDriver::init() {
 		// Clear any pending touch data
 		writeReg(GT911_POINT_INFO, 0);
 
-		LOGI("GT911", "Touch initialized on Wire1 (%dx%d, addr=0x%02X)",
-				DISPLAY_WIDTH, DISPLAY_HEIGHT, addr);
+	LOGI("GT911", "Touch initialized on %s (%dx%d, addr=0x%02X)",
+			GT911_WIRE_NAME, DISPLAY_WIDTH, DISPLAY_HEIGHT, addr);
 }
 
 void GT911_TouchDriver::gt911Read() {
@@ -130,34 +158,34 @@ void GT911_TouchDriver::setRotation(uint8_t r) {
 }
 
 // ============================================================================
-// Low-level I2C (Wire1)
+// Low-level I2C (GT911_WIRE — compile-time bus selection)
 // ============================================================================
 
 void GT911_TouchDriver::writeReg(uint16_t reg, uint8_t val) {
-		Wire1.beginTransmission(addr);
-		Wire1.write(highByte(reg));
-		Wire1.write(lowByte(reg));
-		Wire1.write(val);
-		Wire1.endTransmission();
+		GT911_WIRE.beginTransmission(addr);
+		GT911_WIRE.write(highByte(reg));
+		GT911_WIRE.write(lowByte(reg));
+		GT911_WIRE.write(val);
+		GT911_WIRE.endTransmission();
 }
 
 uint8_t GT911_TouchDriver::readReg(uint16_t reg) {
-		Wire1.beginTransmission(addr);
-		Wire1.write(highByte(reg));
-		Wire1.write(lowByte(reg));
-		Wire1.endTransmission();
-		Wire1.requestFrom(addr, (uint8_t)1);
-		return Wire1.read();
+		GT911_WIRE.beginTransmission(addr);
+		GT911_WIRE.write(highByte(reg));
+		GT911_WIRE.write(lowByte(reg));
+		GT911_WIRE.endTransmission();
+		GT911_WIRE.requestFrom(addr, (uint8_t)1);
+		return GT911_WIRE.read();
 }
 
 void GT911_TouchDriver::readBlock(uint16_t reg, uint8_t* buf, uint8_t len) {
-		Wire1.beginTransmission(addr);
-		Wire1.write(highByte(reg));
-		Wire1.write(lowByte(reg));
-		Wire1.endTransmission();
-		Wire1.requestFrom(addr, len);
+		GT911_WIRE.beginTransmission(addr);
+		GT911_WIRE.write(highByte(reg));
+		GT911_WIRE.write(lowByte(reg));
+		GT911_WIRE.endTransmission();
+		GT911_WIRE.requestFrom(addr, len);
 		for (uint8_t i = 0; i < len; i++) {
-				buf[i] = Wire1.read();
+				buf[i] = GT911_WIRE.read();
 		}
 }
 

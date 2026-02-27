@@ -22,7 +22,6 @@ This project includes several bash scripts to streamline ESP32 development workf
 ```bash
 declare -A FQBN_TARGETS=(
   ["esp32-nodisplay"]="esp32:esp32:esp32"  # ESP32 Dev Module (no display)
-  ["esp32c3-waveshare-169-st7789v2"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"  # ESP32-C3 + Waveshare 1.69" ST7789V2
   ["esp32c3_ota_1_9mb"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb"  # ESP32-C3 w/ custom partitions
   ["cyd-v2"]="esp32:esp32:esp32"  # CYD v2 (same FQBN, different board_overrides.h)
 )
@@ -61,7 +60,7 @@ declare -A FQBN_TARGETS=(
 ```bash
 ./build.sh              # Build all configured boards
 ./build.sh esp32-nodisplay        # Build only ESP32 Dev Module (no display)
-./build.sh esp32c3-waveshare-169-st7789v2  # Build ESP32-C3 + Waveshare 1.69" ST7789V2
+./build.sh cyd-v2                 # Build CYD v2 display board
 ./build.sh esp32c3_ota_1_9mb  # Build ESP32-C3 using custom partitions (example)
 BOARD_PROFILE=psram ./build.sh esp32-nodisplay  # Optional build profile (if defined in config.sh)
 ```
@@ -72,7 +71,7 @@ BOARD_PROFILE=psram ./build.sh esp32-nodisplay  # Optional build profile (if def
   - Also generates `src/app/repo_slug_config.h` when `git remote origin` points at a GitHub repo (used to construct GitHub Pages links)
 - Prints a per-board "Compile-time flags summary" (active `HAS_*` features + key selectors) to make it clear what the build will include
 - Compiles `src/app/app.ino` for specified board(s)
-- Creates board-specific directories: `./build/esp32-nodisplay/`, `./build/esp32c3-waveshare-169-st7789v2/`, etc.
+- Creates board-specific directories: `./build/esp32-nodisplay/`, `./build/cyd-v2/`, etc.
 - Generates `.bin`, `.bootloader.bin`, `.merged.bin`, and `.partitions.bin` files per board
 - Detects build errors including:
   - Compilation failures (exit code ≠ 0)
@@ -81,7 +80,7 @@ BOARD_PROFILE=psram ./build.sh esp32-nodisplay  # Optional build profile (if def
   - Provides helpful diagnostics for Arduino build system limitations
 - If `src/boards/<board>/` exists, adds it to include path and defines:
     - `BOARD_<BOARDNAME>` - Board name sanitized to valid C++ macro (alphanumeric + underscore only)
-      - Examples: `cyd-v2` → `BOARD_CYD_V2`, `esp32c3-waveshare-169-st7789v2` → `BOARD_ESP32C3_WAVESHARE_169_ST7789V2`
+      - Examples: `cyd-v2` → `BOARD_CYD_V2`, `esp32-4848S040` → `BOARD_ESP32_4848S040`
     - `BOARD_HAS_OVERRIDE` (triggers inclusion of `board_overrides.h`)
     - `BUILD_BOARD_NAME` (string literal; used to select the correct per-board app-only GitHub release asset for online updates)
     - Note: these flags are applied to both C++ and C compilation units (LVGL is built as C), so LVGL config can also react to board overrides.
@@ -111,7 +110,7 @@ build/
 │   ├── app.ino.bootloader.bin
 │   ├── app.ino.merged.bin
 │   └── app.ino.partitions.bin
-└── esp32c3-waveshare-169-st7789v2/
+└── cyd-v2/
     ├── app.ino.bin
     └── ...
 ```
@@ -192,11 +191,9 @@ python3 tools/compile_flags_report.py build --board cyd-v2
 ```bash
 python3 tools/portal_stress_test.py --host 192.168.1.111 --no-reboot --cycles 10 --scenario api
 python3 tools/portal_stress_test.py --host 192.168.1.111 --no-reboot --cycles 10 --scenario portal
-python3 tools/portal_stress_test.py --host 192.168.1.111 --no-reboot --cycles 5 --scenario image --image-generate 320x240
 ```
 
 **Notes:**
-- `--scenario image` requires firmware built with `HAS_IMAGE_API` enabled.
 - Use `--no-reboot` when the device should remain up between cycles.
 
 ---
@@ -247,7 +244,7 @@ This script automates both steps.
 **Multiple Boards Configuration:**
 ```bash
 ./upload.sh esp32-nodisplay              # Upload ESP32 build, auto-detect port
-./upload.sh esp32c3-waveshare-169-st7789v2  # Upload ESP32-C3 + Waveshare display build, auto-detect port
+./upload.sh cyd-v2                       # Upload CYD v2 display build, auto-detect port
 ./upload.sh esp32c3_ota_1_9mb   # Upload ESP32-C3 build using custom partitions
 ./upload.sh esp32-nodisplay /dev/ttyUSB0 # Upload ESP32 build to specific port
 ```
@@ -327,7 +324,7 @@ This script automates both steps.
 **Multiple Boards Configuration:**
 ```bash
 ./upload-erase.sh esp32-nodisplay              # Erase ESP32, auto-detect port
-./upload-erase.sh esp32c3-waveshare-169-st7789v2            # Erase ESP32-C3 + Waveshare display board, auto-detect port
+./upload-erase.sh cyd-v2                       # Erase CYD v2 display board, auto-detect port
 ./upload-erase.sh esp32-nodisplay /dev/ttyUSB0 # Erase ESP32 on specific port
 ```
 
@@ -413,17 +410,17 @@ This script automates both steps.
 
 # Or build specific board
 ./build.sh esp32-nodisplay
-./build.sh esp32c3-waveshare-169-st7789v2
+./build.sh cyd-v2
 ./build.sh esp32c3_ota_1_9mb
 
 # Upload to specific board
 ./upload.sh esp32-nodisplay       # Auto-detects port
-./upload.sh esp32c3-waveshare-169-st7789v2     # Auto-detects port
+./upload.sh cyd-v2                # Auto-detects port
 ./upload.sh esp32c3_ota_1_9mb
 
 # Full cycle for specific board
 ./bum.sh esp32-nodisplay          # Build + Upload + Monitor
-./um.sh esp32c3-waveshare-169-st7789v2         # Upload + Monitor
+./um.sh cyd-v2                    # Upload + Monitor
 
 # With upload options
 ./um.sh --baud 921600 cyd-v2                  # Upload + Monitor at custom baud

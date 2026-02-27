@@ -17,16 +17,11 @@
 #include "screens/info_screen.cpp"
 #include "screens/test_screen.cpp"
 
-#if HAS_TOUCH
+#if HAS_TOUCH && LV_USE_CANVAS
 #include "screens/touch_test_screen.cpp"
 #endif
 
 #include "screens/fps_screen.cpp"
-
-#if HAS_IMAGE_API
-#include "screens/direct_image_screen.cpp"
-#include "screens/lvgl_image_screen.cpp"
-#endif
 
 #endif // HAS_DISPLAY
 

@@ -78,6 +78,10 @@ get_bootloader_offset_for_chip() {
         esp32s3|esp32c2|esp32c3|esp32c6|esp32h2)
             echo "0x0"
             ;;
+        # ESP32-P4 uses 0x2000 (per ESP32 Arduino core 3.3.x boards.txt).
+        esp32p4)
+            echo "0x2000"
+            ;;
         *)
             # Conservative fallback: match the core default.
             echo "0x1000"

@@ -111,16 +111,16 @@ Once the device is attached, you can use the project scripts:
 ./upload.sh /dev/ttyUSB0
 
 # Multi-board projects (this template’s default): specify board name
-./upload.sh esp32c3-waveshare-169-st7789v2 /dev/ttyACM0
+./upload.sh cyd-v2 /dev/ttyACM0
 
 # Or just let the scripts auto-detect the port
-./upload.sh esp32c3-waveshare-169-st7789v2
+./upload.sh cyd-v2
 ```
 
 If your device is on a different port:
 
 ```bash
-./upload.sh esp32c3-waveshare-169-st7789v2 /dev/ttyACM1
+./upload.sh cyd-v2 /dev/ttyACM1
 ```
 
 ### Monitor Serial Output
@@ -207,7 +207,7 @@ lsusb
 ./upload.sh /dev/ttyUSB0
 
 # Multi-board projects
-./upload.sh esp32c3-waveshare-169-st7789v2
+./upload.sh cyd-v2
 
 # Monitor serial output
 ./monitor.sh /dev/ttyUSB0 115200

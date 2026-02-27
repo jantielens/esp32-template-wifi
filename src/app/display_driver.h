@@ -79,6 +79,11 @@ public:
 		virtual void setAddrWindow(int16_t x, int16_t y, uint16_t w, uint16_t h) = 0;
 		virtual void pushColors(uint16_t* data, uint32_t len, bool swap_bytes = true) = 0;
 
+		// LVGL v9 stride: source pixel row stride in bytes.
+		// Set by flush callback before pushColors() when LV_DRAW_BUF_STRIDE_ALIGN
+		// causes padding beyond width * bpp.  0 = no extra padding (stride = width * bpp).
+		uint32_t flushSrcStride = 0;
+
 		// Declare whether the driver is Direct or Buffered.
 		// Default: Direct (most SPI/QSPI drivers push pixels immediately in flush callback).
 		virtual RenderMode renderMode() const {
@@ -91,14 +96,19 @@ public:
 				// Override in buffered drivers (e.g., Arduino_GFX canvas)
 		}
 
-		// LVGL configuration hook(override to customize LVGL driver settings)
+		// LVGL configuration hook (override to customize LVGL display settings)
 		// Called during LVGL initialization to allow driver-specific configuration
 		// such as software rotation, full refresh mode, etc.
 		// Default implementation: no special configuration needed
-		virtual void configureLVGL(lv_disp_drv_t* drv, uint8_t rotation) {
+		virtual void configureLVGL(lv_display_t* disp, uint8_t rotation) {
 				// Default: hardware handles rotation via setRotation()
 				// Override if driver needs software rotation or other LVGL tweaks
 		}
+
+		// Whether the driver signals flush-ready asynchronously (e.g., via DMA
+		// completion callback). When true, DisplayManager skips calling
+		// lv_display_flush_ready() in the flush callback.
+		virtual bool asyncFlush() const { return false; }
 };
 
 #endif // DISPLAY_DRIVER_H

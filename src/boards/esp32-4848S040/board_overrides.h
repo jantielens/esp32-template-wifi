@@ -13,7 +13,6 @@
 #define HAS_DISPLAY true
 #define HAS_TOUCH true
 #define HAS_BACKLIGHT true   // PWM brightness control (LEDC attached before LCD init to avoid glitch)
-#define HAS_IMAGE_API true
 
 // Pin LVGL render task to Core 1 (reduces PSRAM bus contention with WiFi on Core 0)
 #define LVGL_TASK_CORE 1

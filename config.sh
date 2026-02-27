@@ -50,7 +50,6 @@ PROJECT_DISPLAY_NAME="ESP32 Template"
 #
 # Examples:
 #   ["esp32-nodisplay"]="esp32:esp32:esp32"                                       # Classic ESP32 dev module (no display)
-#   ["esp32c3-waveshare-169-st7789v2"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc"  # ESP32-C3 Super Mini + Waveshare 1.69" ST7789V2
 #   ["esp32c3_ota_1_9mb"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb"    # ESP32-C3 w/ custom partitions (example)
 #   ["esp32c6"]="esp32:esp32:dfrobot_firebeetle2_esp32c6:CDCOnBoot=cdc"           # ESP32-C6 (USB CDC)
 #   ["cyd-v2"]="esp32:esp32:esp32"                                                # CYD display v2 (same FQBN as classic ESP32)
@@ -58,11 +57,11 @@ PROJECT_DISPLAY_NAME="ESP32 Template"
 declare -A FQBN_TARGETS=(
     ["esp32-nodisplay"]="esp32:esp32:esp32" # Classic ESP32 dev module (no display)
     ["cyd-v2"]="esp32:esp32:esp32:PartitionScheme=min_spiffs" # CYD v2 display (ESP32 + display; minimal spiffs)
-    ["esp32c3-waveshare-169-st7789v2"]="esp32:esp32:nologo_esp32c3_super_mini:PartitionScheme=ota_1_9mb,CDCOnBoot=default" # ESP32-C3 Super Mini + Waveshare 1.69" ST7789V2 (240x280; OTA-friendly partitions)
     ["esp32-4848S040"]="esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB,CDCOnBoot=default" # ESP32-S3-4848S040 (480x480 ST7701 RGB + GT911 touch; 16MB + OPI PSRAM; hardware UART)
     ["jc3248w535"]="esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB,USBMode=hwcdc,CDCOnBoot=cdc" # ESP32-S3 JC3248W535 (16MB + OPI PSRAM)
     ["jc3636w518"]="esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB,USBMode=hwcdc,CDCOnBoot=cdc" # ESP32-S3 JC3636W518 (16MB + OPI PSRAM)
     ["esp32c3-withsensors"]="esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=ota_1_9mb" # ESP32-C3 Super Mini + sensors sample (OTA partitions)
+    ["esp32-p4-lcd4b"]="esp32:esp32:esp32p4:FlashSize=32M,PSRAM=enabled,PartitionScheme=ota_8mb_32MB" # ESP32-P4 Waveshare WIFI6-Touch-LCD-4B (720x720 MIPI-DSI + GT911 touch; 32MB + 32MB PSRAM)
 )
 
 # Default board (used when only one board is configured)

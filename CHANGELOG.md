@@ -9,6 +9,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.56] - 2026-02-27
+
+### Added
+- LVGL v8.4.0 → v9.5.0 upgrade across all boards
+- DMA2D async flush for ESP32-P4 DSI driver (hardware-accelerated framebuffer copy replaces CPU memcpy)
+- TouchTestScreen ported to LVGL v9 Canvas API (layer-based drawing: `lv_canvas_init_layer` / `lv_draw_rect` / `lv_canvas_finish_layer`)
+- Canvas memory fallback: tries PSRAM first, falls back to internal RAM for non-PSRAM boards (e.g., CYD v2)
+- On-screen error message when canvas allocation fails on memory-constrained devices
+- PPA (Pixel Processing Accelerator) support gated on `SOC_PPA_SUPPORTED` for cross-board compatibility
+- `IRAM_ATTR` for LVGL fast memory gated to ESP32-P4 and ESP32-S3 only (prevents IRAM overflow on classic ESP32)
+- `LV_USE_CANVAS` conditionally enabled only when `HAS_TOUCH` is set
+- TouchTestScreen compilation guarded by `HAS_TOUCH && LV_USE_CANVAS` for clean compile-out
+
+### Changed
+- All LVGL API calls migrated to v9: `lv_display_*`, `lv_screen_load`, `lv_obj_delete`, `lv_indev_active`, `LV_COLOR_FORMAT_RGB565`, etc.
+- Display manager uses v9 `lv_display_create()` / `lv_display_set_buffers()` / `lv_display_set_flush_cb()`
+- Draw buffers use `heap_caps_aligned_alloc()` with 64-byte alignment for PPA/DMA compatibility
+- Touch manager uses v9 `lv_indev_create()` / `lv_indev_set_read_cb()`
+- Flush callback passes v9 stride info to drivers via `flushSrcStride`
+- PNG asset generator updated for LVGL v9 image descriptor format (`lv_image_dsc_t`, `LV_IMAGE_HEADER_MAGIC`)
+- `lv_conf.h` restructured: consolidated draw/rendering, PPA, and widget sections with cross-board conditional compilation
+- ESP32-P4 DSI driver: `pushColors()` uses `esp_lcd_panel_draw_bitmap()` with DMA2D instead of manual memcpy + cache writeback
+
+### Fixed
+- PPA build error on non-P4 boards: `LV_USE_PPA` was unconditionally set to 1
+- IRAM overflow on classic ESP32 (CYD v2): `LV_ATTRIBUTE_FAST_MEM IRAM_ATTR` exceeded `iram0_0_seg` by 16KB
+- `CONFIG_LV_DRAW_BUF_ALIGN` bridge was defined before `LV_USE_PPA`, making it ineffective on ESP32-P4
+- TouchTestScreen canvas allocation failure on non-PSRAM boards (PSRAM-only `heap_caps_malloc`)
+
+### Removed
+- ST7789V2 native SPI display driver (`st7789v2_driver.cpp/h`) and `esp32c3-waveshare-169-st7789v2` board target (hardware no longer in use)
+- Unused `ssidLabel` member from InfoScreen
+
+## [0.0.55] - 2026-02-26
+
+### Added
+- ESP32-P4 board support: Waveshare ESP32-P4-WIFI6-Touch-LCD-4B (720×720 ST7703 MIPI-DSI + GT911 touch)
+- ST7703 MIPI-DSI display driver using direct ESP-IDF calls (bypasses Arduino_GFX for DSI path)
+- Custom 32MB flash partition table with 8MB OTA slots (`partitions_ota_8mb_32MB.csv`)
+- Performance analysis doc (`docs/esp32-p4-display-performance.md`) with A/B test data
+
+### Fixed
+- ESP32-P4 cyan/idle-color display flashes caused by DSI LP transitions during blanking intervals
+  - Root cause: Arduino_GFX `Arduino_ESP32DSIPanel` does not set `disable_lp=true` in DPI panel config
+  - Fix: direct ESP-IDF DSI init with `.flags.disable_lp = true` keeps D-PHY in HS mode continuously
+  - Result: ~40 fps (up from ~30), cyan flashes eliminated
+- ESP32-P4 bootloader offset (0x2000) added to `upload.sh` for `--full` flash mode
+
+### Changed
+- LVGL draw buffers use internal RAM on ESP32-P4 (`LVGL_BUFFER_PREFER_INTERNAL true`) — +4 fps vs PSRAM
+- LVGL refresh period lowered to 15 ms on ESP32-P4 (matches IDF reference projects)
+- `pushColors()` flush path uses `memcpy()` per row + `esp_cache_msync()` (replaces per-pixel copy)
+
+### Removed
+- Image API subsystem: `strip_decoder`, `lvgl_jpeg_decoder`, `direct_image_screen`, `lvgl_image_screen`, `image_api`, `jpeg_preflight` (~3900 lines)
+- `HAS_IMAGE_API` compile flag and all board overrides
+- `tools/upload_image.py` and `tools/camera_to_esp32.py`
+
+### Documentation
+- Updated display-touch-architecture, compile-time-flags, web-portal, scripts, drivers README
+- Regenerated `docs/compile-time-flags.md`
+
 ## [0.0.54] - 2026-02-26
 
 ### Fixed

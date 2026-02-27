@@ -79,7 +79,7 @@ void FpsScreen::create() {
 
 void FpsScreen::destroy() {
 		if (screen) {
-				lv_obj_del(screen);
+				lv_obj_delete(screen);
 				screen = nullptr;
 				fpsValueLabel = nullptr;
 				fpsUnitLabel = nullptr;
@@ -93,7 +93,7 @@ void FpsScreen::destroy() {
 void FpsScreen::show() {
 		if (screen) {
 				arcAngle = 0;
-				lv_scr_load(screen);
+				lv_screen_load(screen);
 		}
 }
 
@@ -112,7 +112,7 @@ void FpsScreen::update() {
 		// Force LVGL to redraw the entire screen every frame.
 		// This ensures we measure the maximum achievable panel refresh rate
 		// rather than only counting frames with organic UI changes.
-		lv_obj_invalidate(lv_scr_act());
+		lv_obj_invalidate(lv_screen_active());
 
 		// Read perf stats (updated every ~1s by the render/present task).
 		DisplayPerfStats stats;

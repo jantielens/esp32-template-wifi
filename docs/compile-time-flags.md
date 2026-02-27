@@ -22,7 +22,7 @@ This document is a template. Sections marked with `COMPILE_FLAG_REPORT` markers 
 ## Flags (generated)
 
 <!-- BEGIN COMPILE_FLAG_REPORT:FLAGS -->
-Total flags: 145
+Total flags: 151
 
 ### Features (HAS_*)
 
@@ -31,7 +31,6 @@ Total flags: 145
 - **HAS_BUILTIN_LED** default: `false` — Enable built-in status LED support.
 - **HAS_BUTTON** default: `false` — User Button (optional)
 - **HAS_DISPLAY** default: `false` — Enable display + LVGL UI support.
-- **HAS_IMAGE_API** default: `false` — Enable Image API endpoints (JPEG upload/download/display).
 - **HAS_MQTT** default: `true` — Enable MQTT and Home Assistant integration.
 - **HAS_SENSOR_BME280** default: `false` — Enable BME280 (I2C) environmental sensor adapter.
 - **HAS_SENSOR_DUMMY** default: `false` — Enable dummy sensor adapter (synthetic values for testing).
@@ -40,7 +39,7 @@ Total flags: 145
 
 ### Selectors (*_DRIVER)
 
-- **DISPLAY_DRIVER** default: `DISPLAY_DRIVER_TFT_ESPI` (values: DISPLAY_DRIVER_ARDUINO_GFX, DISPLAY_DRIVER_ARDUINO_GFX_ST77916, DISPLAY_DRIVER_ST7701_RGB, DISPLAY_DRIVER_ST7789V2, DISPLAY_DRIVER_TFT_ESPI) — Select the display HAL backend (one of the DISPLAY_DRIVER_* constants).
+- **DISPLAY_DRIVER** default: `DISPLAY_DRIVER_TFT_ESPI` (values: DISPLAY_DRIVER_ARDUINO_GFX, DISPLAY_DRIVER_ARDUINO_GFX_ST77916, DISPLAY_DRIVER_ST7701_RGB, DISPLAY_DRIVER_ST7703_DSI, DISPLAY_DRIVER_TFT_ESPI) — Select the display HAL backend (one of the DISPLAY_DRIVER_* constants).
 - **ILI9341_2_DRIVER** default: `(no default)` — These macros are consumed by the TFT_eSPI library itself.
 - **TOUCH_DRIVER** default: `TOUCH_DRIVER_XPT2046` (values: TOUCH_DRIVER_AXS15231B_I2C, TOUCH_DRIVER_CST816S_WIRE, TOUCH_DRIVER_GT911, TOUCH_DRIVER_XPT2046) — Select the touch HAL backend (one of the TOUCH_DRIVER_* constants).
 
@@ -58,9 +57,8 @@ Total flags: 145
 - **LCD_B2_PIN** default: `(no default)` — RGB Blue 2 pin.
 - **LCD_B3_PIN** default: `(no default)` — RGB Blue 3 pin.
 - **LCD_B4_PIN** default: `(no default)` — RGB Blue 4 pin.
-- **LCD_BL_PIN** default: `(no default)` — LCD backlight pin.
-- **LCD_CS_PIN** default: `(no default)` — LCD SPI CS pin.
-- **LCD_DC_PIN** default: `(no default)` — LCD SPI DC pin.
+- **LCD_BL_PIN** default: `(no default)` — Backlight control pin.
+- **LCD_CS_PIN** default: `(no default)` — SPI CS pin (ST7701 commands).
 - **LCD_DE_PIN** default: `(no default)` — RGB DE pin.
 - **LCD_G0_PIN** default: `(no default)` — RGB Green 0 pin.
 - **LCD_G1_PIN** default: `(no default)` — RGB Green 1 pin.
@@ -69,7 +67,7 @@ Total flags: 145
 - **LCD_G4_PIN** default: `(no default)` — RGB Green 4 pin.
 - **LCD_G5_PIN** default: `(no default)` — RGB Green 5 pin.
 - **LCD_HSYNC_PIN** default: `(no default)` — RGB HSYNC pin.
-- **LCD_MOSI_PIN** default: `(no default)` — LCD SPI MOSI pin.
+- **LCD_MOSI_PIN** default: `(no default)` — SPI MOSI pin (ST7701 commands).
 - **LCD_PCLK_PIN** default: `(no default)` — RGB PCLK pin.
 - **LCD_QSPI_CS** default: `(no default)` — QSPI chip select pin.
 - **LCD_QSPI_D0** default: `(no default)` — QSPI data line 0 pin.
@@ -84,8 +82,8 @@ Total flags: 145
 - **LCD_R2_PIN** default: `(no default)` — RGB Red 2 pin.
 - **LCD_R3_PIN** default: `(no default)` — RGB Red 3 pin.
 - **LCD_R4_PIN** default: `(no default)` — RGB Red 4 pin.
-- **LCD_RST_PIN** default: `(no default)` — LCD reset pin.
-- **LCD_SCK_PIN** default: `(no default)` — LCD SPI SCK pin.
+- **LCD_RST_PIN** default: `(no default)` — Panel Reset
+- **LCD_SCK_PIN** default: `(no default)` — SPI SCK pin (ST7701 commands).
 - **LCD_VSYNC_PIN** default: `(no default)` — RGB VSYNC pin.
 - **LD2410_OUT_PIN** default: `-1` — LD2410 OUT pin (presence). Use -1 to disable.
 - **LED_PIN** default: `2` — GPIO for the built-in LED (only used when HAS_BUILTIN_LED is true).
@@ -105,7 +103,7 @@ Total flags: 145
 - **TOUCH_IRQ** default: `(no default)` — TFT_eSPI touch: IRQ pin (optional).
 - **TOUCH_MISO** default: `(no default)` — TFT_eSPI touch: MISO pin.
 - **TOUCH_MOSI** default: `(no default)` — TFT_eSPI touch: MOSI pin.
-- **TOUCH_RST** default: `(no default)` — Touch reset pin (-1 = not connected).
+- **TOUCH_RST** default: `-1` — Touch reset pin (-1 = no hardware reset, GT911 boots normally).
 - **TOUCH_SCLK** default: `(no default)` — TFT_eSPI touch: SCLK pin.
 - **XPT2046_CLK** default: `(no default)` — XPT2046 CLK pin.
 - **XPT2046_CS** default: `(no default)` — XPT2046 CS pin.
@@ -119,19 +117,16 @@ Total flags: 145
 - **CONFIG_BT_NIMBLE_MAX_CCCDS** default: `(no default)` — NimBLE max CCCDs
 - **CONFIG_BT_NIMBLE_MAX_CONNECTIONS** default: `(no default)` — NimBLE max connections
 - **HEALTH_HISTORY_PERIOD_MS** default: `5000` — Sampling cadence for the device-side history (ms). Default aligns with UI poll.
-- **IMAGE_API_DECODE_HEADROOM_BYTES** default: `(50 * 1024)` — Extra free RAM required for decoding (bytes).
-- **IMAGE_API_DEFAULT_TIMEOUT_MS** default: `10000` — Default image display timeout in milliseconds.
-- **IMAGE_API_MAX_SIZE_BYTES** default: `(100 * 1024)` — Max bytes accepted for full image uploads (JPEG).
-- **IMAGE_API_MAX_TIMEOUT_MS** default: `(86400UL * 1000UL)` — Maximum image display timeout in milliseconds.
-- **IMAGE_STRIP_BATCH_MAX_ROWS** default: `16` — Max rows batched per LCD transaction when decoding JPEG strips.
 - **LVGL_BUFFER_PREFER_INTERNAL** default: `false` — Prefer internal RAM over PSRAM for LVGL draw buffer allocation.
 - **LVGL_BUFFER_SIZE** default: `(DISPLAY_WIDTH * 10)` — LVGL draw buffer size in pixels (larger = faster, more RAM).
+- **LVGL_REFR_PERIOD_MS** default: `(no default)` — Default LVGL 8.4 is 30 ms (~33 fps). Panel hardware supports ~59 fps.
 - **LVGL_TICK_PERIOD_MS** default: `5` — LVGL tick period in milliseconds.
 - **MEMORY_TRIPWIRE_INTERNAL_MIN_BYTES** default: `0` — Default: disabled (0). Enable per-board if you want early warning logs.
 - **SENSOR_I2C_FREQUENCY** default: `400000` — I2C clock for sensors (Hz).
 - **SPI_FREQUENCY** default: `(no default)` — TFT_eSPI: SPI write frequency (Hz).
 - **SPI_READ_FREQUENCY** default: `(no default)` — TFT_eSPI: SPI read frequency (Hz).
 - **SPI_TOUCH_FREQUENCY** default: `(no default)` — TFT_eSPI: SPI touch frequency (Hz).
+- **ST7703_DPI_CLK_HZ** default: `38000000L` — DPI pixel clock in Hz for ST7703 MIPI-DSI panels (ESP32-P4 only).
 - **TFT_BACKLIGHT_PWM_FREQ** default: `1000` — Lower frequencies give wider dimming range but may cause audible coil whine.
 - **TFT_SPI_FREQUENCY** default: `(no default)` — TFT SPI clock frequency.
 - **TFT_SPI_FREQ_HZ** default: `(no default)` — QSPI clock frequency (Hz).
@@ -151,11 +146,12 @@ Total flags: 145
 - **CONFIG_BT_NIMBLE_ROLE_OBSERVER** default: `(no default)` — NimBLE role: observer
 - **CONFIG_BT_NIMBLE_ROLE_PERIPHERAL** default: `(no default)` — NimBLE role: peripheral (required)
 - **CONFIG_NIMBLE_CPP_LOG_LEVEL** default: `(no default)` — NimBLE C++ wrapper log level
+- **DEVICE_TELEMETRY_BACKGROUND_TASKS** default: `1` — point-in-time values without min/max window bands or CPU %.
 - **DISPLAY_COLOR_ORDER_BGR** default: `(no default)` — Panel uses BGR byte order.
 - **DISPLAY_DRIVER_ILI9341_2** default: `(no default)` — Use the ILI9341_2 controller setup in TFT_eSPI.
 - **DISPLAY_INVERSION_ON** default: `(no default)` — Enable display inversion (panel-specific).
 - **DISPLAY_NEEDS_GAMMA_FIX** default: `(no default)` — Apply gamma correction fix for this panel variant.
-- **HEALTH_HISTORY_ENABLED** default: `1` — Default: enabled.
+- **HEALTH_HISTORY_ENABLED** default: `1` — Enable device-side health history ring buffer for charting in the web portal
 - **HEALTH_HISTORY_SAMPLES** default: `((HEALTH_HISTORY_SECONDS * 1000) / HEALTH_HISTORY_PERIOD_MS)` — Derived number of samples.
 - **HEALTH_HISTORY_SECONDS** default: `300` — How much client-side history (sparklines) to keep.
 - **HEALTH_POLL_INTERVAL_MS** default: `5000` — How often the web UI polls /api/health.
@@ -171,9 +167,18 @@ Total flags: 145
 - **LD2410_OUT_DEBOUNCE_MS** default: `50` — Debounce for LD2410 OUT edge changes (ms).
 - **LED_ACTIVE_HIGH** default: `true` — LED polarity: true if HIGH turns the LED on.
 - **LVGL_TASK_CORE** default: `0` — Core to pin the LVGL render task to on dual-core chips (0 or 1).
+- **LVGL_TASK_PRIORITY** default: `4` — Default 4 matches ESP-IDF BSP convention; keeps rendering above WiFi (pri 2-3).
+- **LV_USE_PERF_MONITOR_POS** default: `(no default)` — LVGL perf monitor alignment.
 - **MEMORY_TRIPWIRE_CHECK_INTERVAL_MS** default: `5000` — How often to check tripwires from the main loop.
 - **POWERON_CONFIG_BURST_ENABLED** default: `false` — Intended for boards WITHOUT a reliable user button.
 - **PROJECT_DISPLAY_NAME** default: `"ESP32 Device"` — Human-friendly project name used in the web UI and device name (can be set by build system).
+- **ST7703_HSYNC_BACK_PORCH** default: `50` — HSYNC back porch in pixel clocks.
+- **ST7703_HSYNC_FRONT_PORCH** default: `50` — HSYNC front porch in pixel clocks.
+- **ST7703_HSYNC_PULSE_WIDTH** default: `20` — HSYNC pulse width in pixel clocks.
+- **ST7703_LANE_BIT_RATE** default: `480` — MIPI-DSI lane bit rate in Mbps for ST7703 panels (ESP32-P4 only).
+- **ST7703_VSYNC_BACK_PORCH** default: `20` — VSYNC back porch in lines.
+- **ST7703_VSYNC_FRONT_PORCH** default: `20` — VSYNC front porch in lines.
+- **ST7703_VSYNC_PULSE_WIDTH** default: `4` — VSYNC pulse width in lines.
 - **TFT_BACKLIGHT_DUTY_MAX** default: `255` — Duty cycle at full saturation (before constant DC).
 - **TFT_BACKLIGHT_DUTY_MIN** default: `0` — Duty cycle where backlight first turns on.
 - **TFT_BACKLIGHT_ON** default: `(no default)` — Backlight "on" level.
@@ -184,6 +189,7 @@ Total flags: 145
 - **TOUCH_CAL_Y_MIN** default: `(no default)` — Touch calibration: Y minimum.
 - **TOUCH_I2C_ADDR** default: `(no default)` — Touch I2C address.
 - **TOUCH_I2C_ADDR_ALT** default: `(no default)` — Optional alternate address (GT911 can be 0x5D or 0x14 depending on INT strap).
+- **TOUCH_I2C_BUS** default: `1` — ESP32-P4 can use Wire (bus 0) since WiFi runs on external C6 over SDIO.
 - **TOUCH_I2C_PORT** default: `(no default)` — I2C controller index.
 - **USE_HSPI_PORT** default: `(no default)` — CYD uses HSPI for the display.
 <!-- END COMPILE_FLAG_REPORT:FLAGS -->
@@ -193,15 +199,15 @@ Total flags: 145
 Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
 
 <!-- BEGIN COMPILE_FLAG_REPORT:MATRIX_FEATURES -->
-| board-name | HAS_BACKLIGHT | HAS_BLE | HAS_BUILTIN_LED | HAS_BUTTON | HAS_DISPLAY | HAS_IMAGE_API | HAS_MQTT | HAS_SENSOR_BME280 | HAS_SENSOR_DUMMY | HAS_SENSOR_LD2410_OUT | HAS_TOUCH |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| esp32-nodisplay |  |  |  |  |  |  | ✅ |  |  |  |  |
-| cyd-v2 | ✅ |  |  |  | ✅ | ✅ | ✅ |  |  |  | ✅ |
-| esp32c3-waveshare-169-st7789v2 | ✅ |  | ✅ |  | ✅ | ✅ | ✅ |  |  |  |  |
-| esp32-4848S040 | ✅ |  |  |  | ✅ | ✅ | ✅ |  |  |  | ✅ |
-| jc3248w535 | ✅ |  |  |  | ✅ | ✅ | ✅ |  |  |  | ✅ |
-| jc3636w518 | ✅ |  |  |  | ✅ | ✅ | ✅ |  |  |  | ✅ |
-| esp32c3-withsensors |  | ✅ |  | ✅ |  |  | ✅ |  | ✅ |  |  |
+| board-name | HAS_BACKLIGHT | HAS_BLE | HAS_BUILTIN_LED | HAS_BUTTON | HAS_DISPLAY | HAS_MQTT | HAS_SENSOR_BME280 | HAS_SENSOR_DUMMY | HAS_SENSOR_LD2410_OUT | HAS_TOUCH |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| esp32-nodisplay |  |  |  |  |  | ✅ |  |  |  |  |
+| cyd-v2 | ✅ |  |  |  | ✅ | ✅ |  |  |  | ✅ |
+| esp32-4848S040 | ✅ |  |  |  | ✅ | ✅ |  |  |  | ✅ |
+| jc3248w535 | ✅ |  |  |  | ✅ | ✅ |  |  |  | ✅ |
+| jc3636w518 | ✅ |  |  |  | ✅ | ✅ |  |  |  | ✅ |
+| esp32c3-withsensors |  | ✅ |  | ✅ |  | ✅ |  | ✅ |  |  |
+| esp32-p4-lcd4b | ✅ |  |  |  | ✅ | ✅ |  |  |  | ✅ |
 <!-- END COMPILE_FLAG_REPORT:MATRIX_FEATURES -->
 
 ## Board Matrix: Selectors (generated)
@@ -211,11 +217,11 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
 | --- | --- | --- |
 | esp32-nodisplay | — | — |
 | cyd-v2 | DISPLAY_DRIVER_TFT_ESPI | TOUCH_DRIVER_XPT2046 |
-| esp32c3-waveshare-169-st7789v2 | DISPLAY_DRIVER_ST7789V2 | — |
 | esp32-4848S040 | DISPLAY_DRIVER_ST7701_RGB | TOUCH_DRIVER_GT911 |
 | jc3248w535 | DISPLAY_DRIVER_ARDUINO_GFX | TOUCH_DRIVER_AXS15231B_I2C |
 | jc3636w518 | DISPLAY_DRIVER_ARDUINO_GFX_ST77916 | TOUCH_DRIVER_CST816S_WIRE |
 | esp32c3-withsensors | — | — |
+| esp32-p4-lcd4b | DISPLAY_DRIVER_ST7703_DSI | TOUCH_DRIVER_GT911 |
 <!-- END COMPILE_FLAG_REPORT:MATRIX_SELECTORS -->
 
 ## Usage Map (preprocessor only, generated)
@@ -228,6 +234,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/drivers/arduino_gfx_driver.cpp
   - src/app/drivers/arduino_gfx_st77916_driver.cpp
   - src/app/drivers/st7701_rgb_driver.cpp
+  - src/app/drivers/st7703_dsi_driver.cpp
   - src/app/drivers/tft_espi_driver.cpp
 - **HAS_BLE**
   - src/app/app.ino
@@ -251,14 +258,10 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/display_drivers.cpp
   - src/app/display_manager.cpp
   - src/app/ha_discovery.cpp
-  - src/app/image_api.cpp
-  - src/app/lvgl_jpeg_decoder.cpp
-  - src/app/lvgl_jpeg_decoder.h
+  - src/app/lv_conf.h
   - src/app/screen_saver_manager.cpp
   - src/app/screen_saver_manager.h
   - src/app/screens.cpp
-  - src/app/screens/lvgl_image_screen.cpp
-  - src/app/screens/lvgl_image_screen.h
   - src/app/touch_manager.cpp
   - src/app/web_portal.cpp
   - src/app/web_portal_config.cpp
@@ -266,27 +269,6 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/web_portal_display.cpp
   - src/app/web_portal_display.h
   - src/app/web_portal_routes.cpp
-- **HAS_IMAGE_API**
-  - src/app/app.ino
-  - src/app/board_config.h
-  - src/app/display_manager.cpp
-  - src/app/display_manager.h
-  - src/app/image_api.cpp
-  - src/app/image_api.h
-  - src/app/jpeg_preflight.cpp
-  - src/app/jpeg_preflight.h
-  - src/app/lv_conf.h
-  - src/app/lvgl_jpeg_decoder.cpp
-  - src/app/lvgl_jpeg_decoder.h
-  - src/app/screens.cpp
-  - src/app/screens/direct_image_screen.cpp
-  - src/app/screens/direct_image_screen.h
-  - src/app/screens/lvgl_image_screen.cpp
-  - src/app/screens/lvgl_image_screen.h
-  - src/app/strip_decoder.cpp
-  - src/app/strip_decoder.h
-  - src/app/web_portal.cpp
-  - src/app/web_portal.h
 - **HAS_MQTT**
   - src/app/app.ino
   - src/app/board_config.h
@@ -345,6 +327,9 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/board_config.h
 - **BUTTON_PIN**
   - src/app/board_config.h
+- **DEVICE_TELEMETRY_BACKGROUND_TASKS**
+  - src/app/app.ino
+  - src/app/board_config.h
 - **DISPLAY_INVERSION_ON**
   - src/app/drivers/tft_espi_driver.cpp
 - **DISPLAY_NEEDS_GAMMA_FIX**
@@ -365,20 +350,11 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/board_config.h
 - **HEALTH_POLL_INTERVAL_MS**
   - src/app/board_config.h
-- **IMAGE_API_DECODE_HEADROOM_BYTES**
-  - src/app/board_config.h
-- **IMAGE_API_DEFAULT_TIMEOUT_MS**
-  - src/app/board_config.h
-- **IMAGE_API_MAX_SIZE_BYTES**
-  - src/app/board_config.h
-- **IMAGE_API_MAX_TIMEOUT_MS**
-  - src/app/board_config.h
-- **IMAGE_STRIP_BATCH_MAX_ROWS**
-  - src/app/board_config.h
 - **LCD_BL_PIN**
   - src/app/drivers/arduino_gfx_driver.cpp
   - src/app/drivers/arduino_gfx_st77916_driver.cpp
   - src/app/drivers/st7701_rgb_driver.cpp
+  - src/app/drivers/st7703_dsi_driver.cpp
 - **LCD_CS_PIN**
   - src/app/drivers/st7701_rgb_driver.cpp
 - **LCD_MOSI_PIN**
@@ -388,6 +364,8 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/drivers/arduino_gfx_st77916_driver.cpp
 - **LCD_QSPI_RST**
   - src/app/drivers/arduino_gfx_st77916_driver.cpp
+- **LCD_RST_PIN**
+  - src/app/drivers/st7703_dsi_driver.cpp
 - **LCD_SCK_PIN**
   - src/app/drivers/st7701_rgb_driver.cpp
 - **LD2410_OUT_DEBOUNCE_MS**
@@ -402,7 +380,11 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/board_config.h
 - **LVGL_BUFFER_SIZE**
   - src/app/board_config.h
+- **LVGL_REFR_PERIOD_MS**
+  - src/app/display_manager.cpp
 - **LVGL_TASK_CORE**
+  - src/app/board_config.h
+- **LVGL_TASK_PRIORITY**
   - src/app/board_config.h
 - **LVGL_TICK_PERIOD_MS**
   - src/app/board_config.h
@@ -422,6 +404,30 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/board_config.h
 - **SENSOR_I2C_SDA**
   - src/app/board_config.h
+- **ST7703_DPI_CLK_HZ**
+  - src/app/board_config.h
+  - src/boards/esp32-p4-lcd4b/board_overrides.h
+- **ST7703_HSYNC_BACK_PORCH**
+  - src/app/board_config.h
+  - src/boards/esp32-p4-lcd4b/board_overrides.h
+- **ST7703_HSYNC_FRONT_PORCH**
+  - src/app/board_config.h
+  - src/boards/esp32-p4-lcd4b/board_overrides.h
+- **ST7703_HSYNC_PULSE_WIDTH**
+  - src/app/board_config.h
+  - src/boards/esp32-p4-lcd4b/board_overrides.h
+- **ST7703_LANE_BIT_RATE**
+  - src/app/board_config.h
+  - src/boards/esp32-p4-lcd4b/board_overrides.h
+- **ST7703_VSYNC_BACK_PORCH**
+  - src/app/board_config.h
+  - src/boards/esp32-p4-lcd4b/board_overrides.h
+- **ST7703_VSYNC_FRONT_PORCH**
+  - src/app/board_config.h
+  - src/boards/esp32-p4-lcd4b/board_overrides.h
+- **ST7703_VSYNC_PULSE_WIDTH**
+  - src/app/board_config.h
+  - src/boards/esp32-p4-lcd4b/board_overrides.h
 - **TFT_BACKLIGHT_DUTY_MAX**
   - src/app/board_config.h
 - **TFT_BACKLIGHT_DUTY_MIN**
@@ -430,6 +436,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/drivers/arduino_gfx_driver.cpp
   - src/app/drivers/arduino_gfx_st77916_driver.cpp
   - src/app/drivers/st7701_rgb_driver.cpp
+  - src/app/drivers/st7703_dsi_driver.cpp
   - src/app/drivers/tft_espi_driver.cpp
 - **TFT_BACKLIGHT_PWM_CHANNEL**
   - src/app/board_config.h
@@ -451,6 +458,9 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/drivers/axs15231b_touch_driver.cpp
 - **TOUCH_I2C_ADDR_ALT**
   - src/app/drivers/gt911_touch_driver.cpp
+- **TOUCH_I2C_BUS**
+  - src/app/board_config.h
+  - src/app/drivers/gt911_touch_driver.h
 - **TOUCH_I2C_SCL**
   - src/app/drivers/axs15231b_touch_driver.cpp
   - src/app/drivers/wire_cst816s_touch_driver.cpp
@@ -458,11 +468,14 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/drivers/wire_cst816s_touch_driver.cpp
 - **TOUCH_INT**
   - src/app/drivers/axs15231b_touch_driver.cpp
+  - src/app/drivers/gt911_touch_driver.cpp
 - **TOUCH_MISO**
   - src/app/drivers/xpt2046_driver.cpp
 - **TOUCH_MOSI**
   - src/app/drivers/xpt2046_driver.cpp
 - **TOUCH_RST**
+  - src/app/board_config.h
+  - src/app/drivers/gt911_touch_driver.cpp
   - src/app/drivers/wire_cst816s_touch_driver.cpp
 - **TOUCH_SCLK**
   - src/app/drivers/xpt2046_driver.cpp

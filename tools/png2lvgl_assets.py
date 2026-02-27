@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Convert top-level PNG files to LVGL 8.x image descriptors.
+"""Convert top-level PNG files to LVGL 9.x image descriptors.
 
 
 Requirements:
@@ -42,30 +42,37 @@ class LvglImage:
     width: int
     height: int
     data: bytes
+    stride: int
     map_name: str
     source_file: str
 
 
-def _read_png_to_true_color_alpha_bytes(png_path: str) -> Tuple[int, int, bytes]:
+def _read_png_to_rgb565a8_bytes(png_path: str) -> Tuple[int, int, int, bytes]:
+    """Convert PNG to LVGL 9.x RGB565A8 format.
+
+    Returns (width, height, stride, data) where data is laid out as:
+      - RGB565 plane: height rows of stride bytes (stride = width * 2)
+      - Alpha plane:  height rows of (stride / 2) bytes
+    """
     img = Image.open(png_path)
     img = img.convert("RGBA")
 
     width, height = img.size
     pixels = list(img.getdata())
+    stride = width * 2  # bytes per row for RGB565
 
-    # LVGL TRUE_COLOR_ALPHA: RGB565 (LE, 2 bytes) + alpha (1 byte) per pixel.
-    out = bytearray()
-    out_extend = out.extend
+    rgb_plane = bytearray()
+    alpha_plane = bytearray()
 
     for r, g, b, a in pixels:
         r5 = (r >> 3) & 0x1F
         g6 = (g >> 2) & 0x3F
         b5 = (b >> 3) & 0x1F
         rgb565 = (r5 << 11) | (g6 << 5) | b5
+        rgb_plane.extend((rgb565 & 0xFF, (rgb565 >> 8) & 0xFF))
+        alpha_plane.append(a)
 
-        out_extend((rgb565 & 0xFF, (rgb565 >> 8) & 0xFF, a))
-
-    return width, height, bytes(out)
+    return width, height, stride, bytes(rgb_plane + alpha_plane)
 
 
 def _list_top_level_pngs(input_dir: str) -> List[str]:
@@ -117,7 +124,7 @@ def _write_header(path_h: str, images: List[LvglImage]) -> None:
         f.write("#endif\n\n")
         f.write("// PNG asset declarations\n")
         for img in images:
-            f.write(f"extern const lv_img_dsc_t {img.symbol};\n")
+            f.write(f"extern const lv_image_dsc_t {img.symbol};\n")
         f.write("\n#ifdef __cplusplus\n")
         f.write("}\n")
         f.write("#endif\n")
@@ -151,7 +158,7 @@ def _write_c(path_c: str, header_basename: str, images: List[LvglImage]) -> None
             )
 
             data = img.data
-            # Write 12 bytes per line (4 pixels * 3 bytes)
+            # Write 12 bytes per line
             for i in range(0, len(data), 12):
                 chunk = data[i : i + 12]
                 hexes = ", ".join(f"0x{b:02x}" for b in chunk)
@@ -162,16 +169,19 @@ def _write_c(path_c: str, header_basename: str, images: List[LvglImage]) -> None
 
             f.write("};\n\n")
 
-            f.write(f"const lv_img_dsc_t {img.symbol} = {{\n")
-            f.write("  {\n")
-            f.write("    LV_IMG_CF_TRUE_COLOR_ALPHA,\n")
-            f.write("    0,\n")
-            f.write("    0,\n")
-            f.write(f"    {img.width},\n")
-            f.write(f"    {img.height},\n")
+            # LVGL 9.x lv_image_dsc_t with designated initializers
+            f.write(f"const lv_image_dsc_t {img.symbol} = {{\n")
+            f.write("  .header = {\n")
+            f.write("    .magic = LV_IMAGE_HEADER_MAGIC,\n")
+            f.write("    .cf = LV_COLOR_FORMAT_RGB565A8,\n")
+            f.write("    .flags = 0,\n")
+            f.write(f"    .w = {img.width},\n")
+            f.write(f"    .h = {img.height},\n")
+            f.write(f"    .stride = {img.stride},\n")
+            f.write("    .reserved_2 = 0,\n")
             f.write("  },\n")
-            f.write(f"  {len(data)},\n")
-            f.write(f"  {img.map_name},\n")
+            f.write(f"  .data_size = {len(data)},\n")
+            f.write(f"  .data = {img.map_name},\n")
             f.write("};\n\n")
 
         f.write("#endif // HAS_DISPLAY\n")
@@ -215,7 +225,7 @@ def main() -> int:
             )
         seen_symbols.add(symbol)
 
-        width, height, data = _read_png_to_true_color_alpha_bytes(png_path)
+        width, height, stride, data = _read_png_to_rgb565a8_bytes(png_path)
 
         images.append(
             LvglImage(
@@ -223,6 +233,7 @@ def main() -> int:
                 width=width,
                 height=height,
                 data=data,
+                stride=stride,
                 map_name=f"{symbol}_map",
                 source_file=png_path,
             )

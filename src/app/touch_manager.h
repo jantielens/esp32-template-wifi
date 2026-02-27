@@ -19,14 +19,13 @@
 class TouchManager {
 private:
 		TouchDriver* driver;
-		lv_indev_drv_t indev_drv;
 		lv_indev_t* indev;
 
 		bool lvglRegisterPending;
 		bool tryRegisterWithLVGL();
 		
 		// LVGL read callback (static, accesses instance via user_data)
-		static void readCallback(lv_indev_drv_t* drv, lv_indev_data_t* data);
+		static void readCallback(lv_indev_t* indev, lv_indev_data_t* data);
 		
 public:
 		TouchManager();
