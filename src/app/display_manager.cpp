@@ -38,7 +38,7 @@ static uint16_t g_perf_frames_in_window = 0;
 DisplayManager* displayManager = nullptr;
 
 DisplayManager::DisplayManager(DeviceConfig* cfg) 
-		: driver(nullptr), display(nullptr), config(cfg), currentScreen(nullptr), screenHistory{}, screenHistorySize(0), pendingScreen(nullptr), 
+		: driver(nullptr), display(nullptr), config(cfg), currentScreen(nullptr), screenHistory{}, screenHistorySize(0), pendingScreen(nullptr), pendingScreenSkipHistory(false), 
 			infoScreen(cfg, this), testScreen(this), fpsScreen(this),
 							lvglTaskHandle(nullptr), lvglTaskAlloc{}, lvglMutex(nullptr),
 						presentTaskHandle(nullptr), presentTaskAlloc{}, presentSem(nullptr), sharedLvTimerUs(0),
@@ -240,12 +240,14 @@ void DisplayManager::lvglTask(void* pvParameter) {
 				// Process pending screen switch (deferred from external calls)
 				if (mgr->pendingScreen) {
 						Screen* target = mgr->pendingScreen;
+						bool skipHistory = mgr->pendingScreenSkipHistory;
 						if (mgr->currentScreen) {
 								mgr->currentScreen->hide();
 						}
 
-						// Push current screen to history (skip splash; it's boot-only)
-						if (mgr->currentScreen && mgr->currentScreen != &mgr->splashScreen) {
+						// Push current screen to history unless this is a back-navigation
+						// or the current screen is splash (boot-only, excluded from history).
+						if (!skipHistory && mgr->currentScreen && mgr->currentScreen != &mgr->splashScreen) {
 								if (mgr->screenHistorySize < 8) {
 										mgr->screenHistory[mgr->screenHistorySize++] = mgr->currentScreen;
 								} else {
@@ -256,8 +258,9 @@ void DisplayManager::lvglTask(void* pvParameter) {
 						}
 
 						mgr->currentScreen = target;
-						mgr->currentScreen->show();
 						mgr->pendingScreen = nullptr;
+						mgr->pendingScreenSkipHistory = false;
+						mgr->currentScreen->show();
 
 						// Reset LVGL input device state so leftover PRESSED from the
 						// previous screen doesn't fire a phantom CLICKED on the new screen.
@@ -611,6 +614,7 @@ void DisplayManager::goBack() {
 		screenHistory[screenHistorySize] = nullptr;
 		if (prev) {
 				pendingScreen = prev;
+				pendingScreenSkipHistory = true; // don't push current screen back onto history
 				LOGI("Display", "Queued go-back (history depth now %d)", screenHistorySize);
 		}
 }
