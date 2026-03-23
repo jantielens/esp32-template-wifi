@@ -16,10 +16,12 @@
 #include "health_history.h"
 #endif
 #include <WiFi.h>
+#include <esp_ota_ops.h>
 
 #if HAS_DISPLAY
 #include "display_manager.h"
 #include "screen_saver_manager.h"
+#include "mqtt_wake.h"
 #endif
 
 #if HAS_TOUCH
@@ -275,8 +277,16 @@ void setup()
 	mqtt_manager.begin(&device_config, device_config.device_name, sanitized);
 	#endif
 
+	#if HAS_MQTT && HAS_DISPLAY
+	// Register MQTT screen saver wake subscription if topic is configured
+	mqtt_wake_begin(&mqtt_manager, device_config.screen_saver_wake_topic);
+	#endif
+
 	last_heartbeat_ms = millis();
 	LOGI("Main", "Setup complete");
+
+	// Mark firmware as valid to prevent bootloader rollback after OTA.
+	esp_ota_mark_app_valid_cancel_rollback();
 
 	// Snapshot after all subsystems are initialized.
 	device_telemetry_log_memory_snapshot("setup");
@@ -360,6 +370,9 @@ void loop()
 		}
 
 		last_heartbeat_ms = current_ms;
+
+		// Periodic heap integrity check — detects buffer overruns close to when they occur.
+		heap_caps_check_integrity_all(true);
 	}
 
 	delay(10);

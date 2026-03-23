@@ -284,6 +284,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/app.ino
   - src/app/board_config.h
   - src/app/config_manager.cpp
+  - src/app/config_manager.h
   - src/app/device_telemetry.cpp
   - src/app/duty_cycle.cpp
   - src/app/ha_discovery.cpp
@@ -297,6 +298,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/sensors/ld2410_out_sensor.cpp
   - src/app/sensors/sensor_manager.cpp
   - src/app/sensors/sensor_manager.h
+  - src/app/web_portal_config.cpp
 - **HAS_SENSOR_BME280**
   - src/app/board_config.h
   - src/app/sensors.cpp

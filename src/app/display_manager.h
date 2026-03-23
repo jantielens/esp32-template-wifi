@@ -74,7 +74,8 @@ private:
 		
 		// Screen management
 		Screen* currentScreen;
-		Screen* previousScreen;  // Track previous screen for return navigation
+		Screen* screenHistory[8];  // Navigation history stack (excludes splash)
+		uint8_t screenHistorySize; // Number of entries in history stack
 		Screen* pendingScreen;   // Deferred screen switch (processed in lvglTask)
 
 		// Defer small LVGL UI updates (like splash status) to the LVGL task.
@@ -135,6 +136,10 @@ public:
 		void showSplash();
 		void showInfo();
 		void showTest();
+
+		// Navigate back to the previous screen in the history stack.
+		// Does nothing if there is no history.
+		void goBack();
 		
 		// Screen selection by ID (thread-safe, returns true if found)
 		bool showScreen(const char* screen_id);
@@ -181,6 +186,7 @@ void display_manager_init(DeviceConfig* config);
 void display_manager_show_splash();
 void display_manager_show_info();
 void display_manager_show_test();
+void display_manager_go_back();
 void display_manager_show_screen(const char* screen_id, bool* success);  // success is optional output
 const char* display_manager_get_current_screen_id();
 const ScreenInfo* display_manager_get_available_screens(size_t* count);

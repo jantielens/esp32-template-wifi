@@ -98,6 +98,10 @@ struct DeviceConfig {
 		uint16_t screen_saver_fade_out_ms;       // default 800
 		uint16_t screen_saver_fade_in_ms;        // default 400
 		bool screen_saver_wake_on_touch;         // default true (when HAS_TOUCH)
+#if HAS_MQTT
+		// Screen saver wake via MQTT: subscribe to this topic and wake on ON/1/true payload
+		char screen_saver_wake_topic[64];        // default ""
+#endif
 #endif
 		
 		// Validation flag (magic number to detect valid config)

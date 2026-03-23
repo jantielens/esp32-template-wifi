@@ -147,8 +147,17 @@ jobs:
           exit 1
         fi
 
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Run host-native unit tests
+      run: bash tests/run_tests.sh
+
   build:
-    needs: [prepare-matrix, compile-flags-doc]
+    needs: [prepare-matrix, compile-flags-doc, unit-tests]
     runs-on: ubuntu-latest
     strategy:
       matrix: ${{ fromJson(needs.prepare-matrix.outputs.matrix) }}

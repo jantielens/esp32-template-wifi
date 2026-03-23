@@ -9,17 +9,73 @@
 #include <WiFi.h>
 #include <ESPmDNS.h>
 #include <lwip/netif.h>
+#include <ping/ping_sock.h>
+#include <esp_ping.h>
 
 // WiFi retry settings
 static constexpr unsigned long WIFI_BACKOFF_BASE = 3000; // 3 seconds base
 static constexpr unsigned long WIFI_CHECK_INTERVAL_MS = 10000; // 10 seconds
 
+// Gateway ping watchdog: reconnect after this many consecutive ping failures
+static constexpr uint8_t PING_FAIL_THRESHOLD = 3;
+
 static unsigned long g_last_wifi_check_ms = 0;
+static uint8_t g_ping_fail_count = 0;
 
 RTC_DATA_ATTR static uint8_t g_cached_bssid[6] = {0};
 RTC_DATA_ATTR static uint8_t g_cached_channel = 0;
 RTC_DATA_ATTR static bool g_cached_valid = false;
 RTC_DATA_ATTR static char g_cached_ssid[CONFIG_SSID_MAX_LEN] = {0};
+
+// Synchronous gateway ping: returns true if gateway responded.
+static volatile bool g_ping_success = false;
+static volatile bool g_ping_done = false;
+
+static void ping_on_success(esp_ping_handle_t hdl, void *) {
+		g_ping_success = true;
+}
+static void ping_on_timeout(esp_ping_handle_t hdl, void *) {
+		// timeout counts as failure; no action needed here
+}
+static void ping_on_end(esp_ping_handle_t hdl, void *) {
+		g_ping_done = true;
+}
+
+static bool wifi_ping_gateway(uint32_t timeout_ms = 3000) {
+		IPAddress gw = WiFi.gatewayIP();
+		if (gw == IPAddress(0, 0, 0, 0)) return false;
+
+		esp_ping_config_t cfg = ESP_PING_DEFAULT_CONFIG();
+		cfg.target_addr.u_addr.ip4.addr = gw;
+		cfg.target_addr.type = ESP_IPADDR_TYPE_V4;
+		cfg.count = 1;
+		cfg.timeout_ms = timeout_ms;
+		cfg.interval_ms = 0;
+		cfg.task_stack_size = 2048;
+		cfg.task_prio = 5;
+
+		esp_ping_callbacks_t cbs = {};
+		cbs.on_ping_success = ping_on_success;
+		cbs.on_ping_timeout = ping_on_timeout;
+		cbs.on_ping_end = ping_on_end;
+
+		g_ping_success = false;
+		g_ping_done = false;
+
+		esp_ping_handle_t hdl;
+		if (esp_ping_new_session(&cfg, &cbs, &hdl) != ESP_OK) return false;
+
+		esp_ping_start(hdl);
+
+		const unsigned long start = millis();
+		while (!g_ping_done && (millis() - start) < (timeout_ms + 1000)) {
+				delay(50);
+		}
+
+		esp_ping_stop(hdl);
+		esp_ping_delete_session(hdl);
+		return g_ping_success;
+}
 
 static void format_bssid(const uint8_t *bssid, char *out, size_t out_len) {
 		if (!out || out_len < 18) return;
@@ -120,7 +176,15 @@ bool wifi_manager_connect(const DeviceConfig *config, bool allow_cached_bssid) {
 		// Instead, just set STA mode and let the hosted link come up cleanly.
 		WiFi.mode(WIFI_STA);
 		LOGI("WiFi", "Waiting for ESP-Hosted link...");
-		delay(5000);
+		// Poll for MAC availability (up to 8 s) instead of a fixed delay.
+		{
+				const unsigned long p4_start = millis();
+				while (millis() - p4_start < 8000) {
+						String mac = WiFi.macAddress();
+						if (mac.length() > 0 && mac != "00:00:00:00:00:00") break;
+						delay(250);
+				}
+		}
 		#else
 		WiFi.disconnect(true);
 		delay(100);
@@ -223,7 +287,7 @@ bool wifi_manager_connect(const DeviceConfig *config, bool allow_cached_bssid) {
 		for (int attempt = 0; attempt < WIFI_MAX_ATTEMPTS; attempt++) {
 				if (attempt > 0) {
 						WiFi.disconnect(false);
-						delay(2000);
+						delay(500);
 				}
 				LOGI("WiFi", "Attempt %d/%d", attempt + 1, WIFI_MAX_ATTEMPTS);
 				WiFi.begin(config->wifi_ssid, config->wifi_password);
@@ -352,14 +416,35 @@ void wifi_manager_watchdog(const DeviceConfig *config, bool config_loaded, bool 
 
 		const unsigned long now = millis();
 		if (now - g_last_wifi_check_ms < WIFI_CHECK_INTERVAL_MS) return;
+		g_last_wifi_check_ms = now;
 
 		if (WiFi.status() != WL_CONNECTED && strlen(config->wifi_ssid) > 0) {
-				LOGW("WIFI", "Watchdog: connection lost - attempting reconnect");
+				LOGW("WiFi", "Watchdog: connection lost - attempting reconnect");
+				g_ping_fail_count = 0;
 				if (wifi_manager_connect(config, false)) {
 						power_manager_note_wifi_success();
 						wifi_manager_start_mdns(config);
 				}
+				return;
 		}
 
-		g_last_wifi_check_ms = now;
+		// Even when WiFi.status() reports connected, the gateway can become
+		// unreachable (e.g., after a router restart). Detect this by pinging
+		// the gateway and force a reconnect after PING_FAIL_THRESHOLD failures.
+		if (WiFi.status() == WL_CONNECTED) {
+				if (!wifi_ping_gateway()) {
+						g_ping_fail_count++;
+						LOGW("WiFi", "Gateway ping failed (%d/%d)", g_ping_fail_count, PING_FAIL_THRESHOLD);
+						if (g_ping_fail_count >= PING_FAIL_THRESHOLD) {
+								LOGW("WiFi", "Gateway unreachable — forcing reconnect");
+								g_ping_fail_count = 0;
+								if (wifi_manager_connect(config, false)) {
+										power_manager_note_wifi_success();
+										wifi_manager_start_mdns(config);
+								}
+						}
+				} else {
+						g_ping_fail_count = 0;
+				}
+		}
 }

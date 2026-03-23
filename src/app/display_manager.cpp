@@ -38,7 +38,7 @@ static uint16_t g_perf_frames_in_window = 0;
 DisplayManager* displayManager = nullptr;
 
 DisplayManager::DisplayManager(DeviceConfig* cfg) 
-		: driver(nullptr), display(nullptr), config(cfg), currentScreen(nullptr), previousScreen(nullptr), pendingScreen(nullptr), 
+		: driver(nullptr), display(nullptr), config(cfg), currentScreen(nullptr), screenHistory{}, screenHistorySize(0), pendingScreen(nullptr), 
 			infoScreen(cfg, this), testScreen(this), fpsScreen(this),
 							lvglTaskHandle(nullptr), lvglTaskAlloc{}, lvglMutex(nullptr),
 						presentTaskHandle(nullptr), presentTaskAlloc{}, presentSem(nullptr), sharedLvTimerUs(0),
@@ -244,7 +244,17 @@ void DisplayManager::lvglTask(void* pvParameter) {
 								mgr->currentScreen->hide();
 						}
 
-						mgr->previousScreen = mgr->currentScreen;
+						// Push current screen to history (skip splash; it's boot-only)
+						if (mgr->currentScreen && mgr->currentScreen != &mgr->splashScreen) {
+								if (mgr->screenHistorySize < 8) {
+										mgr->screenHistory[mgr->screenHistorySize++] = mgr->currentScreen;
+								} else {
+										// Stack full: discard oldest entry
+										memmove(&mgr->screenHistory[0], &mgr->screenHistory[1], 7 * sizeof(Screen*));
+										mgr->screenHistory[7] = mgr->currentScreen;
+								}
+						}
+
 						mgr->currentScreen = target;
 						mgr->currentScreen->show();
 						mgr->pendingScreen = nullptr;
@@ -592,6 +602,19 @@ void DisplayManager::showTest() {
 		LOGI("Display", "Queued switch to TestScreen");
 }
 
+void DisplayManager::goBack() {
+		if (screenHistorySize == 0) {
+				LOGD("Display", "goBack: history empty");
+				return;
+		}
+		Screen* prev = screenHistory[--screenHistorySize];
+		screenHistory[screenHistorySize] = nullptr;
+		if (prev) {
+				pendingScreen = prev;
+				LOGI("Display", "Queued go-back (history depth now %d)", screenHistorySize);
+		}
+}
+
 void DisplayManager::setSplashStatus(const char* text) {
 		// If called before the LVGL task exists (during early setup), update directly.
 		// Otherwise, defer to the LVGL task to avoid cross-task LVGL calls.
@@ -664,6 +687,12 @@ void display_manager_show_info() {
 void display_manager_show_test() {
 		if (displayManager) {
 				displayManager->showTest();
+		}
+}
+
+void display_manager_go_back() {
+		if (displayManager) {
+				displayManager->goBack();
 		}
 }
 
