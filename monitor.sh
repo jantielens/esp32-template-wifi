@@ -12,6 +12,24 @@ source "$SCRIPT_DIR/config.sh"
 # Configuration
 BAUD="${2:-115200}"         # Default baud rate, can be overridden by second argument
 
+# Parse --log / --log=<file> from arguments
+LOG_FILE=""
+POSITIONAL=()
+for arg in "$@"; do
+    case "$arg" in
+        --log=*)
+            LOG_FILE="${arg#--log=}"
+            ;;
+        --log)
+            LOG_FILE="monitor_$(date '+%Y%m%d_%H%M%S').log"
+            ;;
+        *)
+            POSITIONAL+=("$arg")
+            ;;
+    esac
+done
+set -- "${POSITIONAL[@]}"
+
 # Get arduino-cli path
 ARDUINO_CLI=$(find_arduino_cli)
 
@@ -21,8 +39,8 @@ if [ -z "$1" ]; then
         echo -e "${GREEN}Auto-detected port: $PORT${NC}"
     else
         echo -e "${RED}Error: No serial port detected${NC}"
-        echo "Usage: $0 [PORT] [BAUD]"
-        echo "Example: $0 /dev/ttyUSB0 115200"
+        echo "Usage: $0 [PORT] [BAUD] [--log[=file.log]]"
+        echo "Example: $0 /dev/ttyUSB0 115200 --log"
         exit 1
     fi
 else
@@ -34,8 +52,15 @@ echo -e "${CYAN}=== ESP32 Serial Monitor ===${NC}"
 # Display connection info
 echo "Connecting to: $PORT"
 echo "Baud rate: $BAUD"
+if [ -n "$LOG_FILE" ]; then
+    echo -e "${YELLOW}Logging to: $LOG_FILE${NC}"
+fi
 echo -e "${YELLOW}Press Ctrl+C to exit${NC}"
 echo "---"
 
-# Start serial monitor
-"$ARDUINO_CLI" monitor -p "$PORT" -c baudrate="$BAUD"
+# Start serial monitor (with optional logging via tee)
+if [ -n "$LOG_FILE" ]; then
+    "$ARDUINO_CLI" monitor -p "$PORT" -c baudrate="$BAUD" | tee "$LOG_FILE"
+else
+    "$ARDUINO_CLI" monitor -p "$PORT" -c baudrate="$BAUD"
+fi

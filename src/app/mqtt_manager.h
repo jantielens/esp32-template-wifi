@@ -39,6 +39,13 @@ public:
 		// Immediate publish API (topic is full topic string)
 		bool publishImmediate(const char *topic, const char *payload, bool retained);
 
+		// Subscription API: register a handler for an MQTT topic.
+		// Up to MQTT_MAX_SUBSCRIPTIONS handlers can be registered.
+		// Handlers are re-subscribed automatically after each reconnect.
+		static constexpr uint8_t MQTT_MAX_SUBSCRIPTIONS = 8;
+		typedef void (*MessageHandler)(const char *topic, const uint8_t *payload, unsigned int len);
+		bool addSubscription(const char *topic, MessageHandler handler);
+
 		// Topic helpers
 		const char *baseTopic() const { return _base_topic; }
 		const char *availabilityTopic() const { return _availability_topic; }
@@ -72,6 +79,17 @@ private:
 
 		unsigned long _last_reconnect_attempt_ms = 0;
 		unsigned long _last_health_publish_ms = 0;
+
+		// Subscription registry
+		struct Subscription {
+				char topic[128];
+				MessageHandler handler;
+		};
+		Subscription _subscriptions[MQTT_MAX_SUBSCRIPTIONS] = {};
+		uint8_t _subscription_count = 0;
+
+		void resubscribeAll();
+		static void globalMessageCallback(char *topic, uint8_t *payload, unsigned int len);
 };
 
 // Global instance (defined in app.ino)

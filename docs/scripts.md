@@ -274,14 +274,18 @@ This script automates both steps.
 
 **Usage:**
 ```bash
-./monitor.sh                  # Auto-detects port, 115200 baud
-./monitor.sh /dev/ttyUSB0     # Custom port, default baud
-./monitor.sh /dev/ttyUSB0 9600 # Custom port and baud rate
+./monitor.sh                          # Auto-detects port, 115200 baud
+./monitor.sh /dev/ttyUSB0             # Custom port, default baud
+./monitor.sh /dev/ttyUSB0 9600        # Custom port and baud rate
+./monitor.sh --log                    # Log to auto-named file (monitor_YYYYMMDD_HHMMSS.log)
+./monitor.sh --log=session.log        # Log to a specific file
+./monitor.sh /dev/ttyUSB0 --log       # Combine port selection with logging
 ```
 
 **What it does:**
 - Opens serial monitor connection to ESP32
 - Displays real-time output from `Serial.print()` statements
+- When `--log` is specified, output is also saved to a file via `tee`
 - Press `Ctrl+C` to exit
 
 **Requirements:** 

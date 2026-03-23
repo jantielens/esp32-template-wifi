@@ -130,6 +130,9 @@ void handleGetConfig(AsyncWebServerRequest *request) {
 				(*doc)["screen_saver_fade_out_ms"] = current_config->screen_saver_fade_out_ms;
 				(*doc)["screen_saver_fade_in_ms"] = current_config->screen_saver_fade_in_ms;
 				(*doc)["screen_saver_wake_on_touch"] = current_config->screen_saver_wake_on_touch;
+				#if HAS_MQTT
+				(*doc)["screen_saver_wake_topic"] = current_config->screen_saver_wake_topic;
+				#endif
 				#endif
 
 				if (doc->overflowed()) {
@@ -528,6 +531,12 @@ void handlePostConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len,
 						current_config->screen_saver_wake_on_touch = (bool)(doc["screen_saver_wake_on_touch"] | false);
 				}
 		}
+		#if HAS_MQTT
+		if (doc.containsKey("screen_saver_wake_topic")) {
+				const char *v = doc["screen_saver_wake_topic"] | "";
+				strlcpy(current_config->screen_saver_wake_topic, v, sizeof(current_config->screen_saver_wake_topic));
+		}
+		#endif
 		#endif
 
 		current_config->magic = CONFIG_MAGIC;

@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.58] - 2026-03-23
+
+### Added
+- OTA rollback protection: `esp_ota_mark_app_valid_cancel_rollback()` called at end of `setup()` — prevents bootloader from reverting firmware after a clean startup
+- Heap integrity check in 60-second heartbeat: `heap_caps_check_integrity_all()` catches heap corruption early
+- `monitor.sh --log` / `--log=<file>` flag: serial output is simultaneously saved to a timestamped log file via `tee`
+- `i2c_bus.cpp/h`: lightweight FreeRTOS mutex wrapper for shared I2C bus access across tasks (`i2c_bus_init`, `i2c_bus_lock`, `i2c_bus_unlock`)
+- MQTT subscription infrastructure in `MqttManager`: `addSubscription(topic, handler)` registers per-topic callbacks; handlers are re-subscribed automatically after each reconnect
+- `mqtt_wake.cpp/h`: subscribes to a configurable MQTT topic and wakes the screen saver when an `ON`/`1`/`true` payload is received
+- `DeviceConfig.screen_saver_wake_topic` field (64-byte, `#if HAS_MQTT && HAS_DISPLAY`): persisted in NVS, exposed in web portal Home page and REST API
+- Host-native unit test infrastructure in `tests/`: `run_tests.sh`, stub headers (`Arduino.h`, `log_manager.h`, `board_config.h`), and `stubs.cpp`; 40 test cases covering `power_config` parse functions and `config_manager_sanitize_device_name`
+- Unit test CI step in `.github/workflows/build.yml`: `unit-tests` job runs before firmware builds; firmware build now depends on tests passing
+- `DisplayManager::goBack()` and `display_manager_go_back()` C-API: navigate to the previous screen in an 8-deep history stack
+- WiFi resilience: gateway liveness watchdog using `esp_ping` — forces reconnect after 3 consecutive ping failures even when `WiFi.status()` still reports connected
+
+### Changed
+- `DisplayManager` navigation history replaced single `previousScreen` pointer with an 8-entry `screenHistory` stack; splash screen is excluded from history
+- ESP32-P4 WiFi startup: replaced fixed `delay(5000)` with a MAC-address polling loop (250 ms poll, 8 s cap) to reduce boot time when ESP-Hosted link is fast
+- ESP32-P4 WiFi retry delay reduced from 2000 ms to 500 ms between reconnect attempts
+- `wifi_manager_watchdog` refactored: status-lost path and ping-fail path share a single reconnect+mDNS code block; `g_last_wifi_check_ms` updated at entry to prevent overlapping checks
+
 ## [0.0.57] - 2026-02-27
 
 ### Added
