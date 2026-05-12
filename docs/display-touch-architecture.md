@@ -493,6 +493,23 @@ DisplayManager uses a deferred pattern for screen navigation (`showSplash()`, `s
 
 Direct LVGL operations still require manual locking.
 
+**Navigation History Stack:**
+
+DisplayManager maintains an 8-deep history stack (`screenHistory[]`) so screens can navigate back:
+
+- Every forward navigation pushes the current screen onto the stack (splash is excluded)
+- `goBack()` / `display_manager_go_back()` pops the top entry and queues it as `pendingScreen` with `pendingScreenSkipHistory = true`, preventing the departing screen from being pushed again
+- When the stack is full (8 entries), the oldest entry is discarded
+- The stack is in-memory only and resets on reboot
+
+```cpp
+// C++ API (from DisplayManager instance)
+displayManager->goBack();
+
+// C API (callable from non-class code)
+display_manager_go_back();
+```
+
 ## Touch Driver HAL
 
 ### Interface Definition

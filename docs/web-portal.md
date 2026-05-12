@@ -554,13 +554,15 @@ Returns current device configuration (passwords excluded).
   "screen_saver_timeout_seconds": 300,
   "screen_saver_fade_out_ms": 800,
   "screen_saver_fade_in_ms": 400,
-  "screen_saver_wake_on_touch": true
+  "screen_saver_wake_on_touch": true,
+  "screen_saver_wake_topic": ""
 }
 ```
 
 **Notes:**
 - Some fields are build-time gated.
   - Display-related fields (backlight + screen saver) are present when `HAS_DISPLAY` is enabled.
+  - `screen_saver_wake_topic` is additionally gated on `HAS_MQTT` — only present when both `HAS_DISPLAY` and `HAS_MQTT` are enabled.
   - BLE advertising fields are only used when `HAS_BLE` is enabled.
   - Other feature-specific fields may be present depending on firmware configuration.
 
@@ -602,7 +604,8 @@ Save new configuration. Device reboots after successful save.
   "screen_saver_timeout_seconds": 300,
   "screen_saver_fade_out_ms": 800,
   "screen_saver_fade_in_ms": 400,
-  "screen_saver_wake_on_touch": true
+  "screen_saver_wake_on_touch": true,
+  "screen_saver_wake_topic": "home/display/wake"
 }
 ```
 

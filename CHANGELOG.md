@@ -28,7 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `DisplayManager` navigation history replaced single `previousScreen` pointer with an 8-entry `screenHistory` stack; splash screen is excluded from history
 - ESP32-P4 WiFi startup: replaced fixed `delay(5000)` with a MAC-address polling loop (250 ms poll, 8 s cap) to reduce boot time when ESP-Hosted link is fast
 - ESP32-P4 WiFi retry delay reduced from 2000 ms to 500 ms between reconnect attempts
-- `wifi_manager_watchdog` refactored: status-lost path and ping-fail path share a single reconnect+mDNS code block; `g_last_wifi_check_ms` updated at entry to prevent overlapping checks
+- `wifi_manager_watchdog` ping converted to non-blocking two-tick state machine (fire on tick N, collect on tick N+1) — eliminates potential `loop()` stall when gateway is unreachable
+
+### Fixed
+- `DisplayManager::goBack()` no longer corrupts the history stack: added `pendingScreenSkipHistory` flag so the LVGL task skips the push when processing a back-navigation (previously a back would re-add the departing screen and toggle between two screens)
 
 ## [0.0.57] - 2026-02-27
 
