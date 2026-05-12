@@ -12,6 +12,36 @@
 
 MqttManager::MqttManager() : _client(_net) {}
 
+// Global pointer for the PubSubClient callback (only one MqttManager instance exists).
+static MqttManager *g_instance = nullptr;
+
+void MqttManager::globalMessageCallback(char *topic, uint8_t *payload, unsigned int len) {
+		if (!g_instance) return;
+		for (uint8_t i = 0; i < g_instance->_subscription_count; i++) {
+				if (strcmp(g_instance->_subscriptions[i].topic, topic) == 0) {
+						g_instance->_subscriptions[i].handler(topic, payload, len);
+				}
+		}
+}
+
+void MqttManager::resubscribeAll() {
+		for (uint8_t i = 0; i < _subscription_count; i++) {
+				_client.subscribe(_subscriptions[i].topic);
+		}
+}
+
+bool MqttManager::addSubscription(const char *topic, MessageHandler handler) {
+		if (!topic || !handler) return false;
+		if (_subscription_count >= MQTT_MAX_SUBSCRIPTIONS) {
+				LOGW("MQTT", "Subscription limit reached (%d)", MQTT_MAX_SUBSCRIPTIONS);
+				return false;
+		}
+		strlcpy(_subscriptions[_subscription_count].topic, topic, sizeof(_subscriptions[0].topic));
+		_subscriptions[_subscription_count].handler = handler;
+		_subscription_count++;
+		return true;
+}
+
 void MqttManager::begin(const DeviceConfig *config, const char *friendly_name, const char *sanitized_name) {
 		_config = config;
 
@@ -32,6 +62,8 @@ void MqttManager::begin(const DeviceConfig *config, const char *friendly_name, c
 		snprintf(_health_state_topic, sizeof(_health_state_topic), "%s/health/state", _base_topic);
 
 		_client.setBufferSize(MQTT_MAX_PACKET_SIZE);
+		_client.setCallback(MqttManager::globalMessageCallback);
+		g_instance = this;
 
 		_discovery_published_this_boot = false;
 		_last_reconnect_attempt_ms = 0;
@@ -216,6 +248,7 @@ void MqttManager::ensureConnected() {
 
 		if (connected) {
 				LOGI("MQTT", "Connected");
+				resubscribeAll();
 				if (!duty_cycle) {
 						publishAvailability(true);
 				}

@@ -200,6 +200,13 @@
                     <small>Only applies to touch-enabled boards.</small>
                 </div>
 
+                <div class="form-group">
+                    <label for="screen_saver_wake_topic">MQTT Wake Topic</label>
+                    <input type="text" id="screen_saver_wake_topic" name="screen_saver_wake_topic"
+                           maxlength="63" placeholder="e.g. home/screen/wake">
+                    <small>Optional MQTT topic. Sending ON, 1, or true wakes the screen saver. Requires MQTT to be configured.</small>
+                </div>
+
                 <div class="form-group" id="screen-selection-group" style="display:none;">
                     <label for="screen_selection">
                         Current Screen

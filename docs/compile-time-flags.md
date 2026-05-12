@@ -270,6 +270,8 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/display_manager.cpp
   - src/app/ha_discovery.cpp
   - src/app/lv_conf.h
+  - src/app/mqtt_wake.cpp
+  - src/app/mqtt_wake.h
   - src/app/screen_saver_manager.cpp
   - src/app/screen_saver_manager.h
   - src/app/screens.cpp
@@ -284,12 +286,15 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/app.ino
   - src/app/board_config.h
   - src/app/config_manager.cpp
+  - src/app/config_manager.h
   - src/app/device_telemetry.cpp
   - src/app/duty_cycle.cpp
   - src/app/ha_discovery.cpp
   - src/app/ha_discovery.h
   - src/app/mqtt_manager.cpp
   - src/app/mqtt_manager.h
+  - src/app/mqtt_wake.cpp
+  - src/app/mqtt_wake.h
   - src/app/sensors/bme280_sensor.cpp
   - src/app/sensors/bme280_sensor.h
   - src/app/sensors/dummy_sensor.cpp
@@ -297,6 +302,7 @@ Legend: ✅ = enabled/true, blank = disabled/false, ? = unknown/undefined
   - src/app/sensors/ld2410_out_sensor.cpp
   - src/app/sensors/sensor_manager.cpp
   - src/app/sensors/sensor_manager.h
+  - src/app/web_portal_config.cpp
 - **HAS_SENSOR_BME280**
   - src/app/board_config.h
   - src/app/sensors.cpp
